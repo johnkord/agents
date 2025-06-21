@@ -38,27 +38,82 @@ namespace Agent
                 .AddEnvironmentVariables()
                 .Build();
 
-            var openAiApiKey = configuration["OPENAI_API_KEY"];
-            if (string.IsNullOrEmpty(openAiApiKey))
-            {
-                Console.WriteLine("OPENAI_API_KEY environment variable is not set.");
-                Console.WriteLine("Please set this environment variable to use the agent.");
-                return;
-            }
-
             using var loggerFactory = LoggerFactory.Create(builder => 
                 builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
             var logger = loggerFactory.CreateLogger<Program>();
             
+            var openAiApiKey = configuration["OPENAI_API_KEY"];
+            if (string.IsNullOrEmpty(openAiApiKey))
+            {
+                // Check if this is a test mode
+                if (task.Equals("test", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine("Running in test mode - testing MCP connection only...");
+                    await TestMcpConnection(loggerFactory);
+                    return;
+                }
+                
+                Console.WriteLine("OPENAI_API_KEY environment variable is not set.");
+                Console.WriteLine("Please set this environment variable to use the agent.");
+                Console.WriteLine("Or run with 'test' as the task to test MCP connection only.");
+                return;
+            }
+
+            using var loggerFactory2 = LoggerFactory.Create(builder => 
+                builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
+            
             try
             {
-                var agent = new SimpleAgent(openAiApiKey, loggerFactory);
+                var agent = new SimpleAgent(openAiApiKey, loggerFactory2);
                 await agent.ExecuteTaskAsync(task);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error occurred in Agent");
                 Console.WriteLine($"Error: {ex.Message}");
+            }
+        }
+        
+        static async Task TestMcpConnection(ILoggerFactory loggerFactory)
+        {
+            Console.WriteLine("Testing MCP Server connection...");
+            
+            try
+            {
+                // Connect to MCP Server
+                var clientTransport = new StdioClientTransport(new()
+                {
+                    Name = "Test Agent MCP Server",
+                    Command = "dotnet",
+                    Arguments = ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
+                });
+
+                await using var mcpClient = await McpClientFactory.CreateAsync(clientTransport, loggerFactory: loggerFactory);
+                Console.WriteLine("✅ Successfully connected to MCP Server");
+                
+                // Get available tools
+                var tools = await mcpClient.ListToolsAsync();
+                Console.WriteLine($"✅ Found {tools.Count} tools: {string.Join(", ", tools.Select(t => t.Name))}");
+                
+                // Test a simple tool call
+                Console.WriteLine("Testing tool call: add(2, 3)");
+                var result = await mcpClient.CallToolAsync("add", new Dictionary<string, object?> { ["a"] = 2.0, ["b"] = 3.0 });
+                
+                if (!result.IsError)
+                {
+                    var textContent = result.Content.OfType<TextContentBlock>().FirstOrDefault();
+                    Console.WriteLine($"✅ Tool call successful: {textContent?.Text}");
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Tool call failed: {result.Content.FirstOrDefault()}");
+                }
+                
+                Console.WriteLine("✅ MCP connection test completed successfully!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ MCP connection test failed: {ex.Message}");
             }
         }
     }

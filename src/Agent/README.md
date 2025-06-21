@@ -19,6 +19,12 @@ The agent:
 
 ### Running the Agent
 
+**Test MCP connection (no API key required):**
+```bash
+cd src/Agent/Agent
+dotnet run "test"
+```
+
 **With command line argument:**
 ```bash
 cd src/Agent/Agent
