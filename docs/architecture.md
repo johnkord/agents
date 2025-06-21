@@ -4,57 +4,51 @@ This document describes the overall architecture and design decisions for the Ag
 
 ## High-Level Architecture
 
-The repository is structured around the Model Context Protocol (MCP) and follows a modular, extensible design:
+The repository is structured around the Model Context Protocol and follows a modular, extensible design:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Agents Repository                        │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │ AI Agent 1  │    │ AI Agent 2  │    │ AI Agent N  │     │
-│  │             │    │             │    │             │     │
-│  └─────┬───────┘    └─────┬───────┘    └─────┬───────┘     │
-│        │                  │                  │             │
-│        └──────────────────┼──────────────────┘             │
-│                           │                                │
-│  ┌─────────────────────────┼─────────────────────────────┐  │
-│  │         MCP Client      │                             │  │
-│  │  ┌──────────────────────▼──────────────────────────┐  │  │
-│  │  │        ModelContextProtocol SDK                 │  │  │
-│  │  └─────────────────────────────────────────────────┘  │  │
-│  └─────────────────────────┬─────────────────────────────┘  │
-│                            │                                │
-│    ┌───────────────────────┼───────────────────────────┐    │
-│    │         MCP Protocol (JSON-RPC over stdio)        │    │
-│    └───────────────────────┼───────────────────────────┘    │
-│                            │                                │
-│  ┌─────────────────────────┼─────────────────────────────┐  │
-│  │         MCP Server      │                             │  │
-│  │  ┌──────────────────────▼──────────────────────────┐  │  │
-│  │  │        ModelContextProtocol SDK                 │  │  │
-│  │  └─────────────────────────────────────────────────┘  │  │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐   │  │
-│  │  │   Tools     │ │ Resources   │ │   Prompts   │   │  │
-│  │  │ Provider    │ │ Provider    │ │  Provider   │   │  │
-│  │  └─────────────┘ └─────────────┘ └─────────────┘   │  │
-│  └─────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    AgentsRepository["Agents Repository"]
+    subgraph Agents
+        Agent1["Artificial Intelligence Agent 1"]
+        Agent2["Artificial Intelligence Agent 2"]
+        AgentN["Artificial Intelligence Agent N"]
+    end
+    MCPClient["Model Context Protocol Client"]
+    MCPClientSDK["Model Context Protocol Software Development Kit"]
+    MCPServer["Model Context Protocol Server"]
+    MCPServerSDK["Model Context Protocol Software Development Kit"]
+    ToolProvider["Tool Provider"]
+    ResourceProvider["Resource Provider"]
+    PromptProvider["Prompt Provider"]
+    Protocol["Model Context Protocol (JSON-RPC over stdio)"]
+
+    Agent1 --> MCPClient
+    Agent2 --> MCPClient
+    AgentN --> MCPClient
+    MCPClient --> MCPClientSDK
+    MCPClient --> Protocol
+    Protocol --> MCPServer
+    MCPServer --> MCPServerSDK
+    MCPServerSDK --> ToolProvider
+    MCPServerSDK --> ResourceProvider
+    MCPServerSDK --> PromptProvider
 ```
 
 ## Core Components
 
-### 1. Model Context Protocol (MCP)
+### 1. Model Context Protocol
 
-MCP serves as the communication protocol between AI agents and their tools/resources:
+Model Context Protocol serves as the communication protocol between Artificial Intelligence agents and their tools/resources:
 
 - **Standardized Interface**: Consistent API for all agent interactions
 - **JSON-RPC Based**: Reliable, well-established communication protocol
 - **Bidirectional**: Supports both client and server capabilities
 - **Extensible**: Easy to add new tools and resources
 
-### 2. MCP Server
+### 2. Model Context Protocol Server
 
-The server component exposes tools and resources to MCP clients:
+The server component exposes tools and resources to Model Context Protocol clients:
 
 **Responsibilities:**
 - Tool registration and management
@@ -63,24 +57,37 @@ The server component exposes tools and resources to MCP clients:
 - Response formatting and error handling
 
 **Architecture:**
-```csharp
-McpServer
-├── ToolProviders/
-│   ├── EchoToolProvider
-│   ├── TimeToolProvider
-│   └── RandomToolProvider
-├── ResourceProviders/
-│   ├── ConfigurationProvider
-│   └── SystemInfoProvider
-└── Protocol/
-    ├── RequestHandler
-    ├── ResponseFormatter
-    └── ErrorHandler
+```mermaid
+graph TD
+    Server["Model Context Protocol Server"]
+    ToolProviders["Tool Providers"]
+    EchoTool["Echo Tool Provider"]
+    TimeTool["Time Tool Provider"]
+    RandomTool["Random Tool Provider"]
+    ResourceProviders["Resource Providers"]
+    ConfigProvider["Configuration Provider"]
+    SystemInfoProvider["System Information Provider"]
+    Protocol["Protocol"]
+    RequestHandler["Request Handler"]
+    ResponseFormatter["Response Formatter"]
+    ErrorHandler["Error Handler"]
+
+    Server --> ToolProviders
+    ToolProviders --> EchoTool
+    ToolProviders --> TimeTool
+    ToolProviders --> RandomTool
+    Server --> ResourceProviders
+    ResourceProviders --> ConfigProvider
+    ResourceProviders --> SystemInfoProvider
+    Server --> Protocol
+    Protocol --> RequestHandler
+    Protocol --> ResponseFormatter
+    Protocol --> ErrorHandler
 ```
 
-### 3. MCP Client
+### 3. Model Context Protocol Client
 
-The client component connects to MCP servers and provides access to their capabilities:
+The client component connects to Model Context Protocol servers and provides access to their capabilities:
 
 **Responsibilities:**
 - Server connection management
@@ -89,15 +96,24 @@ The client component connects to MCP servers and provides access to their capabi
 - User interface and interaction
 
 **Architecture:**
-```csharp
-McpClient
-├── ConnectionManager
-├── ToolClient
-├── ResourceClient
-├── PromptClient
-└── UserInterface/
-    ├── CommandLineInterface
-    └── (Future) GraphicalInterface
+```mermaid
+graph TD
+    Client["Model Context Protocol Client"]
+    ConnectionManager["Connection Manager"]
+    ToolClient["Tool Client"]
+    ResourceClient["Resource Client"]
+    PromptClient["Prompt Client"]
+    UserInterface["User Interface"]
+    CommandLine["Command Line Interface"]
+    Graphical["Graphical Interface (Future)"]
+
+    Client --> ConnectionManager
+    Client --> ToolClient
+    Client --> ResourceClient
+    Client --> PromptClient
+    Client --> UserInterface
+    UserInterface --> CommandLine
+    UserInterface --> Graphical
 ```
 
 ### 4. Shared Libraries
@@ -105,18 +121,30 @@ McpClient
 Common functionality shared between components:
 
 **Current Structure:**
-```
-Shared/
-├── Models/
-│   ├── ToolDefinition
-│   ├── ResourceDefinition
-│   └── PromptDefinition
-├── Extensions/
-│   ├── LoggingExtensions
-│   └── ConfigurationExtensions
-└── Utilities/
-    ├── JsonHelper
-    └── ValidationHelper
+```mermaid
+graph TD
+    Shared["Shared Libraries"]
+    Models["Models"]
+    ToolDef["Tool Definition"]
+    ResourceDef["Resource Definition"]
+    PromptDef["Prompt Definition"]
+    Extensions["Extensions"]
+    LoggingExt["Logging Extensions"]
+    ConfigExt["Configuration Extensions"]
+    Utilities["Utilities"]
+    JsonHelper["JSON Helper"]
+    ValidationHelper["Validation Helper"]
+
+    Shared --> Models
+    Models --> ToolDef
+    Models --> ResourceDef
+    Models --> PromptDef
+    Shared --> Extensions
+    Extensions --> LoggingExt
+    Extensions --> ConfigExt
+    Shared --> Utilities
+    Utilities --> JsonHelper
+    Utilities --> ValidationHelper
 ```
 
 ## Design Principles
@@ -205,25 +233,37 @@ sequenceDiagram
 ## Deployment Patterns
 
 ### Development Deployment
-```
-Developer Machine
-├── MCP Server (Console App)
-├── MCP Client (Console App)
-└── Shared Libraries (Class Libraries)
+```mermaid
+graph TD
+    DevMachine["Developer Machine"]
+    DevServer["Model Context Protocol Server (Console Application)"]
+    DevClient["Model Context Protocol Client (Console Application)"]
+    DevShared["Shared Libraries (Class Libraries)"]
+    DevMachine --> DevServer
+    DevMachine --> DevClient
+    DevMachine --> DevShared
 ```
 
 ### Production Deployment
-```
-Server Environment
-├── MCP Server (Windows Service / systemd)
-├── Configuration Files
-├── Logging Infrastructure
-└── Monitoring Dashboard
+```mermaid
+graph TD
+    ServerEnv["Server Environment"]
+    ProdServer["Model Context Protocol Server (Service)"]
+    ConfigFiles["Configuration Files"]
+    LoggingInfra["Logging Infrastructure"]
+    Monitoring["Monitoring Dashboard"]
+    ServerEnv --> ProdServer
+    ServerEnv --> ConfigFiles
+    ServerEnv --> LoggingInfra
+    ServerEnv --> Monitoring
 
-Client Environment
-├── MCP Client (Console/Desktop App)
-├── Connection Configuration
-└── Local Cache
+    ClientEnv["Client Environment"]
+    ProdClient["Model Context Protocol Client (Console/Desktop Application)"]
+    ConnConfig["Connection Configuration"]
+    LocalCache["Local Cache"]
+    ClientEnv --> ProdClient
+    ClientEnv --> ConnConfig
+    ClientEnv --> LocalCache
 ```
 
 ## Security Considerations
