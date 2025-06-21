@@ -1,0 +1,49 @@
+# Agents Repository Documentation
+
+This repository contains multiple AI agents with their MCP (Model Context Protocol) clients and MCP servers, exposing tools and resources for various use cases.
+
+## Overview
+
+The Agents repository is designed to be a comprehensive collection of:
+
+- **MCP Servers**: Expose various tools and resources that AI agents can use
+- **MCP Clients**: Connect to and interact with MCP servers
+- **AI Agents**: Intelligent agents that leverage MCP infrastructure for various tasks
+
+## Architecture
+
+The repository follows a modular architecture with:
+
+```
+/src/
+  /MCPServer/     - MCP Server implementation
+  /MCPClient/     - MCP Client implementation  
+  /Shared/        - Shared models and utilities between projects
+/docs/            - Documentation
+agents.sln        - Visual Studio solution file
+```
+
+## Quick Start
+
+1. **Prerequisites**: .NET 8.0 SDK or later
+2. **Build**: `dotnet build` from the root directory
+3. **Run MCP Server**: Navigate to `src/MCPServer/MCPServer` and run `dotnet run`
+4. **Run MCP Client**: Navigate to `src/MCPClient/MCPClient` and run `dotnet run`
+
+## Documentation Index
+
+- [Getting Started](getting-started.md) - Setup and initial configuration
+- [MCP Server](mcp-server.md) - MCP Server implementation details
+- [MCP Client](mcp-client.md) - MCP Client usage and features
+- [Architecture](architecture.md) - System architecture and design decisions
+
+## Technology Stack
+
+- **.NET 8.0**: Primary framework
+- **Model Context Protocol C# SDK**: Official MCP implementation for .NET
+- **Microsoft Extensions**: Logging, DI, Configuration, and Hosting
+- **Console Applications**: Simple, cross-platform deployment
+
+## Contributing
+
+This repository serves as a foundation for building AI agents with MCP capabilities. Each agent implementation should follow the established patterns and leverage the shared infrastructure.
