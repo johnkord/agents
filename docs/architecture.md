@@ -10,29 +10,29 @@ The repository is structured around the Model Context Protocol and follows a mod
 graph TD
     AgentsRepository["Agents Repository"]
     subgraph Agents
-        Agent1["Artificial Intelligence Agent 1"]
-        Agent2["Artificial Intelligence Agent 2"]
-        AgentN["Artificial Intelligence Agent N"]
+        ArtificialIntelligenceAgent1["Artificial Intelligence Agent 1"]
+        ArtificialIntelligenceAgent2["Artificial Intelligence Agent 2"]
+        ArtificialIntelligenceAgentN["Artificial Intelligence Agent N"]
     end
-    MCPClient["Model Context Protocol Client"]
-    MCPClientSDK["Model Context Protocol Software Development Kit"]
-    MCPServer["Model Context Protocol Server"]
-    MCPServerSDK["Model Context Protocol Software Development Kit"]
+    ModelContextProtocolClient["Model Context Protocol Client"]
+    ModelContextProtocolClientSDK["Model Context Protocol Software Development Kit"]
+    ModelContextProtocolServer["Model Context Protocol Server"]
+    ModelContextProtocolServerSDK["Model Context Protocol Software Development Kit"]
     ToolProvider["Tool Provider"]
     ResourceProvider["Resource Provider"]
     PromptProvider["Prompt Provider"]
     Protocol["Model Context Protocol (JSON-RPC over stdio)"]
 
-    Agent1 --> MCPClient
-    Agent2 --> MCPClient
-    AgentN --> MCPClient
-    MCPClient --> MCPClientSDK
-    MCPClient --> Protocol
-    Protocol --> MCPServer
-    MCPServer --> MCPServerSDK
-    MCPServerSDK --> ToolProvider
-    MCPServerSDK --> ResourceProvider
-    MCPServerSDK --> PromptProvider
+    ArtificialIntelligenceAgent1 --> ModelContextProtocolClient
+    ArtificialIntelligenceAgent2 --> ModelContextProtocolClient
+    ArtificialIntelligenceAgentN --> ModelContextProtocolClient
+    ModelContextProtocolClient --> ModelContextProtocolClientSDK
+    ModelContextProtocolClient --> Protocol
+    Protocol --> ModelContextProtocolServer
+    ModelContextProtocolServer --> ModelContextProtocolServerSDK
+    ModelContextProtocolServerSDK --> ToolProvider
+    ModelContextProtocolServerSDK --> ResourceProvider
+    ModelContextProtocolServerSDK --> PromptProvider
 ```
 
 ## Core Components
@@ -59,27 +59,27 @@ The server component exposes tools and resources to Model Context Protocol clien
 **Architecture:**
 ```mermaid
 graph TD
-    Server["Model Context Protocol Server"]
+    ModelContextProtocolServer["Model Context Protocol Server"]
     ToolProviders["Tool Providers"]
-    EchoTool["Echo Tool Provider"]
-    TimeTool["Time Tool Provider"]
-    RandomTool["Random Tool Provider"]
+    EchoToolProvider["Echo Tool Provider"]
+    TimeToolProvider["Time Tool Provider"]
+    RandomToolProvider["Random Tool Provider"]
     ResourceProviders["Resource Providers"]
-    ConfigProvider["Configuration Provider"]
-    SystemInfoProvider["System Information Provider"]
+    ConfigurationProvider["Configuration Provider"]
+    SystemInformationProvider["System Information Provider"]
     Protocol["Protocol"]
     RequestHandler["Request Handler"]
     ResponseFormatter["Response Formatter"]
     ErrorHandler["Error Handler"]
 
-    Server --> ToolProviders
-    ToolProviders --> EchoTool
-    ToolProviders --> TimeTool
-    ToolProviders --> RandomTool
-    Server --> ResourceProviders
-    ResourceProviders --> ConfigProvider
-    ResourceProviders --> SystemInfoProvider
-    Server --> Protocol
+    ModelContextProtocolServer --> ToolProviders
+    ToolProviders --> EchoToolProvider
+    ToolProviders --> TimeToolProvider
+    ToolProviders --> RandomToolProvider
+    ModelContextProtocolServer --> ResourceProviders
+    ResourceProviders --> ConfigurationProvider
+    ResourceProviders --> SystemInformationProvider
+    ModelContextProtocolServer --> Protocol
     Protocol --> RequestHandler
     Protocol --> ResponseFormatter
     Protocol --> ErrorHandler
@@ -98,22 +98,22 @@ The client component connects to Model Context Protocol servers and provides acc
 **Architecture:**
 ```mermaid
 graph TD
-    Client["Model Context Protocol Client"]
+    ModelContextProtocolClient["Model Context Protocol Client"]
     ConnectionManager["Connection Manager"]
     ToolClient["Tool Client"]
     ResourceClient["Resource Client"]
     PromptClient["Prompt Client"]
     UserInterface["User Interface"]
-    CommandLine["Command Line Interface"]
-    Graphical["Graphical Interface (Future)"]
+    CommandLineInterface["Command Line Interface"]
+    GraphicalInterface["Graphical Interface (Future)"]
 
-    Client --> ConnectionManager
-    Client --> ToolClient
-    Client --> ResourceClient
-    Client --> PromptClient
-    Client --> UserInterface
-    UserInterface --> CommandLine
-    UserInterface --> Graphical
+    ModelContextProtocolClient --> ConnectionManager
+    ModelContextProtocolClient --> ToolClient
+    ModelContextProtocolClient --> ResourceClient
+    ModelContextProtocolClient --> PromptClient
+    ModelContextProtocolClient --> UserInterface
+    UserInterface --> CommandLineInterface
+    UserInterface --> GraphicalInterface
 ```
 
 ### 4. Shared Libraries
@@ -123,26 +123,26 @@ Common functionality shared between components:
 **Current Structure:**
 ```mermaid
 graph TD
-    Shared["Shared Libraries"]
+    SharedLibraries["Shared Libraries"]
     Models["Models"]
-    ToolDef["Tool Definition"]
-    ResourceDef["Resource Definition"]
-    PromptDef["Prompt Definition"]
+    ToolDefinition["Tool Definition"]
+    ResourceDefinition["Resource Definition"]
+    PromptDefinition["Prompt Definition"]
     Extensions["Extensions"]
-    LoggingExt["Logging Extensions"]
-    ConfigExt["Configuration Extensions"]
+    LoggingExtensions["Logging Extensions"]
+    ConfigurationExtensions["Configuration Extensions"]
     Utilities["Utilities"]
     JsonHelper["JSON Helper"]
     ValidationHelper["Validation Helper"]
 
-    Shared --> Models
-    Models --> ToolDef
-    Models --> ResourceDef
-    Models --> PromptDef
-    Shared --> Extensions
-    Extensions --> LoggingExt
-    Extensions --> ConfigExt
-    Shared --> Utilities
+    SharedLibraries --> Models
+    Models --> ToolDefinition
+    Models --> ResourceDefinition
+    Models --> PromptDefinition
+    SharedLibraries --> Extensions
+    Extensions --> LoggingExtensions
+    Extensions --> ConfigurationExtensions
+    SharedLibraries --> Utilities
     Utilities --> JsonHelper
     Utilities --> ValidationHelper
 ```
@@ -235,35 +235,35 @@ sequenceDiagram
 ### Development Deployment
 ```mermaid
 graph TD
-    DevMachine["Developer Machine"]
-    DevServer["Model Context Protocol Server (Console Application)"]
-    DevClient["Model Context Protocol Client (Console Application)"]
-    DevShared["Shared Libraries (Class Libraries)"]
-    DevMachine --> DevServer
-    DevMachine --> DevClient
-    DevMachine --> DevShared
+    DeveloperMachine["Developer Machine"]
+    DevelopmentServer["Model Context Protocol Server (Console Application)"]
+    DevelopmentClient["Model Context Protocol Client (Console Application)"]
+    DevelopmentSharedLibraries["Shared Libraries (Class Libraries)"]
+    DeveloperMachine --> DevelopmentServer
+    DeveloperMachine --> DevelopmentClient
+    DeveloperMachine --> DevelopmentSharedLibraries
 ```
 
 ### Production Deployment
 ```mermaid
 graph TD
-    ServerEnv["Server Environment"]
-    ProdServer["Model Context Protocol Server (Service)"]
-    ConfigFiles["Configuration Files"]
-    LoggingInfra["Logging Infrastructure"]
-    Monitoring["Monitoring Dashboard"]
-    ServerEnv --> ProdServer
-    ServerEnv --> ConfigFiles
-    ServerEnv --> LoggingInfra
-    ServerEnv --> Monitoring
+    ServerEnvironment["Server Environment"]
+    ProductionServer["Model Context Protocol Server (Service)"]
+    ConfigurationFiles["Configuration Files"]
+    LoggingInfrastructure["Logging Infrastructure"]
+    MonitoringDashboard["Monitoring Dashboard"]
+    ServerEnvironment --> ProductionServer
+    ServerEnvironment --> ConfigurationFiles
+    ServerEnvironment --> LoggingInfrastructure
+    ServerEnvironment --> MonitoringDashboard
 
-    ClientEnv["Client Environment"]
-    ProdClient["Model Context Protocol Client (Console/Desktop Application)"]
-    ConnConfig["Connection Configuration"]
+    ClientEnvironment["Client Environment"]
+    ProductionClient["Model Context Protocol Client (Console/Desktop Application)"]
+    ConnectionConfiguration["Connection Configuration"]
     LocalCache["Local Cache"]
-    ClientEnv --> ProdClient
-    ClientEnv --> ConnConfig
-    ClientEnv --> LocalCache
+    ClientEnvironment --> ProductionClient
+    ClientEnvironment --> ConnectionConfiguration
+    ClientEnvironment --> LocalCache
 ```
 
 ## Security Considerations
