@@ -1,0 +1,3 @@
+[submodule "reference/csharp-sdk"]
+	path = reference/csharp-sdk
+	url = https://github.com/modelcontextprotocol/csharp-sdk

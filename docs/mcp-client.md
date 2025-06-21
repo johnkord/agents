@@ -64,7 +64,7 @@ namespace MCPClient
 ### Dependencies
 
 The client project includes these NuGet packages:
-- `ModelContextProtocol` (v0.3.0-preview.1) - Official MCP SDK
+- `ModelContextProtocol` (v0.3.0-preview.1) - Official MCP SDK (see also `reference/csharp-sdk` for full source)
 - `Microsoft.Extensions.Logging` (v9.0.6) - Logging framework
 - `Microsoft.Extensions.Logging.Console` (v9.0.6) - Console logging provider
 
@@ -189,7 +189,7 @@ Future versions will support configuration for:
 
 ### SDK Integration
 
-The client uses the official Model Context Protocol C# SDK, ensuring:
+The client uses the official Model Context Protocol C# SDK. The full SDK source is available in the `reference/csharp-sdk` submodule for reference and future AI development, ensuring:
 - Standard protocol compliance
 - Consistent behavior across implementations
 - Access to latest MCP features

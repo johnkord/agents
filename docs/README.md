@@ -40,9 +40,21 @@ agents.sln        - Visual Studio solution file
 ## Technology Stack
 
 - **.NET 8.0**: Primary framework
-- **Model Context Protocol C# SDK**: Official MCP implementation for .NET
+- **Model Context Protocol C# SDK**: Official MCP implementation for .NET (see `reference/csharp-sdk` for the full SDK source as a submodule)
 - **Microsoft Extensions**: Logging, DI, Configuration, and Hosting
 - **Console Applications**: Simple, cross-platform deployment
+
+## Reference SDKs
+
+This repository includes a `reference` folder containing the official Model Context Protocol C# SDK as a git submodule:
+
+- `reference/csharp-sdk`: [modelcontextprotocol/csharp-sdk](https://github.com/modelcontextprotocol/csharp-sdk)
+
+This folder is intended as a reference for future AI development and for ensuring compatibility with the MCP specification. To update the submodule, use:
+
+```bash
+git submodule update --remote reference/csharp-sdk
+```
 
 ## Contributing
 

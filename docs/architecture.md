@@ -193,7 +193,7 @@ sequenceDiagram
 - **Microsoft.Extensions**: Dependency injection, logging, configuration
 
 ### MCP Implementation
-- **ModelContextProtocol NuGet Package**: Official C# SDK
+- **ModelContextProtocol NuGet Package**: Official C# SDK (see also `reference/csharp-sdk` for full source)
 - **JSON-RPC**: Standard protocol implementation
 - **Stdio Transport**: Simple, reliable communication
 

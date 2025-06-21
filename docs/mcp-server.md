@@ -7,7 +7,7 @@ The MCP Server is a console application that implements the Model Context Protoc
 The current implementation provides a basic MCP server that:
 - Starts and runs as a console application
 - Uses Microsoft Extensions for logging and dependency injection
-- References the official ModelContextProtocol NuGet package
+- References the official ModelContextProtocol NuGet package (see also the `reference/csharp-sdk` submodule for full SDK source)
 - Provides a foundation for exposing tools and resources
 
 ## Current Implementation
@@ -113,7 +113,7 @@ Currently, the server uses default configuration. Future versions will support:
 
 ### SDK Integration
 
-The server references the official Model Context Protocol C# SDK from the `modelcontextprotocol/csharp-sdk` project. This ensures compatibility with the standard MCP specification.
+The server references the official Model Context Protocol C# SDK from the `reference/csharp-sdk` submodule (mirroring the `modelcontextprotocol/csharp-sdk` project). This ensures compatibility with the standard MCP specification and provides a local reference for future AI development.
 
 ### Logging
 
