@@ -4,21 +4,28 @@ The MCP Server is a console application that implements the Model Context Protoc
 
 ## Overview
 
-The current implementation provides a basic MCP server that:
-- Starts and runs as a console application
+The current implementation provides a complete MCP server that:
+- Starts and runs as a console application using the hosting framework
 - Uses Microsoft Extensions for logging and dependency injection
 - References the official ModelContextProtocol NuGet package (see also the `reference/csharp-sdk` submodule for full SDK source)
-- Provides a foundation for exposing tools and resources
+- Implements mathematical tools (add, subtract, multiply, divide) using the MCP SDK
+- Provides proper stdio transport for client communication
+- Handles tool registration and execution through the MCP framework
 
 ## Current Implementation
 
 ### Basic Structure
 
-The server is implemented in `src/MCPServer/MCPServer/Program.cs`:
+The server is implemented in `src/MCPServer/MCPServer/Program.cs` and `src/MCPServer/MCPServer/Tools/MathTools.cs`:
 
 ```csharp
+// Program.cs - Server setup and hosting
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using ModelContextProtocol.Server;
+using MCPServer.Tools;
 
 namespace MCPServer
 {
@@ -26,20 +33,54 @@ namespace MCPServer
     {
         static async Task Main(string[] args)
         {
-            Console.WriteLine("Simple MCP Server Starting...");
+            var builder = Host.CreateApplicationBuilder(args);
             
-            // Create logging infrastructure
-            using var loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder => builder.AddConsole());
-            var logger = loggerFactory.CreateLogger<Program>();
+            builder.Logging.AddConsole(consoleLogOptions =>
+            {
+                consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
+            });
+
+            builder.Services
+                .AddMcpServer()
+                .WithStdioServerTransport()
+                .WithTools<MathTools>();
+
+            var host = builder.Build();
             
-            // Log server status
-            logger.LogInformation("MCP Server is running...");
-            logger.LogInformation("Available tools: echo, time, random");
+            Console.WriteLine("MCP Server Starting...");
+            Console.WriteLine("Available tools: add, subtract, multiply, divide");
             
-            // Keep server running
-            Console.WriteLine("Press Ctrl+C to stop the server...");
-            await Task.Delay(-1);
+            await host.RunAsync();
         }
+    }
+}
+```
+
+```csharp
+// Tools/MathTools.cs - Mathematical operations
+using ModelContextProtocol.Server;
+using System.ComponentModel;
+
+namespace MCPServer.Tools;
+
+[McpServerToolType]
+public class MathTools
+{
+    [McpServerTool(Name = "add"), Description("Adds two numbers.")]
+    public static string Add(double a, double b) => $"The sum of {a} and {b} is {a + b}";
+
+    [McpServerTool(Name = "subtract"), Description("Subtracts the second number from the first number.")]
+    public static string Subtract(double a, double b) => $"The difference of {a} and {b} is {a - b}";
+
+    [McpServerTool(Name = "multiply"), Description("Multiplies two numbers.")]
+    public static string Multiply(double a, double b) => $"The product of {a} and {b} is {a * b}";
+
+    [McpServerTool(Name = "divide"), Description("Divides the first number by the second number.")]
+    public static string Divide(double a, double b)
+    {
+        if (b == 0)
+            return "Error: Cannot divide by zero";
+        return $"The quotient of {a} and {b} is {a / b}";
     }
 }
 ```
@@ -47,18 +88,25 @@ namespace MCPServer
 ### Dependencies
 
 The server project includes these NuGet packages:
+- `Microsoft.Extensions.Hosting` (v9.0.6) - Application hosting framework
 - `ModelContextProtocol` (v0.3.0-preview.1) - Official MCP SDK
 - `Microsoft.Extensions.Logging` (v9.0.6) - Logging framework
 - `Microsoft.Extensions.Logging.Console` (v9.0.6) - Console logging provider
 
 ## Planned Tools and Resources
 
-The server is designed to expose these example tools:
+The server implements these mathematical tools:
 
 ### Tools
-1. **echo** - Echoes back the input text
-2. **time** - Gets the current server time
-3. **random** - Generates random numbers within a specified range
+1. **add** - Adds two numbers and returns the sum
+2. **subtract** - Subtracts the second number from the first number
+3. **multiply** - Multiplies two numbers and returns the product
+4. **divide** - Divides the first number by the second number (with division by zero handling)
+
+### Legacy Planned Tools
+1. **echo** - Echoes back the input text (to be implemented)
+2. **time** - Gets the current server time (to be implemented) 
+3. **random** - Generates random numbers within a specified range (to be implemented)
 
 ### Resources
 - Configuration data

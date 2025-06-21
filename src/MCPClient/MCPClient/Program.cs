@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
+using System.Text.Json;
 
 namespace MCPClient
 {
@@ -7,44 +9,150 @@ namespace MCPClient
     {
         static async Task Main(string[] args)
         {
-            Console.WriteLine("Simple MCP Client Starting...");
+            Console.WriteLine("MCP Client Starting...");
             
             // Create a simple console logger
             using var loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder => builder.AddConsole());
             var logger = loggerFactory.CreateLogger<Program>();
             
-            logger.LogInformation("MCP Client is running...");
-            logger.LogInformation("This client will connect to MCP servers and use their tools.");
+            IMcpClient? client = null;
             
-            // For now, just demonstrate that the client can start
+            try
+            {
+                // Connect to the MCP Server via stdio
+                var clientTransport = new StdioClientTransport(new()
+                {
+                    Name = "Math MCP Server",
+                    Command = "dotnet",
+                    Arguments = ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
+                });
+
+                client = await McpClientFactory.CreateAsync(clientTransport, loggerFactory: loggerFactory);
+                
+                logger.LogInformation("Connected to MCP Server");
+
+                // List available tools
+                var tools = await client.ListToolsAsync();
+                Console.WriteLine("\nAvailable tools:");
+                foreach (var tool in tools)
+                {
+                    Console.WriteLine($"- {tool.Name}: {tool.Description}");
+                }
+                Console.WriteLine();
+
+                // Interactive command loop
+                ShowHelp();
+                while (true)
+                {
+                    Console.Write("mcp> ");
+                    var input = await Console.In.ReadLineAsync();
+                    
+                    if (string.IsNullOrWhiteSpace(input))
+                        continue;
+                    
+                    var parts = input.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    var command = parts[0].ToLower();
+
+                    switch (command)
+                    {
+                        case "help":
+                            ShowHelp();
+                            break;
+                        case "list":
+                            Console.WriteLine("Available tools:");
+                            foreach (var tool in tools)
+                            {
+                                Console.WriteLine($"- {tool.Name}: {tool.Description}");
+                            }
+                            break;
+                        case "add":
+                        case "subtract":
+                        case "multiply":
+                        case "divide":
+                            await ExecuteMathOperation(client, command, parts);
+                            break;
+                        case "quit":
+                        case "exit":
+                            Console.WriteLine("Goodbye!");
+                            return;
+                        default:
+                            Console.WriteLine($"Unknown command: {command}. Type 'help' for available commands.");
+                            break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error occurred in MCP Client");
+                Console.WriteLine($"Error: {ex.Message}");
+            }
+            finally
+            {
+                if (client != null)
+                {
+                    await client.DisposeAsync();
+                }
+            }
+        }
+
+        static void ShowHelp()
+        {
             Console.WriteLine("Available commands:");
             Console.WriteLine("- help: Show this help message");
-            Console.WriteLine("- quit: Exit the client");
+            Console.WriteLine("- list: List available tools");
+            Console.WriteLine("- add <num1> <num2>: Add two numbers");
+            Console.WriteLine("- subtract <num1> <num2>: Subtract second number from first");
+            Console.WriteLine("- multiply <num1> <num2>: Multiply two numbers");
+            Console.WriteLine("- divide <num1> <num2>: Divide first number by second");
+            Console.WriteLine("- quit/exit: Exit the client");
             Console.WriteLine();
-            
-            while (true)
+        }
+
+        static async Task ExecuteMathOperation(IMcpClient client, string operation, string[] parts)
+        {
+            if (parts.Length != 3)
             {
-                Console.Write("mcp> ");
-                var input = await Console.In.ReadLineAsync();
-                
-                if (string.IsNullOrWhiteSpace(input))
-                    continue;
-                
-                switch (input.ToLower().Trim())
+                Console.WriteLine($"Usage: {operation} <number1> <number2>");
+                return;
+            }
+
+            if (!double.TryParse(parts[1], out double a) || !double.TryParse(parts[2], out double b))
+            {
+                Console.WriteLine("Error: Both arguments must be valid numbers");
+                return;
+            }
+
+            try
+            {
+                var result = await client.CallToolAsync(
+                    operation,
+                    new Dictionary<string, object?>
+                    {
+                        ["a"] = a,
+                        ["b"] = b
+                    }
+                );
+
+                if (result.IsError)
                 {
-                    case "help":
-                        Console.WriteLine("Available commands:");
-                        Console.WriteLine("- help: Show this help message");
-                        Console.WriteLine("- quit: Exit the client");
-                        break;
-                    case "quit":
-                    case "exit":
-                        Console.WriteLine("Goodbye!");
-                        return;
-                    default:
-                        Console.WriteLine($"Unknown command: {input}. Type 'help' for available commands.");
-                        break;
+                    Console.WriteLine($"Error calling tool: {result.Content.FirstOrDefault()?.ToString()}");
                 }
+                else
+                {
+                    var textContent = result.Content.OfType<TextContentBlock>().FirstOrDefault();
+                    if (textContent != null)
+                    {
+                        Console.WriteLine(textContent.Text);
+                    }
+                    else
+                    {
+                        Console.WriteLine("No result returned from tool");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error executing {operation}: {ex.Message}");
             }
         }
     }

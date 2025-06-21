@@ -2,6 +2,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using ModelContextProtocol.Server;
+using MCPServer.Tools;
 
 namespace MCPServer
 {
@@ -9,18 +11,25 @@ namespace MCPServer
     {
         static async Task Main(string[] args)
         {
-            Console.WriteLine("Simple MCP Server Starting...");
+            var builder = Host.CreateApplicationBuilder(args);
             
-            // Create a simple console logger
-            using var loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder => builder.AddConsole());
-            var logger = loggerFactory.CreateLogger<Program>();
+            builder.Logging.AddConsole(consoleLogOptions =>
+            {
+                // Configure all logs to go to stderr
+                consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
+            });
+
+            builder.Services
+                .AddMcpServer()
+                .WithStdioServerTransport()
+                .WithTools<MathTools>();
+
+            var host = builder.Build();
             
-            logger.LogInformation("MCP Server is running...");
-            logger.LogInformation("Available tools: echo, time, random");
+            Console.WriteLine("MCP Server Starting...");
+            Console.WriteLine("Available tools: add, subtract, multiply, divide");
             
-            // Keep the server running
-            Console.WriteLine("Press Ctrl+C to stop the server...");
-            await Task.Delay(-1);
+            await host.RunAsync();
         }
     }
 }
