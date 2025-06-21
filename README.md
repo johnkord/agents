@@ -32,10 +32,15 @@ This repository provides a foundation for building AI agents that leverage the M
    dotnet run
    ```
 
-3. **Start the MCP Client** (in another terminal):
+3. **Start the AI Agent** (in another terminal):
    ```bash
-   cd src/MCPClient/MCPClient
-   dotnet run
+   cd src/Agent/Agent
+   # Test MCP connection (no API key required)
+   dotnet run "test"
+   
+   # Or with OpenAI API key for full agent functionality
+   export OPENAI_API_KEY=your_api_key_here
+   dotnet run "Calculate 15 + 27 and then multiply by 2"
    ```
 
 ## Project Structure
@@ -45,6 +50,7 @@ agents/
 ├── src/
 │   ├── MCPServer/MCPServer/     # MCP Server console application
 │   ├── MCPClient/MCPClient/     # MCP Client console application
+│   ├── Agent/Agent/             # Simple AI Agent with MCP integration
 │   └── Shared/Shared/           # Shared utilities and models
 ├── docs/                        # Comprehensive documentation
 │   ├── README.md               # Documentation overview
@@ -61,6 +67,7 @@ agents/
 ### Current Implementation
 - ✅ Basic MCP server with foundation for tools and resources
 - ✅ Interactive MCP client with command-line interface
+- ✅ Simple AI Agent with MCP Client integration loop
 - ✅ Microsoft Extensions integration (logging, DI, configuration)
 - ✅ Official MCP C# SDK integration
 - ✅ Comprehensive documentation and guides
