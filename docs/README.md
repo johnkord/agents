@@ -28,14 +28,31 @@ agents.sln        - Visual Studio solution file
 1. **Prerequisites**: .NET 8.0 SDK or later
 2. **Build**: `dotnet build` from the root directory
 3. **Run MCP Server**: Navigate to `src/MCPServer/MCPServer` and run `dotnet run`
-4. **Run MCP Client**: Navigate to `src/MCPClient/MCPClient` and run `dotnet run`
+4. **Run MCP Client**: In another terminal, navigate to `src/MCPClient/MCPClient` and run `dotnet run`
+5. **Test**: Run `dotnet test` to execute all unit tests
+
+## Example Usage
+
+Once both server and client are running:
+
+```
+mcp> add 5 3
+The sum of 5 and 3 is 8
+
+mcp> divide 20 4  
+The quotient of 20 and 4 is 5
+
+mcp> divide 10 0
+Error: Cannot divide by zero
+```
 
 ## Documentation Index
 
 - [Getting Started](getting-started.md) - Setup and initial configuration
-- [MCP Server](mcp-server.md) - MCP Server implementation details
-- [MCP Client](mcp-client.md) - MCP Client usage and features
+- [MCP Server](mcp-server.md) - MCP Server implementation with mathematical tools
+- [MCP Client](mcp-client.md) - MCP Client usage and interactive features  
 - [Architecture](architecture.md) - System architecture and design decisions
+- [Tests](../tests/README.md) - Comprehensive testing including AI validation
 
 ## Technology Stack
 

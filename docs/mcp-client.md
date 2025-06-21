@@ -4,12 +4,14 @@ The MCP Client is a console application that connects to MCP servers and provide
 
 ## Overview
 
-The current implementation provides a basic MCP client that:
+The current implementation provides a complete MCP client that:
 - Starts as an interactive console application
-- Provides a command-line interface for user interaction
+- Connects to MCP servers via stdio transport
+- Discovers and lists available tools from connected servers
+- Provides an interactive command-line interface for invoking tools
+- Implements proper error handling and connection management
 - Uses Microsoft Extensions for logging
 - References the official ModelContextProtocol NuGet package
-- Serves as a foundation for connecting to MCP servers
 
 ## Current Implementation
 
@@ -64,6 +66,7 @@ namespace MCPClient
 ### Dependencies
 
 The client project includes these NuGet packages:
+- `Microsoft.Extensions.Hosting` (v9.0.6) - Application hosting framework
 - `ModelContextProtocol` (v0.3.0-preview.1) - Official MCP SDK (see also `reference/csharp-sdk` for full source)
 - `Microsoft.Extensions.Logging` (v9.0.6) - Logging framework
 - `Microsoft.Extensions.Logging.Console` (v9.0.6) - Console logging provider
@@ -74,15 +77,20 @@ The client provides an interactive shell with these commands:
 
 ### Available Commands
 - `help` - Display available commands and usage
+- `list` - List available tools from connected server
+- `add <num1> <num2>` - Add two numbers using the MCP server
+- `subtract <num1> <num2>` - Subtract second number from first using the MCP server
+- `multiply <num1> <num2>` - Multiply two numbers using the MCP server
+- `divide <num1> <num2>` - Divide first number by second using the MCP server
 - `quit` / `exit` - Exit the client application
 
-### Future Commands
-- `connect <server>` - Connect to an MCP server
+### Current Commands
+- `connect <server>` - Connect to an MCP server (automatically done on startup)
 - `disconnect` - Disconnect from current server
-- `list-tools` - Show available tools on connected server
-- `call <tool> [args]` - Execute a tool with arguments
-- `list-resources` - Show available resources on connected server
-- `get-resource <name>` - Retrieve a resource from the server
+- `list-tools` - Show available tools on connected server (same as `list`)
+- `call <tool> [args]` - Execute a tool with arguments (implemented for math operations)
+- `list-resources` - Show available resources on connected server (planned)
+- `get-resource <name>` - Retrieve a resource from the server (planned)
 
 ## Usage
 
