@@ -1,0 +1,24 @@
+# .dockerignore
+bin/
+obj/
+.vs/
+.vscode/
+.git/
+.gitignore
+*.md
+*.txt
+Dockerfile*
+docker-compose*
+.env*
+tests/
+docs/
+reference/
+.github/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

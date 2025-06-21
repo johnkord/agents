@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="ResearchAgent.App/ResearchAgent.App.csproj" />
+  <Project Path="ResearchAgent.Core/ResearchAgent.Core.csproj" />
+  <Project Path="ResearchAgent.Plugins/ResearchAgent.Plugins.csproj" />
+</Solution>

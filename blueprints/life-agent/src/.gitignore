@@ -1,0 +1,8 @@
+# Life Agent — Build outputs
+bin/
+obj/
+
+# Runtime data (event store, conversational memory)
+data/
+
+# User secrets (managed by dotnet user-secrets)

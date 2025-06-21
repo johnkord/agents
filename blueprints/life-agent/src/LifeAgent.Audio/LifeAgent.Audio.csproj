@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>LifeAgent.Audio</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LifeAgent.Core\LifeAgent.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Deepgram .NET SDK for streaming speech-to-text -->
+    <PackageReference Include="Deepgram" Version="5.0.0" />
+    <!-- EF Core SQLite for conversational memory + event store -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
+    <!-- Logging abstractions for structured logging in services -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
+    <!-- Options pattern for typed configuration -->
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.3" />
+    <!-- DI abstractions for IServiceCollection extensions -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
+    <!-- Hosting abstractions for BackgroundService -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.3" />
+  </ItemGroup>
+</Project>

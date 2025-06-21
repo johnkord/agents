@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="LifeAgent.Core/LifeAgent.Core.csproj" />
+  <Project Path="LifeAgent.Audio/LifeAgent.Audio.csproj" />
+  <Project Path="LifeAgent.App/LifeAgent.App.csproj" />
+</Solution>

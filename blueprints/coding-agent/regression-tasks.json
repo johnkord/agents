@@ -1,0 +1,43 @@
+[
+  {
+    "id": "bug-fix-known",
+    "task": "The SanitizeFileName method in EventLog.cs doesn't handle tilde (~) characters. They should be replaced with hyphens like other special characters. Fix it and add a test.",
+    "type": "bug-fix-specified",
+    "expectedFeatures": ["verification", "run_tests"],
+    "maxSteps": 12,
+    "notes": "Tests that the agent follows Plan→Act→Verify for a well-specified bug. Should NOT trigger debugging protocol (bug is directly described). Should NOT state assumptions (single interpretation)."
+  },
+  {
+    "id": "bug-fix-vague",
+    "task": "Something is wrong with how session filenames are generated. Some filenames come out garbled when the task description contains certain characters. Investigate and fix.",
+    "type": "bug-fix-vague",
+    "expectedFeatures": ["debugging-protocol", "hypothesis", "verification", "run_tests"],
+    "maxSteps": 15,
+    "notes": "Tests the 5A debugging protocol: the agent should reproduce the issue, hypothesize about root causes, test its hypothesis. May also trigger 5B assumptions ('I'm assuming garbled means special characters not being sanitized')."
+  },
+  {
+    "id": "feature-add",
+    "task": "Add a method to EpisodeSegmenter that returns the dominant episode type for a session (the type that spans the most steps). Include a test.",
+    "type": "feature-addition",
+    "expectedFeatures": ["manage_todos", "verification", "run_tests"],
+    "maxSteps": 15,
+    "notes": "Tests that the agent can implement a new feature from spec. Should use manage_todos for the multi-step plan. Validates verification compliance."
+  },
+  {
+    "id": "multi-file-refactor",
+    "task": "Rename the ExtractPivotReason method to ExtractPivotSummary everywhere it appears in the codebase. Update all references and tests.",
+    "type": "refactor",
+    "expectedFeatures": ["verification", "run_tests", "grep_search"],
+    "maxSteps": 20,
+    "notes": "Tests multi-file changes. The agent should grep to find all references first (explore-first pattern), then make coordinated edits. May trigger assumptions about scope ('I'm assuming this includes test helper methods')."
+  },
+  {
+    "id": "resume-test",
+    "task": "Add comprehensive XML doc comments to all public methods and properties in EpisodeSegmenter.cs. Each comment should describe the method's purpose, parameters, and return value.",
+    "type": "documentation",
+    "expectedFeatures": ["consolidation", "episode-chain", "manage_todos"],
+    "maxSteps": 5,
+    "expectResume": true,
+    "notes": "Deliberately under-budgeted. Tests the handoff system: consolidation summary quality, episode chain, todo state preservation. Resume with --resume flag and 15 additional steps to validate continuation."
+  }
+]

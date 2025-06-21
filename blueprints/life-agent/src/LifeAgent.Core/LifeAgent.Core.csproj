@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>LifeAgent.Core</RootNamespace>
+  </PropertyGroup>
+  <!-- Core has zero external dependencies — plain domain models, events, interfaces -->
+</Project>
