@@ -44,8 +44,22 @@ internal class Program
             var agent = new SimpleAgentAlpha(openAiApiKey, loggerFactory);
             await agent.ExecuteTaskAsync(task);
         }
+        catch (HttpRequestException httpEx) when (httpEx.Message.Contains("api.openai.com"))
+        {
+            Console.WriteLine("❌ Failed to connect to OpenAI API. Please check:");
+            Console.WriteLine("   - Your internet connection");
+            Console.WriteLine("   - Your OPENAI_API_KEY is valid");
+            Console.WriteLine("   - You have sufficient API credits");
+            logger.LogError(httpEx, "OpenAI API connection failed");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            Console.WriteLine("❌ OpenAI API authentication failed. Please check your OPENAI_API_KEY.");
+        }
         catch (Exception ex)
         {
+            Console.WriteLine($"❌ Agent failed with error: {ex.Message}");
+            Console.WriteLine("💡 Try running 'dotnet run test' to verify MCP server connectivity");
             logger.LogError(ex, "Agent failed");
         }
     }
@@ -127,23 +141,39 @@ internal sealed class SimpleAgentAlpha
         var mcp = new McpClientService(_lf);
         await using var _ = mcp;
 
-        var transport = Program.GetMcpTransportType();
-        if (transport == McpTransportType.Http)
+        try
         {
-            var url = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
-            await mcp.ConnectAsync(McpTransportType.Http, "Agent MCP Server", serverUrl: url);
+            var transport = Program.GetMcpTransportType();
+            if (transport == McpTransportType.Http)
+            {
+                var url = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
+                await mcp.ConnectAsync(McpTransportType.Http, "Agent MCP Server", serverUrl: url);
+            }
+            else
+            {
+                await mcp.ConnectAsync(
+                    McpTransportType.Stdio,
+                    "Agent MCP Server",
+                    "dotnet",
+                    ["run", "--project", "../../MCPServer/MCPServer.csproj"]);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            await mcp.ConnectAsync(
-                McpTransportType.Stdio,
-                "Agent MCP Server",
-                "dotnet",
-                ["run", "--project", "../../MCPServer/MCPServer.csproj"]);
+            Console.WriteLine("❌ Failed to connect to MCP Server. Please ensure:");
+            Console.WriteLine("   - The MCPServer project builds successfully");
+            Console.WriteLine("   - No other MCP server instances are running");
+            Console.WriteLine("   - Run from the correct directory (src/Agent/AgentAlpha)");
+            Console.WriteLine($"   Error: {ex.Message}");
+            return;
         }
+
+        Console.WriteLine("✅ Connected to MCP Server");
 
         /* --- prepare OpenAI tool schema ----------------------------------- */
         var tools = await mcp.ListToolsAsync();
+        Console.WriteLine($"🔧 Discovered {tools.Count} tools: {string.Join(", ", tools.Take(5).Select(t => t.Name))}{(tools.Count > 5 ? "..." : "")}");
+        
         var openAiTools = tools.Select(t => new ToolDefinition
         {
             Type        = "function",
