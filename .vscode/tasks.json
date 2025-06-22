@@ -29,7 +29,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/src/MCPServer/MCPServer/MCPServer.csproj"
+                "${workspaceFolder}/src/MCPServer/MCPServer.csproj"
             ],
             "group": "build",
             "presentation": {
@@ -67,7 +67,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/src/MCPClient/MCPClient/MCPClient.csproj"
+                "${workspaceFolder}/src/MCPClient/MCPClient.csproj"
             ],
             "group": "build",
             "presentation": {

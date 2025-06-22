@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using OpenAIIntegration;
+using OpenAIIntegration.Model;
 using System.Text.Json;
 using MCPClient;
 
@@ -76,7 +77,7 @@ internal class Program
                     McpTransportType.Stdio,
                     "Test Agent MCP Server",
                     "dotnet",
-                    ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]);
+                    ["run", "--project", "../../MCPServer/MCPServer.csproj"]);
             }
 
             Console.WriteLine("✅ Connected.");
@@ -107,14 +108,16 @@ internal class Program
 internal sealed class SimpleAgentAlpha
 {
     private readonly ILogger<SimpleAgentAlpha> _logger;
-    private readonly IOpenAIChatService        _openAi;
-    private readonly ILoggerFactory            _lf;
+    // private readonly IOpenAIChatService        _openAi;
+    private readonly IOpenAIResponseService _openAi;
+    private readonly ILoggerFactory _lf;
 
     public SimpleAgentAlpha(string apiKey, ILoggerFactory lf)
     {
         _lf     = lf;
         _logger = lf.CreateLogger<SimpleAgentAlpha>();
-        _openAi = new OpenAIChatService(apiKey);
+        // _openAi = new OpenAIChatService(apiKey);
+        _openAi = new OpenAIResponseService(apiKey);
     }
 
     public async Task ExecuteTaskAsync(string task)
@@ -135,7 +138,7 @@ internal sealed class SimpleAgentAlpha
                 McpTransportType.Stdio,
                 "Agent MCP Server",
                 "dotnet",
-                ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]);
+                ["run", "--project", "../../MCPServer/MCPServer.csproj"]);
         }
 
         /* --- prepare OpenAI tool schema ----------------------------------- */
@@ -172,7 +175,20 @@ internal sealed class SimpleAgentAlpha
         {
             Console.WriteLine($"\n--- Iteration {i + 1} ---");
 
-            var (content, toolCalls) = await _openAi.CreateChatCompletionAsync(msgs.ToArray(), openAiTools);
+            // NEW – build request & call Responses API
+            var req = new ResponseCreateRequest
+            {
+                Model      = "gpt-3.5-turbo",
+                Messages   = msgs.ToArray(),
+                Tools      = openAiTools,
+                ToolChoice = "auto"
+            };
+
+            var res = await _openAi.CreateResponseAsync(req);
+
+            string       content   = res.Content ?? "";
+            ToolCall[]?  toolCalls = res.ToolCalls;
+
             Console.WriteLine($"AI: {content}");
 
             if (content.Contains("TASK COMPLETED", StringComparison.OrdinalIgnoreCase))
@@ -187,15 +203,15 @@ internal sealed class SimpleAgentAlpha
                 foreach (var tc in toolCalls)
                 {
                     var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(tc.function.arguments)!;
-                    var res  = await mcp.CallToolAsync(tc.function.name, new Dictionary<string, object?>
+                    var res2  = await mcp.CallToolAsync(tc.function.name, new Dictionary<string, object?>
                     {
                         ["a"] = args["a"].GetDouble(),
                         ["b"] = args["b"].GetDouble()
                     });
 
-                    string toolReply = res.IsError
-                        ? $"Error: {res.Content.FirstOrDefault()}"
-                        : res.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? "";
+                    string toolReply = res2.IsError
+                        ? $"Error: {res2.Content.FirstOrDefault()}"
+                        : res2.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? "";
 
                     msgs.Add(new { role = "tool", tool_call_id = tc.id, content = toolReply });
                 }

@@ -34,7 +34,7 @@ The MCP server exposes tools and resources that clients can use.
 
 1. **Navigate to server directory**:
    ```bash
-   cd src/MCPServer/MCPServer
+   cd src/MCPServer
    ```
 
 2. **Run the server**:
@@ -58,7 +58,7 @@ The MCP client connects to MCP servers and uses their tools.
 
 2. **Navigate to client directory**:
    ```bash
-   cd src/MCPClient/MCPClient
+   cd src/MCPClient
    ```
 
 3. **Run the client**:

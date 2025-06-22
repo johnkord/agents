@@ -20,7 +20,7 @@ public class AgentAlphaIntegrationTests
         {
             Name = "Test Agent MCP Server",
             Command = "dotnet",
-            Arguments = ["run", "--project", "../../src/MCPServer/MCPServer/MCPServer.csproj"]
+            Arguments = ["run", "--project", "../../src/MCPServer/MCPServer.csproj"]
         });
 
         await using var mcpClient = await McpClientFactory.CreateAsync(clientTransport, loggerFactory: loggerFactory);

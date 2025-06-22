@@ -36,7 +36,7 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_AGENTS_1 }}
       run: |
         echo "Starting MCP Server..."
-        cd src/MCPServer/MCPServer
+        cd src/MCPServer
         timeout 30s dotnet run --configuration Release &
         SERVER_PID=$!
         sleep 5

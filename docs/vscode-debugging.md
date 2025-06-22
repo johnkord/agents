@@ -53,7 +53,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 ```bash
 # Start MCP Server (stdio mode)
-cd src/MCPServer/MCPServer
+cd src/MCPServer
 dotnet run
 
 # Connect with AgentAlpha
@@ -65,7 +65,7 @@ dotnet run test
 
 ```bash
 # Start MCP Server (SSE mode)
-cd src/MCPServer/MCPServer
+cd src/MCPServer
 dotnet run -- --transport sse
 # OR using environment variable:
 # MCP_TRANSPORT=sse dotnet run
@@ -103,7 +103,7 @@ dotnet run "Calculate the sum of 15 and 27"
 ### 1. Quick Testing
 ```bash
 # Terminal 1: Start MCP Server
-cd src/MCPServer/MCPServer
+cd src/MCPServer
 dotnet run
 
 # Terminal 2: Test with AgentAlpha
@@ -114,7 +114,7 @@ dotnet run test
 ### 2. SSE Transport Testing
 ```bash
 # Terminal 1: Start SSE Server
-cd src/MCPServer/MCPServer
+cd src/MCPServer
 MCP_TRANSPORT=sse ASPNETCORE_URLS=http://localhost:3000 dotnet run
 
 # Terminal 2: Test SSE Client

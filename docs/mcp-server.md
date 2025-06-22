@@ -16,7 +16,7 @@ The current implementation provides a complete MCP server that:
 
 ### Basic Structure
 
-The server is implemented in `src/MCPServer/MCPServer/Program.cs` and `src/MCPServer/MCPServer/Tools/MathTools.cs`:
+The server is implemented in `src/MCPServer/Program.cs` and `src/MCPServer/Tools/MathTools.cs`:
 
 ```csharp
 // Program.cs - Server setup and hosting
@@ -132,7 +132,7 @@ The server implements these mathematical tools:
 ### Starting the Server
 
 ```bash
-cd src/MCPServer/MCPServer
+cd src/MCPServer
 dotnet run
 ```
 

@@ -37,7 +37,7 @@ This repository provides a foundation for building AI agents that leverage the M
 
 2. **Start the MCP Server** (in one terminal):
    ```bash
-   cd src/MCPServer/MCPServer
+   cd src/MCPServer
    dotnet run
    ```
 
@@ -58,7 +58,7 @@ For HTTP-based communication instead of stdio:
 
 1. **Start MCP Server (SSE mode)**:
    ```bash
-   cd src/MCPServer/MCPServer
+   cd src/MCPServer
    MCP_TRANSPORT=sse dotnet run
    ```
 
@@ -82,8 +82,8 @@ See [docs/vscode-debugging.md](docs/vscode-debugging.md) for detailed instructio
 ```
 agents/
 ├── src/
-│   ├── MCPServer/MCPServer/     # MCP Server console application
-│   ├── MCPClient/MCPClient/     # MCP Client console application
+│   ├── MCPServer/     # MCP Server console application
+│   ├── MCPClient/     # MCP Client console application
 │   ├── AgentAlpha/AgentAlpha/   # Simple AI AgentAlpha with MCP integration
 │   └── Shared/Shared/           # Shared utilities and models
 ├── docs/                        # Comprehensive documentation

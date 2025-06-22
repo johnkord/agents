@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../OpenAIIntegration/OpenAIIntegration.csproj" />
+    <ProjectReference Include="../../Common/Common.csproj" />
     <ProjectReference Include="../../MCPClient/MCPClient.csproj" />
   </ItemGroup>
 

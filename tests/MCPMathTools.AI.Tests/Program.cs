@@ -36,7 +36,7 @@ public class Program
             {
                 Name = "AI Test Math MCP Server",
                 Command = "dotnet",
-                Arguments = ["run", "--project", "../../src/MCPServer/MCPServer/MCPServer.csproj"]
+                Arguments = ["run", "--project", "../../src/MCPServer/MCPServer.csproj"]
             });
 
             await using var mcpClient = await McpClientFactory.CreateAsync(clientTransport, loggerFactory: loggerFactory);

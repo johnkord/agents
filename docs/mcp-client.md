@@ -17,7 +17,7 @@ The current implementation provides a complete MCP client that:
 
 ### Basic Structure
 
-The client is implemented in `src/MCPClient/MCPClient/Program.cs`:
+The client is implemented in `src/MCPClient/Program.cs`:
 
 ```csharp
 using Microsoft.Extensions.Logging;
@@ -97,7 +97,7 @@ The client provides an interactive shell with these commands:
 ### Starting the Client
 
 ```bash
-cd src/MCPClient/MCPClient
+cd src/MCPClient
 dotnet run
 ```
 

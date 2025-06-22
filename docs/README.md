@@ -27,8 +27,8 @@ agents.sln        - Visual Studio solution file
 
 1. **Prerequisites**: .NET 8.0 SDK or later
 2. **Build**: `dotnet build` from the root directory
-3. **Run MCP Server**: Navigate to `src/MCPServer/MCPServer` and run `dotnet run`
-4. **Run MCP Client**: In another terminal, navigate to `src/MCPClient/MCPClient` and run `dotnet run`
+3. **Run MCP Server**: Navigate to `src/MCPServer` and run `dotnet run`
+4. **Run MCP Client**: In another terminal, navigate to `src/MCPClient` and run `dotnet run`
 5. **Test**: Run `dotnet test` to execute all unit tests
 
 ## Example Usage

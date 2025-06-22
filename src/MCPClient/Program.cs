@@ -23,7 +23,7 @@ namespace MCPClient
                 await mcpService.ConnectAsync(
                     "Math MCP Server",
                     "dotnet",
-                    ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
+                    ["run", "--project", "../../MCPServer/MCPServer.csproj"]
                 );
                 
                 logger.LogInformation("Connected to MCP Server");
