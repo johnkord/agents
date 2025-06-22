@@ -15,24 +15,21 @@ namespace MCPClient
             using var loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder => builder.AddConsole());
             var logger = loggerFactory.CreateLogger<Program>();
             
-            IMcpClient? client = null;
+            var mcpService = new McpClientService(loggerFactory);
             
             try
             {
                 // Connect to the MCP Server via stdio
-                var clientTransport = new StdioClientTransport(new()
-                {
-                    Name = "Math MCP Server",
-                    Command = "dotnet",
-                    Arguments = ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
-                });
-
-                client = await McpClientFactory.CreateAsync(clientTransport, loggerFactory: loggerFactory);
+                await mcpService.ConnectAsync(
+                    "Math MCP Server",
+                    "dotnet",
+                    ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
+                );
                 
                 logger.LogInformation("Connected to MCP Server");
 
                 // List available tools
-                var tools = await client.ListToolsAsync();
+                var tools = await mcpService.ListToolsAsync();
                 Console.WriteLine("\nAvailable tools:");
                 foreach (var tool in tools)
                 {
@@ -69,7 +66,7 @@ namespace MCPClient
                         case "subtract":
                         case "multiply":
                         case "divide":
-                            await ExecuteMathOperation(client, command, parts);
+                            await ExecuteMathOperation(mcpService, command, parts);
                             break;
                         case "quit":
                         case "exit":
@@ -88,10 +85,7 @@ namespace MCPClient
             }
             finally
             {
-                if (client != null)
-                {
-                    await client.DisposeAsync();
-                }
+                await mcpService.DisposeAsync();
             }
         }
 
@@ -108,7 +102,7 @@ namespace MCPClient
             Console.WriteLine();
         }
 
-        static async Task ExecuteMathOperation(IMcpClient client, string operation, string[] parts)
+        static async Task ExecuteMathOperation(McpClientService mcpService, string operation, string[] parts)
         {
             if (parts.Length != 3)
             {
@@ -124,7 +118,7 @@ namespace MCPClient
 
             try
             {
-                var result = await client.CallToolAsync(
+                var result = await mcpService.CallToolAsync(
                     operation,
                     new Dictionary<string, object?>
                     {

@@ -32,9 +32,9 @@ This repository provides a foundation for building AI agents that leverage the M
    dotnet run
    ```
 
-3. **Start the AI Agent** (in another terminal):
+3. **Start the AI AgentAlpha** (in another terminal):
    ```bash
-   cd src/Agent/Agent
+   cd src/AgentAlpha/AgentAlpha
    # Test MCP connection (no API key required)
    dotnet run "test"
    
@@ -50,7 +50,7 @@ agents/
 ├── src/
 │   ├── MCPServer/MCPServer/     # MCP Server console application
 │   ├── MCPClient/MCPClient/     # MCP Client console application
-│   ├── Agent/Agent/             # Simple AI Agent with MCP integration
+│   ├── AgentAlpha/AgentAlpha/   # Simple AI AgentAlpha with MCP integration
 │   └── Shared/Shared/           # Shared utilities and models
 ├── docs/                        # Comprehensive documentation
 │   ├── README.md               # Documentation overview
@@ -67,7 +67,7 @@ agents/
 ### Current Implementation
 - ✅ Basic MCP server with foundation for tools and resources
 - ✅ Interactive MCP client with command-line interface
-- ✅ Simple AI Agent with MCP Client integration loop
+- ✅ Simple AI AgentAlpha with MCP Client integration loop
 - ✅ Microsoft Extensions integration (logging, DI, configuration)
 - ✅ Official MCP C# SDK integration
 - ✅ Comprehensive documentation and guides
