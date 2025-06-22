@@ -136,6 +136,7 @@ Detailed documentation is available in the `docs/` directory:
 - 🖥️ [MCP Server Documentation](docs/mcp-server.md) - Server implementation
 - 💻 [MCP Client Documentation](docs/mcp-client.md) - Client usage
 - 🏗️ [Architecture Overview](docs/architecture.md) - System design
+- 🚀 [Strategic Enhancement Design](docs/strategic-enhancement-design.md) - Strategic roadmap for scaling
 
 ## Use Cases
 

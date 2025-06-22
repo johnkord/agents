@@ -52,6 +52,8 @@ Error: Cannot divide by zero
 - [MCP Server](mcp-server.md) - MCP Server implementation with mathematical tools
 - [MCP Client](mcp-client.md) - MCP Client usage and interactive features  
 - [Architecture](architecture.md) - System architecture and design decisions
+- [AgentAlpha Enhancement Plan](agent-alpha-enhancement-plan.md) - Tactical improvements for AgentAlpha
+- [Strategic Enhancement Design](strategic-enhancement-design.md) - Strategic improvements for project scaling
 - [Tests](../tests/README.md) - Comprehensive testing including AI validation
 
 ## Technology Stack
