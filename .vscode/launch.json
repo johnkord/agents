@@ -1,0 +1,78 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch MCP Server",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/MCPServer/MCPServer/bin/Debug/net8.0/MCPServer.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/MCPServer/MCPServer",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build-mcp-server",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Launch MCP Server (SSE Mode)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/MCPServer/MCPServer/bin/Debug/net8.0/MCPServer.dll",
+            "args": ["--transport", "sse"],
+            "cwd": "${workspaceFolder}/src/MCPServer/MCPServer",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build-mcp-server",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:3000",
+                "MCP_TRANSPORT": "sse"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Launch AgentAlpha",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/AgentAlpha/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": ["test"],
+            "cwd": "${workspaceFolder}/src/AgentAlpha/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build-agent-alpha",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Launch AgentAlpha (Interactive)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/AgentAlpha/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/AgentAlpha/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build-agent-alpha",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Launch AgentAlpha with SSE",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/AgentAlpha/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": ["test"],
+            "cwd": "${workspaceFolder}/src/AgentAlpha/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build-agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}
