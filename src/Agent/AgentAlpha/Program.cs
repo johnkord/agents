@@ -2,372 +2,210 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using OpenAIIntegration;
 using System.Text.Json;
-using System.Text;
 using MCPClient;
 
-namespace AgentAlpha
+namespace AgentAlpha;
+
+internal class Program
 {
-    class Program
+    private static async Task Main(string[] args)
     {
-        private static readonly HttpClient httpClient = new();
-        private const int MaxIterations = 10; // Prevent infinite loops
-        
-        static async Task Main(string[] args)
+        Console.WriteLine("AI Agent Starting...");
+
+        /* --- acquire task -------------------------------------------------- */
+        string task = args.Length > 0
+            ? string.Join(" ", args)
+            : PromptForTask();
+        if (string.IsNullOrWhiteSpace(task)) return;
+
+        /* --- configuration / logging --------------------------------------- */
+        var config        = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+        var loggerFactory = LoggerFactory.Create(b => b.AddConsole().SetMinimumLevel(LogLevel.Warning));
+        var logger        = loggerFactory.CreateLogger<Program>();
+
+        var openAiApiKey = config["OPENAI_API_KEY"];
+        if (string.IsNullOrEmpty(openAiApiKey))
         {
-            Console.WriteLine("AI Agent Starting...");
-            
-            // Get task from command line args or prompt user
-            string task;
-            if (args.Length > 0)
+            if (task.Equals("test", StringComparison.OrdinalIgnoreCase))
             {
-                task = string.Join(" ", args);
+                await TestMcpConnection(loggerFactory);
+                return;
+            }
+            Console.WriteLine("OPENAI_API_KEY not set."); return;
+        }
+
+        /* --- run the agent -------------------------------------------------- */
+        try
+        {
+            var agent = new SimpleAgentAlpha(openAiApiKey, loggerFactory);
+            await agent.ExecuteTaskAsync(task);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Agent failed");
+        }
+    }
+
+    /* --------------------------------------------------------------------- */
+    private static string PromptForTask()
+    {
+        Console.Write("Enter a task for the agent: ");
+        return Console.ReadLine() ?? "";
+    }
+
+    /* ---------------- MCP test helper ------------------------------------ */
+    private static async Task TestMcpConnection(ILoggerFactory lf)
+    {
+        Console.WriteLine("Testing MCP Server connection...");
+        try
+        {
+            var mcp = new McpClientService(lf);
+            await using var _ = mcp;
+
+            var transport = GetMcpTransportType();
+            if (transport == McpTransportType.Http)
+            {
+                var url = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
+                await mcp.ConnectAsync(McpTransportType.Http, "Test Agent MCP Server", serverUrl: url);
             }
             else
             {
-                Console.Write("Enter a task for the agent: ");
-                task = Console.ReadLine() ?? "";
-                if (string.IsNullOrWhiteSpace(task))
+                await mcp.ConnectAsync(
+                    McpTransportType.Stdio,
+                    "Test Agent MCP Server",
+                    "dotnet",
+                    ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]);
+            }
+
+            Console.WriteLine("✅ Connected.");
+            var tools = await mcp.ListToolsAsync();
+            Console.WriteLine($"✅ Tools: {string.Join(", ", tools.Select(t => t.Name))}");
+
+            var addRes = await mcp.CallToolAsync("add", new Dictionary<string, object?> { ["a"] = 2, ["b"] = 3 });
+            var txt    = addRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text;
+            Console.WriteLine(addRes.IsError ? $"❌ add failed: {txt}" : $"✅ add(2,3) = {txt}");
+
+            Console.WriteLine("✅ MCP connection test completed.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ MCP test failed: {ex.Message}");
+        }
+    }
+
+    internal static McpTransportType GetMcpTransportType()
+        => (Environment.GetEnvironmentVariable("MCP_TRANSPORT") ?? "stdio").ToLowerInvariant() switch
+        {
+            "http" or "sse" => McpTransportType.Http,
+            _               => McpTransportType.Stdio
+        };
+}
+
+/* ======================================================================= */
+internal sealed class SimpleAgentAlpha
+{
+    private readonly ILogger<SimpleAgentAlpha> _logger;
+    private readonly IOpenAIChatService        _openAi;
+    private readonly ILoggerFactory            _lf;
+
+    public SimpleAgentAlpha(string apiKey, ILoggerFactory lf)
+    {
+        _lf     = lf;
+        _logger = lf.CreateLogger<SimpleAgentAlpha>();
+        _openAi = new OpenAIChatService(apiKey);
+    }
+
+    public async Task ExecuteTaskAsync(string task)
+    {
+        /* --- connect to MCP ------------------------------------------------ */
+        var mcp = new McpClientService(_lf);
+        await using var _ = mcp;
+
+        var transport = Program.GetMcpTransportType();
+        if (transport == McpTransportType.Http)
+        {
+            var url = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
+            await mcp.ConnectAsync(McpTransportType.Http, "Agent MCP Server", serverUrl: url);
+        }
+        else
+        {
+            await mcp.ConnectAsync(
+                McpTransportType.Stdio,
+                "Agent MCP Server",
+                "dotnet",
+                ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]);
+        }
+
+        /* --- prepare OpenAI tool schema ----------------------------------- */
+        var tools = await mcp.ListToolsAsync();
+        var openAiTools = tools.Select(t => new
+        {
+            type     = "function",
+            function = new
+            {
+                name        = t.Name,
+                description = t.Description,
+                parameters  = new
                 {
-                    Console.WriteLine("No task provided. Exiting.");
-                    return;
+                    type       = "object",
+                    properties = new
+                    {
+                        a = new { type = "number", description = "First number" },
+                        b = new { type = "number", description = "Second number" }
+                    },
+                    required = new[] { "a", "b" }
                 }
             }
-            
-            // Get OpenAI API key
-            var configuration = new ConfigurationBuilder()
-                .AddEnvironmentVariables()
-                .Build();
+        }).ToArray();
 
-            using var loggerFactory = LoggerFactory.Create(builder => 
-                builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
-            var logger = loggerFactory.CreateLogger<Program>();
-            
-            var openAiApiKey = configuration["OPENAI_API_KEY"];
-            if (string.IsNullOrEmpty(openAiApiKey))
+        /* --- chat loop ----------------------------------------------------- */
+        var msgs = new List<object>
+        {
+            new { role = "system", content = "You are a helpful AI agent..." },
+            new { role = "user",   content = task }
+        };
+
+        const int MaxIterations = 10;
+        for (int i = 0; i < MaxIterations; i++)
+        {
+            Console.WriteLine($"\n--- Iteration {i + 1} ---");
+
+            var (content, toolCalls) = await _openAi.CreateChatCompletionAsync(msgs.ToArray(), openAiTools);
+            Console.WriteLine($"AI: {content}");
+
+            if (content.Contains("TASK COMPLETED", StringComparison.OrdinalIgnoreCase))
             {
-                // Check if this is a test mode
-                if (task.Equals("test", StringComparison.OrdinalIgnoreCase))
-                {
-                    Console.WriteLine("Running in test mode - testing MCP connection only...");
-                    await TestMcpConnection(loggerFactory);
-                    return;
-                }
-                
-                Console.WriteLine("OPENAI_API_KEY environment variable is not set.");
-                Console.WriteLine("Please set this environment variable to use the agent.");
-                Console.WriteLine("Or run with 'test' as the task to test MCP connection only.");
+                Console.WriteLine("✅ Task completed!");
                 return;
             }
 
-            using var loggerFactory2 = LoggerFactory.Create(builder => 
-                builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
-            
-            try
+            if (toolCalls?.Any() == true)
             {
-                var agent = new SimpleAgentAlpha(openAiApiKey, loggerFactory2);
-                await agent.ExecuteTaskAsync(task);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error occurred in Agent");
-                Console.WriteLine($"Error: {ex.Message}");
-            }
-        }
-        
-        static async Task TestMcpConnection(ILoggerFactory loggerFactory)
-        {
-            Console.WriteLine("Testing MCP Server connection...");
-            
-            try
-            {
-                // Connect to MCP Server using MCPClient service
-                var mcpService = new McpClientService(loggerFactory);
-                await using var _ = mcpService; // Ensure disposal
-                
-                // Get transport configuration from environment variables
-                var transportType = GetMcpTransportType();
-                
-                if (transportType == McpTransportType.Http)
+                msgs.Add(new { role = "assistant", content, tool_calls = toolCalls });
+                foreach (var tc in toolCalls)
                 {
-                    var serverUrl = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
-                    Console.WriteLine($"Connecting to MCP Server via HTTP at {serverUrl}...");
-                    await mcpService.ConnectAsync(McpTransportType.Http, "Test Agent MCP Server", serverUrl: serverUrl);
-                }
-                else
-                {
-                    Console.WriteLine("Connecting to MCP Server via stdio...");
-                    await mcpService.ConnectAsync(
-                        McpTransportType.Stdio,
-                        "Test Agent MCP Server",
-                        "dotnet",
-                        ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
-                    );
-                }
-                
-                Console.WriteLine("✅ Successfully connected to MCP Server");
-                
-                // Get available tools
-                var tools = await mcpService.ListToolsAsync();
-                Console.WriteLine($"✅ Found {tools.Count} tools: {string.Join(", ", tools.Select(t => t.Name))}");
-                
-                // Test a simple tool call
-                Console.WriteLine("Testing tool call: add(2, 3)");
-                var result = await mcpService.CallToolAsync("add", new Dictionary<string, object?> { ["a"] = 2.0, ["b"] = 3.0 });
-                
-                if (!result.IsError)
-                {
-                    var textContent = result.Content.OfType<TextContentBlock>().FirstOrDefault();
-                    Console.WriteLine($"✅ Tool call successful: {textContent?.Text}");
-                }
-                else
-                {
-                    Console.WriteLine($"❌ Tool call failed: {result.Content.FirstOrDefault()}");
-                }
-                
-                Console.WriteLine("✅ MCP connection test completed successfully!");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ MCP connection test failed: {ex.Message}");
-            }
-        }
-        
-        static McpTransportType GetMcpTransportType()
-        {
-            var transport = Environment.GetEnvironmentVariable("MCP_TRANSPORT")?.ToLowerInvariant();
-            return transport switch
-            {
-                "http" or "sse" => McpTransportType.Http,
-                "stdio" => McpTransportType.Stdio,
-                _ => McpTransportType.Stdio // Default to stdio for backward compatibility
-            };
-        }
-    }
+                    var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(tc.function.arguments)!;
+                    var res  = await mcp.CallToolAsync(tc.function.name, new Dictionary<string, object?>
+                    {
+                        ["a"] = args["a"].GetDouble(),
+                        ["b"] = args["b"].GetDouble()
+                    });
 
-    public class SimpleAgentAlpha
-    {
-        private readonly string _openAiApiKey;
-        private readonly ILoggerFactory _loggerFactory;
-        private readonly ILogger<SimpleAgentAlpha> _logger;
-        private readonly HttpClient _httpClient = new();
-        
-        public SimpleAgentAlpha(string openAiApiKey, ILoggerFactory loggerFactory)
-        {
-            _openAiApiKey = openAiApiKey;
-            _loggerFactory = loggerFactory;
-            _logger = loggerFactory.CreateLogger<SimpleAgentAlpha>();
-        }
-        
-        public async Task ExecuteTaskAsync(string task)
-        {
-            Console.WriteLine($"Agent Task: {task}");
-            Console.WriteLine("Connecting to MCP Server...");
-            
-            // Connect to MCP Server using MCPClient service
-            var mcpService = new McpClientService(_loggerFactory);
-            await using var _ = mcpService; // Ensure disposal
-            
-            // Get transport configuration from environment variables
-            var transportType = GetMcpTransportType();
-            
-            if (transportType == McpTransportType.Http)
-            {
-                var serverUrl = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
-                Console.WriteLine($"Connecting to MCP Server via HTTP at {serverUrl}...");
-                await mcpService.ConnectAsync(McpTransportType.Http, "Agent MCP Server", serverUrl: serverUrl);
+                    string toolReply = res.IsError
+                        ? $"Error: {res.Content.FirstOrDefault()}"
+                        : res.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? "";
+
+                    msgs.Add(new { role = "tool", tool_call_id = tc.id, content = toolReply });
+                }
             }
             else
             {
-                Console.WriteLine("Connecting to MCP Server via stdio...");
-                await mcpService.ConnectAsync(
-                    McpTransportType.Stdio,
-                    "Agent MCP Server",
-                    "dotnet",
-                    ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
-                );
-            }
-            
-            _logger.LogInformation("Connected to MCP Server");
-            
-            // Get available tools
-            var tools = await mcpService.ListToolsAsync();
-            Console.WriteLine($"Available tools: {string.Join(", ", tools.Select(t => t.Name))}");
-            
-            // Prepare OpenAI tools format
-            var openAiTools = tools.Select(tool => new
-            {
-                type = "function",
-                function = new
-                {
-                    name = tool.Name,
-                    description = tool.Description,
-                    parameters = new
-                    {
-                        type = "object",
-                        properties = new
-                        {
-                            a = new { type = "number", description = "First number" },
-                            b = new { type = "number", description = "Second number" }
-                        },
-                        required = new[] { "a", "b" }
-                    }
-                }
-            }).ToArray();
-            
-            // Agent loop
-            var messages = new List<object>
-            {
-                new { role = "system", content = "You are a helpful AI agent that can perform mathematical calculations using the provided tools. Work step by step to complete the given task. When the task is complete, clearly state 'TASK COMPLETED' in your response." },
-                new { role = "user", content = task }
-            };
-            
-            var iteration = 0;
-            const int maxIterations = 10;
-            
-            while (iteration < maxIterations)
-            {
-                iteration++;
-                Console.WriteLine($"\n--- Iteration {iteration} ---");
-                
-                // Call OpenAI
-                var result = await CallOpenAI(messages.ToArray(), openAiTools);
-                Console.WriteLine($"AI Response: {result.content}");
-                
-                // Check if task is complete
-                if (result.content.Contains("TASK COMPLETED", StringComparison.OrdinalIgnoreCase))
-                {
-                    Console.WriteLine("\n✅ Task completed successfully!");
-                    break;
-                }
-                
-                // Add AI response to messages
-                if (result.toolCalls?.Any() == true)
-                {
-                    messages.Add(new { role = "assistant", content = result.content, tool_calls = result.toolCalls });
-                    
-                    // Execute tool calls
-                    foreach (var toolCall in result.toolCalls)
-                    {
-                        Console.WriteLine($"Executing tool: {toolCall.function.name}");
-                        Console.WriteLine($"Parameters: {toolCall.function.arguments}");
-                        
-                        try
-                        {
-                            // Parse arguments and call MCP tool
-                            var arguments = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolCall.function.arguments);
-                            var parameters = new Dictionary<string, object?>
-                            {
-                                ["a"] = arguments!["a"].GetDouble(),
-                                ["b"] = arguments["b"].GetDouble()
-                            };
-
-                            var mcpResult = await mcpService.CallToolAsync(toolCall.function.name, parameters);
-                            
-                            string toolResult;
-                            if (!mcpResult.IsError)
-                            {
-                                var textContent = mcpResult.Content.OfType<TextContentBlock>().FirstOrDefault();
-                                toolResult = textContent?.Text ?? "No result returned";
-                                Console.WriteLine($"Tool Result: {toolResult}");
-                            }
-                            else
-                            {
-                                toolResult = $"Error: {mcpResult.Content.FirstOrDefault()?.ToString()}";
-                                Console.WriteLine($"Tool Error: {toolResult}");
-                            }
-                            
-                            // Add tool result to messages
-                            messages.Add(new { 
-                                role = "tool", 
-                                tool_call_id = toolCall.id, 
-                                content = toolResult 
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            var errorMsg = $"Error executing tool {toolCall.function.name}: {ex.Message}";
-                            Console.WriteLine(errorMsg);
-                            messages.Add(new { 
-                                role = "tool", 
-                                tool_call_id = toolCall.id, 
-                                content = errorMsg 
-                            });
-                        }
-                    }
-                }
-                else
-                {
-                    messages.Add(new { role = "assistant", content = result.content });
-                }
-            }
-            
-            if (iteration >= maxIterations)
-            {
-                Console.WriteLine($"\n⚠️  Agent reached maximum iterations ({maxIterations}) without completing the task.");
+                msgs.Add(new { role = "assistant", content });
             }
         }
-        
-        private async Task<(string content, ToolCall[]? toolCalls)> CallOpenAI(object[] messages, object[] tools)
-        {
-            var requestData = new
-            {
-                model = "gpt-3.5-turbo",
-                messages,
-                tools,
-                tool_choice = "auto"
-            };
 
-            var json = JsonSerializer.Serialize(requestData);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            _httpClient.DefaultRequestHeaders.Clear();
-            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_openAiApiKey}");
-
-            var response = await _httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
-            var responseJson = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new Exception($"OpenAI API error: {response.StatusCode} - {responseJson}");
-            }
-
-            var result = JsonSerializer.Deserialize<JsonElement>(responseJson);
-            var message = result.GetProperty("choices")[0].GetProperty("message");
-
-            var responseContent = message.TryGetProperty("content", out var contentProp) ? contentProp.GetString() ?? "" : "";
-            
-            ToolCall[]? toolCalls = null;
-            if (message.TryGetProperty("tool_calls", out var toolCallsProp))
-            {
-                toolCalls = JsonSerializer.Deserialize<ToolCall[]>(toolCallsProp.GetRawText());
-            }
-
-            return (responseContent, toolCalls);
-        }
-        
-        private static McpTransportType GetMcpTransportType()
-        {
-            var transport = Environment.GetEnvironmentVariable("MCP_TRANSPORT")?.ToLowerInvariant();
-            return transport switch
-            {
-                "http" or "sse" => McpTransportType.Http,
-                "stdio" => McpTransportType.Stdio,
-                _ => McpTransportType.Stdio // Default to stdio for backward compatibility
-            };
-        }
-    }
-
-    public class ToolCall
-    {
-        public string id { get; set; } = "";
-        public string type { get; set; } = "";
-        public FunctionCall function { get; set; } = new();
-    }
-
-    public class FunctionCall
-    {
-        public string name { get; set; } = "";
-        public string arguments { get; set; } = "";
+        Console.WriteLine($"⚠️  Reached maximum iterations ({MaxIterations}).");
     }
 }

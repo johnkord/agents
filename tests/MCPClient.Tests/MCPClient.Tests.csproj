@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\MCPClient\MCPClient\MCPClient.csproj" />
+    <ProjectReference Include="..\..\src\MCPClient\MCPClient.csproj" />
   </ItemGroup>
 
 </Project>
