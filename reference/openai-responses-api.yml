@@ -1,0 +1,395 @@
+openapi: 3.0.0
+info:
+  title: OpenAI Responses API
+  description: Sub-spec containing only the `/responses` endpoints from the OpenAI platform API.
+  version: 2.3.0
+servers:
+  - url: https://api.openai.com/v1
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Responses
+    description: Create, retrieve, cancel and delete model responses.
+
+paths:
+  /responses:
+    post:
+      operationId: createResponse
+      tags: [Responses]
+      summary: |
+        Creates a model response. Provide [text](/docs/guides/text) or
+        as input for the model's response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateResponseRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+      x-oaiMeta:
+        name: Create a model response
+
+  /responses/{response_id}:
+    get:
+      operationId: getResponse
+      tags: [Responses]
+      summary: Retrieves a model response with the given ID.
+      parameters:
+        - in: path
+          name: response_id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+      x-oaiMeta:
+        name: Get a model response
+    delete:
+      operationId: deleteResponse
+      tags: [Responses]
+      summary: Deletes a model response with the given ID.
+      parameters:
+        - in: path
+          name: response_id
+      responses:
+        '200':
+          description: OK
+      x-oaiMeta:
+        name: Delete a model response
+
+  /responses/{response_id}/cancel:
+    post:
+      operationId: cancelResponse
+      tags: [Responses]
+      summary: Cancels a model response with the given ID.
+      parameters:
+        - in: path
+          name: response_id
+      responses:
+        '200':
+          description: OK
+      x-oaiMeta:
+        name: Cancel a response
+
+  /responses/{response_id}/input_items:
+    get:
+      operationId: listInputItems
+      tags: [Responses]
+      summary: Returns a list of input items for a given response.
+      parameters:
+        - in: path
+          name: response_id
+      responses:
+        '200':
+          description: OK
+      x-oaiMeta:
+        name: List input items
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    CreateResponseRequest:
+      type: object
+      additionalProperties: false
+      description: Parameters accepted when creating a model response.
+      properties:
+        background:
+          type: boolean
+          nullable: true
+          description: Run the model response in the background. Defaults to `false`.
+        include:
+          type: array
+          items:
+            $ref: '#/components/schemas/Includable'
+          description: Additional output data to include in the response.
+        input:
+          oneOf:
+            - type: string
+            - type: array
+              items: {}
+          description: Text, image or file inputs used to generate a response.
+        instructions:
+          type: string
+          nullable: true
+          description: System / developer message inserted into the model's context.
+        max_output_tokens:
+          type: integer
+          nullable: true
+          description: Upper bound on the number of output tokens.
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        model:
+          type: string
+          description: Model ID to use (e.g. `gpt-4o`, `o3`).
+        parallel_tool_calls:
+          type: boolean
+          nullable: true
+          default: true
+          description: Allow the model to run tool calls in parallel.
+        previous_response_id:
+          type: string
+          nullable: true
+          description: Unique ID of the previous response (for multi-turn convs).
+        prompt:
+          type: object
+          nullable: true
+          description: Reference to a prompt template and its variables.
+        reasoning:
+          type: object
+          nullable: true
+          description: Configuration options for reasoning models.
+        service_tier:
+          type: string
+          nullable: true
+          enum: [auto, default, flex, scale]
+          default: auto
+          description: Latency tier to use for processing the request.
+        store:
+          type: boolean
+          nullable: true
+          default: true
+          description: Whether to store the generated response for later retrieval.
+        stream:
+          type: boolean
+          nullable: true
+          default: false
+          description: |
+            Stream the response back using server-sent events.  
+            When `true`, the server will send data chunks as they are generated.
+        temperature:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 2
+          default: 1
+          description: >
+            Sampling temperature. Higher values produce more random output, lower values
+            make the output more focused and deterministic.
+        text:
+          $ref: '#/components/schemas/TextOptions'
+        tool_choice:
+          $ref: '#/components/schemas/ToolChoice'
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tool'
+          description: |
+            List of tools that the model may call while generating the response.
+        top_p:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+          default: 1
+          description: >
+            Nucleus sampling probability. Recommended to adjust either this or
+            `temperature`, but not both.
+        truncation:
+          $ref: '#/components/schemas/TruncationStrategy'
+        user:
+          type: string
+          description: |
+            Stable identifier for the end-user. Helps with abuse detection and
+            request deduplication.
+      required:
+        - input
+
+    Includable:
+      type: string
+      description: Valid values for the `include` array.
+      enum:
+        - file_search_call.results
+        - message.input_image.image_url
+        - computer_call_output.output_image_url
+        - reasoning.encrypted_content
+        - code_interpreter_call.outputs
+
+    Metadata:
+      type: object
+      description: Up to 16 key-value pairs of string metadata (max key 64 chars, value 512).
+      maxProperties: 16
+      additionalProperties:
+        type: string
+        maxLength: 512
+
+    # ---------- new helper schemas ----------
+    TextOptions:
+      type: object
+      description: Configuration options for a text response from the model.
+      additionalProperties: true
+
+    ToolChoice:
+      description: How the model should pick a tool (or tools) to call.
+      oneOf:
+        - type: string
+          enum: [none, auto, required]
+        - type: object
+          description: Force the model to call a specific tool by name.
+          additionalProperties: true
+
+    Tool:
+      type: object
+      description: Definition of a tool the model may call.
+      additionalProperties: true
+
+    TruncationStrategy:
+      description: Strategy to use when the context exceeds the model window.
+      oneOf:
+        - type: string
+          enum: [auto, disabled]
+        - type: object
+          additionalProperties: true
+      default: disabled
+
+    # ---------- new response schemas ----------
+    Response:
+      type: object
+      description: |
+        The Response object created and returned by the `/responses` endpoints.
+      required:
+        - id
+        - object
+        - model
+        - status
+      properties:
+        id:
+          type: string
+          description: Unique identifier for this Response.
+        object:
+          type: string
+          enum: [response]
+          description: The object type – always `response`.
+        background:
+          type: boolean
+          nullable: true
+          description: Whether the model response is running in the background.
+        created_at:
+          type: integer
+          format: unix-time
+          description: Unix timestamp (seconds) when the Response was created.
+        error:
+          $ref: '#/components/schemas/ResponseError'
+        incomplete_details:
+          $ref: '#/components/schemas/IncompleteDetails'
+        instructions:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          nullable: true
+          description: System / developer instructions applied to the model.
+        max_output_tokens:
+          type: integer
+          nullable: true
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        model:
+          type: string
+          description: Model ID used to generate the response.
+        output:
+          type: array
+          description: An array of content items generated by the model.
+          items: {}
+        output_text:
+          type: string
+          nullable: true
+          description: SDK-only aggregated text output convenience property.
+        parallel_tool_calls:
+          type: boolean
+        previous_response_id:
+          type: string
+          nullable: true
+        prompt:
+          type: object
+          nullable: true
+        reasoning:
+          type: object
+          nullable: true
+        service_tier:
+          $ref: '#/components/schemas/ServiceTier'
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        temperature:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 2
+          description: Sampling temperature used when generating the response.
+        text:
+          $ref: '#/components/schemas/TextOptions'
+        tool_choice:
+          $ref: '#/components/schemas/ToolChoice'
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tool'
+          description: Tools that the model could have called while generating the response.
+        top_p:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Nucleus sampling probability used when generating the response.
+        truncation:
+          $ref: '#/components/schemas/TruncationStrategy'
+        usage:
+          $ref: '#/components/schemas/ResponseUsage'
+        user:
+          type: string
+          description: Stable identifier for the end-user associated with the response.
+
+    ResponseStatus:
+      type: string
+      description: Current state of the response generation.
+      enum: [completed, failed, in_progress, cancelled, queued, incomplete]
+
+    ResponseError:
+      type: object
+      nullable: true
+      description: Error information when the model fails to generate a Response.
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    IncompleteDetails:
+      type: object
+      nullable: true
+      description: Details explaining why a response is incomplete.
+      additionalProperties: true
+
+    ServiceTier:
+      type: string
+      nullable: true
+      enum: [auto, default, flex, scale]
+      description: Latency tier utilised for processing the request.
+
+    ResponseUsage:
+      type: object
+      description: Usage information for the tokens and resources for this response.
+      properties:
+        completion_tokens:
+          type: integer
+          description: Number of tokens used in the response.
+        prompt_tokens:
+          type: integer
+          description: Number of tokens used in the prompt.
+        total_tokens:
+          type: integer
+          description: Total number of tokens used (prompt + response).
+      required:
+        - total_tokens

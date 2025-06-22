@@ -6,6 +6,7 @@ using OpenAIIntegration;
 using OpenAIIntegration.Model;
 using System.Text.Json;
 using MCPClient;
+using System.Linq;               // NEW
 
 namespace AgentAlpha;
 
@@ -109,7 +110,7 @@ internal sealed class SimpleAgentAlpha
 {
     private readonly ILogger<SimpleAgentAlpha> _logger;
     // private readonly IOpenAIChatService        _openAi;
-    private readonly IOpenAIResponseService _openAi;
+    private readonly IOpenAIResponsesService _openAi;
     private readonly ILoggerFactory _lf;
 
     public SimpleAgentAlpha(string apiKey, ILoggerFactory lf)
@@ -117,7 +118,7 @@ internal sealed class SimpleAgentAlpha
         _lf     = lf;
         _logger = lf.CreateLogger<SimpleAgentAlpha>();
         // _openAi = new OpenAIChatService(apiKey);
-        _openAi = new OpenAIResponseService(apiKey);
+        _openAi = new OpenAIResponsesService(apiKey);
     }
 
     public async Task ExecuteTaskAsync(string task)
@@ -143,23 +144,20 @@ internal sealed class SimpleAgentAlpha
 
         /* --- prepare OpenAI tool schema ----------------------------------- */
         var tools = await mcp.ListToolsAsync();
-        var openAiTools = tools.Select(t => new
+        var openAiTools = tools.Select(t => new ToolDefinition
         {
-            type     = "function",
-            function = new
+            Type        = "function",
+            Name        = t.Name,
+            Description = t.Description,
+            Parameters  = new
             {
-                name        = t.Name,
-                description = t.Description,
-                parameters  = new
+                type       = "object",
+                properties = new
                 {
-                    type       = "object",
-                    properties = new
-                    {
-                        a = new { type = "number", description = "First number" },
-                        b = new { type = "number", description = "Second number" }
-                    },
-                    required = new[] { "a", "b" }
-                }
+                    a = new { type = "number", description = "First number" },
+                    b = new { type = "number", description = "Second number" }
+                },
+                required = new[] { "a", "b" }
             }
         }).ToArray();
 
@@ -175,51 +173,75 @@ internal sealed class SimpleAgentAlpha
         {
             Console.WriteLine($"\n--- Iteration {i + 1} ---");
 
-            // NEW – build request & call Responses API
-            var req = new ResponseCreateRequest
+            var req = new ResponsesCreateRequest
             {
                 Model      = "gpt-3.5-turbo",
-                Messages   = msgs.ToArray(),
+                Input      = msgs.ToArray(),
                 Tools      = openAiTools,
                 ToolChoice = "auto"
             };
 
             var res = await _openAi.CreateResponseAsync(req);
 
-            string       content   = res.Content ?? "";
-            ToolCall[]?  toolCalls = res.ToolCalls;
+            /* -------- extract normal assistant text ------------------------ */
+            string assistantText = res.Output?
+                .OfType<OutputMessage>()
+                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase))
+                ?.Content?.ToString() ?? "";
 
-            Console.WriteLine($"AI: {content}");
+            /* -------- handle tool-call items ------------------------------- */
+            var followUpSummaries = new List<string>();
 
-            if (content.Contains("TASK COMPLETED", StringComparison.OrdinalIgnoreCase))
+            foreach (var item in res.Output ?? Array.Empty<ResponseOutputItem>())
+            {
+                switch (item)
+                {
+                    case McpToolCall call:
+                        {
+                            var args = string.IsNullOrWhiteSpace(call.Arguments)
+                                ? new Dictionary<string, object?>()
+                                : JsonSerializer.Deserialize<Dictionary<string, object?>>(call.Arguments!)!;
+                            var mcpRes = await mcp.CallToolAsync(call.Name!, args);
+                            var txt = mcpRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text
+                                      ?? "<no text>";
+                            followUpSummaries.Add($"Tool '{call.Name}' called with args {call.Arguments}. Result: {txt}");
+                            break;
+                        }
+                    case McpListTools list:
+                        {
+                            var toolsList = await mcp.ListToolsAsync();
+                            followUpSummaries.Add($"Listed tools on server '{list.ServerLabel}': {string.Join(", ", toolsList.Select(t => t.Name))}");
+                            break;
+                        }
+                    case McpApprovalRequest appr:
+                        {
+                            // simplistic automatic approval for now
+                            followUpSummaries.Add($"Automatically approved request '{appr.Name}' on server '{appr.ServerLabel}'.");
+                            break;
+                        }
+                    default: break; // ignore other item types
+                }
+            }
+
+            /* -------- build next round messages ---------------------------- */
+            if (followUpSummaries.Count > 0)
+            {
+                var summary = string.Join("\n", followUpSummaries);
+                msgs.Add(new { role = "assistant", content = assistantText }); // preserve any assistant text
+                msgs.Add(new { role = "assistant", content = summary });
+                msgs.Add(new { role = "user",      content = $"I executed the requested tools.\n{summary}\n\nIs the task complete?" });
+                Console.WriteLine($"🔧 {summary}");
+                continue; // go to next iteration
+            }
+
+            Console.WriteLine($"AI: {assistantText}");
+            if (assistantText.Contains("TASK COMPLETED", StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine("✅ Task completed!");
                 return;
             }
 
-            if (toolCalls?.Any() == true)
-            {
-                msgs.Add(new { role = "assistant", content, tool_calls = toolCalls });
-                foreach (var tc in toolCalls)
-                {
-                    var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(tc.function.arguments)!;
-                    var res2  = await mcp.CallToolAsync(tc.function.name, new Dictionary<string, object?>
-                    {
-                        ["a"] = args["a"].GetDouble(),
-                        ["b"] = args["b"].GetDouble()
-                    });
-
-                    string toolReply = res2.IsError
-                        ? $"Error: {res2.Content.FirstOrDefault()}"
-                        : res2.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? "";
-
-                    msgs.Add(new { role = "tool", tool_call_id = tc.id, content = toolReply });
-                }
-            }
-            else
-            {
-                msgs.Add(new { role = "assistant", content });
-            }
+            msgs.Add(new { role = "assistant", content = assistantText });
         }
 
         Console.WriteLine($"⚠️  Reached maximum iterations ({MaxIterations}).");
