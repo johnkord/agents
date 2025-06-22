@@ -5,7 +5,7 @@ using ModelContextProtocol.Protocol;
 using System.Text.Json;
 using System.Text;
 
-namespace Agent
+namespace AgentAlpha
 {
     class Program
     {
@@ -64,7 +64,7 @@ namespace Agent
             
             try
             {
-                var agent = new SimpleAgent(openAiApiKey, loggerFactory2);
+                var agent = new SimpleAgentAlpha(openAiApiKey, loggerFactory2);
                 await agent.ExecuteTaskAsync(task);
             }
             catch (Exception ex)
@@ -118,18 +118,18 @@ namespace Agent
         }
     }
 
-    public class SimpleAgent
+    public class SimpleAgentAlpha
     {
         private readonly string _openAiApiKey;
         private readonly ILoggerFactory _loggerFactory;
-        private readonly ILogger<SimpleAgent> _logger;
+        private readonly ILogger<SimpleAgentAlpha> _logger;
         private readonly HttpClient _httpClient = new();
         
-        public SimpleAgent(string openAiApiKey, ILoggerFactory loggerFactory)
+        public SimpleAgentAlpha(string openAiApiKey, ILoggerFactory loggerFactory)
         {
             _openAiApiKey = openAiApiKey;
             _loggerFactory = loggerFactory;
-            _logger = loggerFactory.CreateLogger<SimpleAgent>();
+            _logger = loggerFactory.CreateLogger<SimpleAgentAlpha>();
         }
         
         public async Task ExecuteTaskAsync(string task)

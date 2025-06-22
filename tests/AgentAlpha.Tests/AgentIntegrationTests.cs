@@ -3,10 +3,10 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using Xunit;
 
-namespace Agent.Tests;
+namespace AgentAlpha.Tests;
 
 [Collection("MCPServer")] // Ensure tests run sequentially to avoid MCP server conflicts
-public class AgentIntegrationTests
+public class AgentAlphaIntegrationTests
 {
     [Fact(Skip = "Integration test - requires MCP server startup which conflicts in test environment")]
     public async Task Agent_CanConnectToMcpServer()
@@ -56,7 +56,7 @@ public class AgentIntegrationTests
     }
 
     [Fact]
-    public void Agent_ImplementsCorrectArchitecturePattern()
+    public void AgentAlpha_ImplementsCorrectArchitecturePattern()
     {
         // This test verifies the agent follows the correct architectural pattern
         // without requiring MCP server startup (avoiding conflicts)
@@ -69,11 +69,11 @@ public class AgentIntegrationTests
         // 5. Loop until task completion
         
         // This is validated by the existence of the agent source files
-        var agentSourcePath = Path.Combine("..", "..", "..", "..", "..", "src", "Agent", "Agent", "Program.cs");
+        var agentSourcePath = Path.Combine("..", "..", "..", "..", "..", "src", "AgentAlpha", "AgentAlpha", "Program.cs");
         Assert.True(File.Exists(agentSourcePath), $"Agent source file should exist at {agentSourcePath}");
         
         // Verify agent documentation exists
-        var readmePath = Path.Combine("..", "..", "..", "..", "..", "src", "Agent", "README.md");
+        var readmePath = Path.Combine("..", "..", "..", "..", "..", "src", "AgentAlpha", "README.md");
         Assert.True(File.Exists(readmePath), $"Agent documentation should exist at {readmePath}");
         
         var readmeContent = File.ReadAllText(readmePath);
@@ -87,6 +87,6 @@ public class AgentIntegrationTests
         Assert.Contains("OpenAI", agentSource);
         Assert.Contains("MCP", agentSource);
         Assert.Contains("CallToolAsync", agentSource);
-        Assert.Contains("SimpleAgent", agentSource);
+        Assert.Contains("SimpleAgentAlpha", agentSource);
     }
 }

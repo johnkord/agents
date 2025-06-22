@@ -23,11 +23,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCPMathTools.Tests", "tests
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCPMathTools.AI.Tests", "tests\MCPMathTools.AI.Tests\MCPMathTools.AI.Tests.csproj", "{562D90DB-9761-4AEB-8E17-68B6002EA3B1}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Agent", "Agent", "{F7A8B23C-1A5D-4E9F-8B6C-3D2E1F4A7B9C}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AgentAlpha", "AgentAlpha", "{F7A8B23C-1A5D-4E9F-8B6C-3D2E1F4A7B9C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agent", "src\Agent\Agent\Agent.csproj", "{A1B2C3D4-5E6F-7A8B-9C0D-1E2F3A4B5C6D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentAlpha", "src\AgentAlpha\AgentAlpha\AgentAlpha.csproj", "{A1B2C3D4-5E6F-7A8B-9C0D-1E2F3A4B5C6D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agent.Tests", "tests\Agent.Tests\Agent.Tests.csproj", "{B2C3D4E5-6F7A-8B9C-0D1E-2F3A4B5C6D7E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentAlpha.Tests", "tests\AgentAlpha.Tests\AgentAlpha.Tests.csproj", "{B2C3D4E5-6F7A-8B9C-0D1E-2F3A4B5C6D7E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
