@@ -10,6 +10,65 @@ using System.Linq;               // NEW
 
 namespace AgentAlpha;
 
+/// <summary>
+/// Configuration for filtering MCP server tools
+/// </summary>
+public sealed class ToolFilterConfig
+{
+    /// <summary>
+    /// Tools to explicitly include (if specified, only these tools will be available)
+    /// </summary>
+    public HashSet<string> Whitelist { get; set; } = new();
+
+    /// <summary>
+    /// Tools to explicitly exclude (takes precedence over whitelist)
+    /// </summary>
+    public HashSet<string> Blacklist { get; set; } = new();
+
+    /// <summary>
+    /// Check if a tool should be included based on the filter configuration
+    /// </summary>
+    public bool ShouldIncludeTool(string toolName)
+    {
+        // Blacklist takes precedence
+        if (Blacklist.Contains(toolName))
+            return false;
+
+        // If whitelist is specified, only include whitelisted tools
+        if (Whitelist.Count > 0)
+            return Whitelist.Contains(toolName);
+
+        // If no whitelist specified, include all tools (except blacklisted)
+        return true;
+    }
+
+    /// <summary>
+    /// Create filter configuration from environment variables
+    /// </summary>
+    public static ToolFilterConfig FromEnvironment()
+    {
+        var config = new ToolFilterConfig();
+        
+        var whitelist = Environment.GetEnvironmentVariable("MCP_TOOL_WHITELIST");
+        if (!string.IsNullOrEmpty(whitelist))
+        {
+            config.Whitelist = whitelist.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                       .Select(s => s.Trim())
+                                       .ToHashSet();
+        }
+
+        var blacklist = Environment.GetEnvironmentVariable("MCP_TOOL_BLACKLIST");
+        if (!string.IsNullOrEmpty(blacklist))
+        {
+            config.Blacklist = blacklist.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                       .Select(s => s.Trim())
+                                       .ToHashSet();
+        }
+
+        return config;
+    }
+}
+
 internal class Program
 {
     private static async Task Main(string[] args)
@@ -41,7 +100,8 @@ internal class Program
         /* --- run the agent -------------------------------------------------- */
         try
         {
-            var agent = new SimpleAgentAlpha(openAiApiKey, loggerFactory);
+            var toolFilter = ToolFilterConfig.FromEnvironment();
+            var agent = new SimpleAgentAlpha(openAiApiKey, loggerFactory, toolFilter);
             await agent.ExecuteTaskAsync(task);
         }
         catch (HttpRequestException httpEx) when (httpEx.Message.Contains("api.openai.com"))
@@ -126,13 +186,15 @@ internal sealed class SimpleAgentAlpha
     // private readonly IOpenAIChatService        _openAi;
     private readonly IOpenAIResponsesService _openAi;
     private readonly ILoggerFactory _lf;
+    private readonly ToolFilterConfig _toolFilter;
 
-    public SimpleAgentAlpha(string apiKey, ILoggerFactory lf)
+    public SimpleAgentAlpha(string apiKey, ILoggerFactory lf, ToolFilterConfig? toolFilter = null)
     {
-        _lf     = lf;
-        _logger = lf.CreateLogger<SimpleAgentAlpha>();
+        _lf         = lf;
+        _logger     = lf.CreateLogger<SimpleAgentAlpha>();
         // _openAi = new OpenAIChatService(apiKey);
-        _openAi = new OpenAIResponsesService(apiKey);
+        _openAi     = new OpenAIResponsesService(apiKey);
+        _toolFilter = toolFilter ?? new ToolFilterConfig();
     }
 
     public async Task ExecuteTaskAsync(string task)
@@ -171,10 +233,18 @@ internal sealed class SimpleAgentAlpha
         Console.WriteLine("✅ Connected to MCP Server");
 
         /* --- prepare OpenAI tool schema ----------------------------------- */
-        var tools = await mcp.ListToolsAsync();
-        Console.WriteLine($"🔧 Discovered {tools.Count} tools: {string.Join(", ", tools.Take(5).Select(t => t.Name))}{(tools.Count > 5 ? "..." : "")}");
+        var allTools = await mcp.ListToolsAsync();
+        var filteredTools = allTools.Where(t => _toolFilter.ShouldIncludeTool(t.Name)).ToList();
         
-        var openAiTools = tools.Select(t => new ToolDefinition
+        Console.WriteLine($"🔧 Discovered {allTools.Count} tools total, {filteredTools.Count} after filtering: {string.Join(", ", filteredTools.Take(5).Select(t => t.Name))}{(filteredTools.Count > 5 ? "..." : "")}");
+        
+        if (filteredTools.Count != allTools.Count)
+        {
+            var excluded = allTools.Where(t => !_toolFilter.ShouldIncludeTool(t.Name)).Select(t => t.Name);
+            Console.WriteLine($"🚫 Excluded tools: {string.Join(", ", excluded)}");
+        }
+        
+        var openAiTools = filteredTools.Select(t => new ToolDefinition
         {
             Type        = "function",
             Name        = t.Name,
@@ -234,15 +304,47 @@ internal sealed class SimpleAgentAlpha
             {
                 switch (item)
                 {
+                    case FunctionToolCall funcCall:
+                        {
+                            // Handle FunctionToolCall by invoking MCP Client+Server
+                            var name = funcCall.Name;
+                            if (!string.IsNullOrEmpty(name))
+                            {
+                                if (!_toolFilter.ShouldIncludeTool(name))
+                                {
+                                    followUpSummaries.Add($"Function '{name}' call blocked by tool filter configuration.");
+                                    break;
+                                }
+
+                                var args = funcCall.Arguments?.ValueKind == JsonValueKind.Object
+                                    ? JsonSerializer.Deserialize<Dictionary<string, object?>>(funcCall.Arguments.Value.GetRawText())!
+                                    : new Dictionary<string, object?>();
+                                var mcpRes = await mcp.CallToolAsync(name, args);
+                                var txt = mcpRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text
+                                          ?? "<no text>";
+                                followUpSummaries.Add($"Function '{name}' called via MCP. Result: {txt}");
+                            }
+                            break;
+                        }
                     case McpToolCall call:
                         {
-                            var args = string.IsNullOrWhiteSpace(call.Arguments)
-                                ? new Dictionary<string, object?>()
-                                : JsonSerializer.Deserialize<Dictionary<string, object?>>(call.Arguments!)!;
-                            var mcpRes = await mcp.CallToolAsync(call.Name!, args);
-                            var txt = mcpRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text
-                                      ?? "<no text>";
-                            followUpSummaries.Add($"Tool '{call.Name}' called with args {call.Arguments}. Result: {txt}");
+                            var name = call.Name;
+                            if (!string.IsNullOrEmpty(name))
+                            {
+                                if (!_toolFilter.ShouldIncludeTool(name))
+                                {
+                                    followUpSummaries.Add($"Tool '{name}' call blocked by tool filter configuration.");
+                                    break;
+                                }
+
+                                var args = string.IsNullOrWhiteSpace(call.Arguments)
+                                    ? new Dictionary<string, object?>()
+                                    : JsonSerializer.Deserialize<Dictionary<string, object?>>(call.Arguments!)!;
+                                var mcpRes = await mcp.CallToolAsync(name, args);
+                                var txt = mcpRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text
+                                          ?? "<no text>";
+                                followUpSummaries.Add($"Tool '{name}' called with args {call.Arguments}. Result: {txt}");
+                            }
                             break;
                         }
                     case McpListTools list:
@@ -257,7 +359,52 @@ internal sealed class SimpleAgentAlpha
                             followUpSummaries.Add($"Automatically approved request '{appr.Name}' on server '{appr.ServerLabel}'.");
                             break;
                         }
-                    default: break; // ignore other item types
+                    case FileSearchToolCall fileSearch:
+                        {
+                            followUpSummaries.Add($"File search requested with queries: {string.Join(", ", fileSearch.Queries ?? Array.Empty<string>())}. Status: {fileSearch.Status}");
+                            break;
+                        }
+                    case WebSearchToolCall webSearch:
+                        {
+                            followUpSummaries.Add($"Web search requested with queries: {string.Join(", ", webSearch.Queries ?? Array.Empty<string>())}. Status: {webSearch.Status}");
+                            break;
+                        }
+                    case ComputerToolCall computerCall:
+                        {
+                            followUpSummaries.Add($"Computer tool call executed. Status: {computerCall.Status}");
+                            break;
+                        }
+                    case ReasoningItem reasoning:
+                        {
+                            followUpSummaries.Add($"Reasoning step completed. Status: {reasoning.Status}");
+                            break;
+                        }
+                    case ImageGenerationCall imageGen:
+                        {
+                            followUpSummaries.Add($"Image generation requested. Status: {imageGen.Status}");
+                            break;
+                        }
+                    case CodeInterpreterToolCall codeInterpreter:
+                        {
+                            followUpSummaries.Add($"Code interpreter executed code. Status: {codeInterpreter.Status}");
+                            break;
+                        }
+                    case LocalShellToolCall shellCall:
+                        {
+                            followUpSummaries.Add($"Local shell command executed. Status: {shellCall.Status}");
+                            break;
+                        }
+                    case OutputMessage message:
+                        {
+                            // Handle normal assistant messages - already extracted above
+                            break;
+                        }
+                    default: 
+                        {
+                            // Log unhandled item types for debugging
+                            followUpSummaries.Add($"Unhandled response item type: {item.GetType().Name}");
+                            break;
+                        }
                 }
             }
 
