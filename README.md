@@ -15,7 +15,16 @@ This repository provides a foundation for building AI agents that leverage the M
 
 ### Prerequisites
 - .NET 8.0 SDK or later
-- Terminal/Command Prompt
+- Terminal/Command Prompt  
+- VS Code (optional, for debugging)
+
+### Environment Setup
+
+1. **Copy environment template**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration (e.g., OPENAI_API_KEY)
+   ```
 
 ### Build and Run
 
@@ -43,6 +52,31 @@ This repository provides a foundation for building AI agents that leverage the M
    dotnet run "Calculate 15 + 27 and then multiply by 2"
    ```
 
+### Alternative: SSE Transport
+
+For HTTP-based communication instead of stdio:
+
+1. **Start MCP Server (SSE mode)**:
+   ```bash
+   cd src/MCPServer/MCPServer
+   MCP_TRANSPORT=sse dotnet run
+   ```
+
+2. **Connect with AgentAlpha (SSE mode)**:
+   ```bash
+   cd src/AgentAlpha/AgentAlpha
+   MCP_TRANSPORT=sse MCP_SERVER_URL=http://localhost:3000 dotnet run test
+   ```
+
+### VS Code Debugging
+
+Open the repository in VS Code and use the pre-configured debug launch configurations:
+- Launch MCP Server (stdio or SSE mode)
+- Launch AgentAlpha (test or interactive mode)
+- All configurations support breakpoint debugging
+
+See [docs/vscode-debugging.md](docs/vscode-debugging.md) for detailed instructions.
+
 ## Project Structure
 
 ```
@@ -55,22 +89,30 @@ agents/
 ├── docs/                        # Comprehensive documentation
 │   ├── README.md               # Documentation overview
 │   ├── getting-started.md      # Setup and usage guide
+│   ├── vscode-debugging.md     # VS Code debugging and transport guide
 │   ├── mcp-server.md          # Server implementation details
 │   ├── mcp-client.md          # Client usage and features
 │   └── architecture.md        # System architecture
-├── agents.sln                  # Visual Studio solution
-└── README.md                   # This file
+├── .vscode/                    # VS Code configuration
+│   ├── launch.json            # Debug configurations
+│   └── tasks.json             # Build tasks
+├── .env.example               # Environment configuration template
+├── agents.sln                 # Visual Studio solution
+└── README.md                  # This file
 ```
 
 ## Features
 
 ### Current Implementation
-- ✅ Basic MCP server with foundation for tools and resources
-- ✅ Interactive MCP client with command-line interface
-- ✅ Simple AI AgentAlpha with MCP Client integration loop
+- ✅ MCP Server with mathematical tools (add, subtract, multiply, divide)
+- ✅ Interactive MCP Client with command-line interface
+- ✅ AgentAlpha: AI agent with MCP Client integration and OpenAI API
+- ✅ **VS Code debugging support** with launch.json and tasks.json
+- ✅ **Dual transport support**: stdio and SSE (Server-Sent Events)
+- ✅ **Environment configuration** with .env file support
 - ✅ Microsoft Extensions integration (logging, DI, configuration)
 - ✅ Official MCP C# SDK integration
-- ✅ Comprehensive documentation and guides
+- ✅ Comprehensive documentation and testing
 
 ### Planned Features
 - 🔄 Full MCP protocol implementation with tools and resources

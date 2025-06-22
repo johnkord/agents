@@ -40,7 +40,52 @@ namespace MCPClient
             });
 
             _mcpClient = await McpClientFactory.CreateAsync(clientTransport, loggerFactory: _loggerFactory);
-            _logger.LogInformation("Connected to MCP Server: {ServerName}", serverName);
+            _logger.LogInformation("Connected to MCP Server: {ServerName} (stdio)", serverName);
+        }
+
+        /// <summary>
+        /// Connect to an MCP server using SSE transport
+        /// </summary>
+        /// <param name="serverName">Name of the server</param>
+        /// <param name="serverUrl">URL of the SSE server</param>
+        public async Task ConnectSseAsync(string serverName, string serverUrl)
+        {
+            if (_mcpClient != null)
+            {
+                throw new InvalidOperationException("Already connected to an MCP server. Disconnect first.");
+            }
+
+            var clientTransport = new SseClientTransport(new()
+            {
+                Name = serverName,
+                Endpoint = new Uri(serverUrl),
+                TransportMode = HttpTransportMode.AutoDetect
+            }, _loggerFactory);
+
+            _mcpClient = await McpClientFactory.CreateAsync(clientTransport, loggerFactory: _loggerFactory);
+            _logger.LogInformation("Connected to MCP Server: {ServerName} (SSE) at {ServerUrl}", serverName, serverUrl);
+        }
+
+        /// <summary>
+        /// Connect to an MCP server using the transport mode specified in environment variables
+        /// </summary>
+        /// <param name="serverName">Name of the server</param>
+        /// <param name="command">Command to start the server (used for stdio)</param>
+        /// <param name="arguments">Arguments for the server command (used for stdio)</param>
+        /// <param name="serverUrl">URL of the SSE server (used for SSE)</param>
+        public async Task ConnectAsync(string serverName, string command, string[] arguments, string? serverUrl = null)
+        {
+            var transportMode = Environment.GetEnvironmentVariable("MCP_TRANSPORT")?.ToLowerInvariant() ?? "stdio";
+            
+            if (transportMode == "sse")
+            {
+                var url = serverUrl ?? Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
+                await ConnectSseAsync(serverName, url);
+            }
+            else
+            {
+                await ConnectAsync(serverName, command, arguments);
+            }
         }
 
         /// <summary>
