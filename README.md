@@ -43,7 +43,7 @@ This repository provides a foundation for building AI agents that leverage the M
 
 3. **Start the AI AgentAlpha** (in another terminal):
    ```bash
-   cd src/AgentAlpha/AgentAlpha
+   cd src/Agent/AgentAlpha
    # Test MCP connection (no API key required)
    dotnet run "test"
    
@@ -64,7 +64,7 @@ For HTTP-based communication instead of stdio:
 
 2. **Connect with AgentAlpha (SSE mode)**:
    ```bash
-   cd src/AgentAlpha/AgentAlpha
+   cd src/Agent/AgentAlpha
    MCP_TRANSPORT=sse MCP_SERVER_URL=http://localhost:3000 dotnet run test
    ```
 

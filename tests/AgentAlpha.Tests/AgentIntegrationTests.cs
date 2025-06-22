@@ -69,11 +69,11 @@ public class AgentAlphaIntegrationTests
         // 5. Loop until task completion
         
         // This is validated by the existence of the agent source files
-        var agentSourcePath = Path.Combine("..", "..", "..", "..", "..", "src", "AgentAlpha", "AgentAlpha", "Program.cs");
+        var agentSourcePath = Path.Combine("..", "..", "..", "..", "..", "src", "Agent", "AgentAlpha", "Program.cs");
         Assert.True(File.Exists(agentSourcePath), $"Agent source file should exist at {agentSourcePath}");
         
         // Verify agent documentation exists
-        var readmePath = Path.Combine("..", "..", "..", "..", "..", "src", "AgentAlpha", "README.md");
+        var readmePath = Path.Combine("..", "..", "..", "..", "..", "src", "Agent", "README.md");
         Assert.True(File.Exists(readmePath), $"Agent documentation should exist at {readmePath}");
         
         var readmeContent = File.ReadAllText(readmePath);

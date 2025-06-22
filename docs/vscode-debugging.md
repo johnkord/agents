@@ -57,7 +57,7 @@ cd src/MCPServer/MCPServer
 dotnet run
 
 # Connect with AgentAlpha
-cd src/AgentAlpha/AgentAlpha  
+cd src/Agent/AgentAlpha  
 dotnet run test
 ```
 
@@ -71,7 +71,7 @@ dotnet run -- --transport sse
 # MCP_TRANSPORT=sse dotnet run
 
 # Connect with AgentAlpha (SSE mode)
-cd src/AgentAlpha/AgentAlpha
+cd src/Agent/AgentAlpha
 MCP_TRANSPORT=sse MCP_SERVER_URL=http://localhost:3000 dotnet run test
 ```
 
@@ -107,7 +107,7 @@ cd src/MCPServer/MCPServer
 dotnet run
 
 # Terminal 2: Test with AgentAlpha
-cd src/AgentAlpha/AgentAlpha
+cd src/Agent/AgentAlpha
 dotnet run test
 ```
 
@@ -118,7 +118,7 @@ cd src/MCPServer/MCPServer
 MCP_TRANSPORT=sse ASPNETCORE_URLS=http://localhost:3000 dotnet run
 
 # Terminal 2: Test SSE Client
-cd src/AgentAlpha/AgentAlpha
+cd src/Agent/AgentAlpha
 MCP_TRANSPORT=sse MCP_SERVER_URL=http://localhost:3000 dotnet run test
 ```
 

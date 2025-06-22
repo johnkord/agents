@@ -48,7 +48,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/src/AgentAlpha/AgentAlpha/AgentAlpha.csproj"
+                "${workspaceFolder}/src/Agent/AgentAlpha/AgentAlpha.csproj"
             ],
             "group": "build",
             "presentation": {
