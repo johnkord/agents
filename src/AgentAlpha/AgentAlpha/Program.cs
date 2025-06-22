@@ -4,8 +4,9 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using System.Text.Json;
 using System.Text;
+using MCPClient;
 
-namespace Agent
+namespace AgentAlpha
 {
     class Program
     {
@@ -64,7 +65,7 @@ namespace Agent
             
             try
             {
-                var agent = new SimpleAgent(openAiApiKey, loggerFactory2);
+                var agent = new SimpleAgentAlpha(openAiApiKey, loggerFactory2);
                 await agent.ExecuteTaskAsync(task);
             }
             catch (Exception ex)
@@ -80,24 +81,25 @@ namespace Agent
             
             try
             {
-                // Connect to MCP Server
-                var clientTransport = new StdioClientTransport(new()
-                {
-                    Name = "Test Agent MCP Server",
-                    Command = "dotnet",
-                    Arguments = ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
-                });
-
-                await using var mcpClient = await McpClientFactory.CreateAsync(clientTransport, loggerFactory: loggerFactory);
+                // Connect to MCP Server using MCPClient service
+                var mcpService = new McpClientService(loggerFactory);
+                await using var _ = mcpService; // Ensure disposal
+                
+                await mcpService.ConnectAsync(
+                    "Test Agent MCP Server",
+                    "dotnet",
+                    ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
+                );
+                
                 Console.WriteLine("✅ Successfully connected to MCP Server");
                 
                 // Get available tools
-                var tools = await mcpClient.ListToolsAsync();
+                var tools = await mcpService.ListToolsAsync();
                 Console.WriteLine($"✅ Found {tools.Count} tools: {string.Join(", ", tools.Select(t => t.Name))}");
                 
                 // Test a simple tool call
                 Console.WriteLine("Testing tool call: add(2, 3)");
-                var result = await mcpClient.CallToolAsync("add", new Dictionary<string, object?> { ["a"] = 2.0, ["b"] = 3.0 });
+                var result = await mcpService.CallToolAsync("add", new Dictionary<string, object?> { ["a"] = 2.0, ["b"] = 3.0 });
                 
                 if (!result.IsError)
                 {
@@ -118,18 +120,18 @@ namespace Agent
         }
     }
 
-    public class SimpleAgent
+    public class SimpleAgentAlpha
     {
         private readonly string _openAiApiKey;
         private readonly ILoggerFactory _loggerFactory;
-        private readonly ILogger<SimpleAgent> _logger;
+        private readonly ILogger<SimpleAgentAlpha> _logger;
         private readonly HttpClient _httpClient = new();
         
-        public SimpleAgent(string openAiApiKey, ILoggerFactory loggerFactory)
+        public SimpleAgentAlpha(string openAiApiKey, ILoggerFactory loggerFactory)
         {
             _openAiApiKey = openAiApiKey;
             _loggerFactory = loggerFactory;
-            _logger = loggerFactory.CreateLogger<SimpleAgent>();
+            _logger = loggerFactory.CreateLogger<SimpleAgentAlpha>();
         }
         
         public async Task ExecuteTaskAsync(string task)
@@ -137,19 +139,20 @@ namespace Agent
             Console.WriteLine($"Agent Task: {task}");
             Console.WriteLine("Connecting to MCP Server...");
             
-            // Connect to MCP Server
-            var clientTransport = new StdioClientTransport(new()
-            {
-                Name = "Agent MCP Server",
-                Command = "dotnet",
-                Arguments = ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
-            });
-
-            await using var mcpClient = await McpClientFactory.CreateAsync(clientTransport, loggerFactory: _loggerFactory);
+            // Connect to MCP Server using MCPClient service
+            var mcpService = new McpClientService(_loggerFactory);
+            await using var _ = mcpService; // Ensure disposal
+            
+            await mcpService.ConnectAsync(
+                "Agent MCP Server",
+                "dotnet",
+                ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
+            );
+            
             _logger.LogInformation("Connected to MCP Server");
             
             // Get available tools
-            var tools = await mcpClient.ListToolsAsync();
+            var tools = await mcpService.ListToolsAsync();
             Console.WriteLine($"Available tools: {string.Join(", ", tools.Select(t => t.Name))}");
             
             // Prepare OpenAI tools format
@@ -220,7 +223,7 @@ namespace Agent
                                 ["b"] = arguments["b"].GetDouble()
                             };
 
-                            var mcpResult = await mcpClient.CallToolAsync(toolCall.function.name, parameters);
+                            var mcpResult = await mcpService.CallToolAsync(toolCall.function.name, parameters);
                             
                             string toolResult;
                             if (!mcpResult.IsError)

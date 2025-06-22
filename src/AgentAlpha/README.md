@@ -1,6 +1,6 @@
-# Simple AI Agent
+# Simple AI AgentAlpha
 
-This is a simple AI Agent that demonstrates using the MCP Client as part of its loop.
+This is a simple AI AgentAlpha that demonstrates using the MCP Client as part of its loop.
 
 ## Overview
 
@@ -21,20 +21,20 @@ The agent:
 
 **Test MCP connection (no API key required):**
 ```bash
-cd src/Agent/Agent
+cd src/AgentAlpha/AgentAlpha
 dotnet run "test"
 ```
 
 **With command line argument:**
 ```bash
-cd src/Agent/Agent
+cd src/AgentAlpha/AgentAlpha
 export OPENAI_API_KEY=your_api_key_here
 dotnet run "Calculate 25 + 17 and then multiply the result by 3"
 ```
 
 **Interactive mode:**
 ```bash
-cd src/Agent/Agent
+cd src/AgentAlpha/AgentAlpha
 export OPENAI_API_KEY=your_api_key_here
 dotnet run
 # Enter task when prompted
