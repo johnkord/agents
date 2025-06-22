@@ -93,20 +93,40 @@ The server project includes these NuGet packages:
 - `Microsoft.Extensions.Logging` (v9.0.6) - Logging framework
 - `Microsoft.Extensions.Logging.Console` (v9.0.6) - Console logging provider
 
-## Planned Tools and Resources
+## Current Tools and Resources
 
-The server implements these mathematical tools:
+The server now implements a comprehensive set of tools across multiple domains:
 
-### Tools
+### Mathematical Tools
 1. **add** - Adds two numbers and returns the sum
 2. **subtract** - Subtracts the second number from the first number
 3. **multiply** - Multiplies two numbers and returns the product
 4. **divide** - Divides the first number by the second number (with division by zero handling)
 
-### Legacy Planned Tools
-1. **echo** - Echoes back the input text (to be implemented)
-2. **time** - Gets the current server time (to be implemented) 
-3. **random** - Generates random numbers within a specified range (to be implemented)
+### File Operations Tools
+1. **read_file** - Read the contents of a file
+2. **write_file** - Write text content to a file
+3. **list_directory** - List files and directories in a given path
+4. **file_exists** - Check if a file exists at the given path
+5. **delete_file** - Delete a file at the given path
+6. **create_directory** - Create a new directory at the given path
+7. **get_file_info** - Get information about a file (size, creation date, etc.)
+
+### Text Processing Tools
+1. **search_text** - Search for a pattern in text and return matching lines
+2. **replace_text** - Replace all occurrences of a pattern with replacement text
+3. **extract_lines** - Extract specific lines from text by line numbers
+4. **word_count** - Count words, characters, and lines in text
+5. **format_text** - Apply formatting to text (uppercase, lowercase, title case)
+6. **split_text** - Split text by a delimiter and return the parts
+
+### System Information Tools
+1. **get_current_time** - Get the current date and time
+2. **get_system_info** - Get basic system information
+3. **get_environment_variable** - Get the value of an environment variable
+4. **list_environment_variables** - List all environment variables (or filter by pattern)
+5. **get_current_directory** - Get the current working directory
+6. **generate_uuid** - Generate a new UUID/GUID
 
 ### Resources
 - Configuration data

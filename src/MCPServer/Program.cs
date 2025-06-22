@@ -61,12 +61,15 @@ namespace MCPServer
             builder.Services
                 .AddMcpServer()
                 .WithStdioServerTransport()
-                .WithTools<MathTools>();
+                .WithTools<MathTools>()
+                .WithTools<FileTools>()
+                .WithTools<TextTools>()
+                .WithTools<SystemTools>();
 
             var host = builder.Build();
             
             Console.WriteLine("MCP Server Starting (stdio mode)...");
-            Console.WriteLine("Available tools: add, subtract, multiply, divide");
+            Console.WriteLine("Available tools: add, subtract, multiply, divide, read_file, write_file, list_directory, search_text, get_current_time, and more...");
             
             await host.RunAsync();
         }
@@ -83,14 +86,17 @@ namespace MCPServer
             builder.Services
                 .AddMcpServer()
                 .WithHttpTransport()
-                .WithTools<MathTools>();
+                .WithTools<MathTools>()
+                .WithTools<FileTools>()
+                .WithTools<TextTools>()
+                .WithTools<SystemTools>();
 
             var app = builder.Build();
             
             app.MapMcp();
             
             Console.WriteLine("MCP Server Starting (SSE mode)...");
-            Console.WriteLine("Available tools: add, subtract, multiply, divide");
+            Console.WriteLine("Available tools: add, subtract, multiply, divide, read_file, write_file, list_directory, search_text, get_current_time, and more...");
             Console.WriteLine($"Server listening on: {builder.Configuration["ASPNETCORE_URLS"] ?? "http://localhost:5000"}");
             
             await app.RunAsync();
