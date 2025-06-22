@@ -35,6 +35,42 @@ This repository provides a foundation for building AI agents that leverage the M
    dotnet build
    ```
 
+## AKS Deployment
+
+For production deployment on Azure Kubernetes Service (AKS), see the comprehensive [AKS Deployment Guide](docs/aks-deployment.md).
+
+### Quick AKS Deployment
+
+1. **Build and push Docker images**:
+   ```bash
+   # Set your container registry
+   export REGISTRY=your-registry.azurecr.io
+   
+   # Build and push images
+   REGISTRY=$REGISTRY PUSH=true ./build-images.sh
+   ```
+
+2. **Deploy to AKS**:
+   ```bash
+   # Update image references
+   sed -i "s|mcp-server:latest|$REGISTRY/mcp-server:latest|g" k8s/mcp-server.yaml
+   sed -i "s|agent-alpha:latest|$REGISTRY/agent-alpha:latest|g" k8s/agent-alpha.yaml k8s/agent-alpha-job.yaml
+   
+   # Deploy to cluster
+   ./deploy-to-aks.sh
+   ```
+
+The deployment includes:
+- ✅ **Namespace isolation** with proper RBAC
+- ✅ **ConfigMaps** for application configuration
+- ✅ **Secrets** for sensitive data (OpenAI API key)
+- ✅ **Health checks** and resource limits
+- ✅ **Service discovery** between components
+- ✅ **Job templates** for one-time tasks
+- ✅ **Horizontal scaling** support
+
+### Local Development
+
 2. **Start the MCP Server** (in one terminal):
    ```bash
    cd src/MCPServer
@@ -83,16 +119,27 @@ See [docs/vscode-debugging.md](docs/vscode-debugging.md) for detailed instructio
 agents/
 ├── src/
 │   ├── MCPServer/     # MCP Server console application
+│   │   └── Dockerfile # Docker image for MCP Server
 │   ├── MCPClient/     # MCP Client console application
-│   ├── AgentAlpha/AgentAlpha/   # Simple AI AgentAlpha with MCP integration
-│   └── Shared/Shared/           # Shared utilities and models
+│   ├── Agent/AgentAlpha/   # Simple AI AgentAlpha with MCP integration
+│   │   └── Dockerfile # Docker image for AgentAlpha
+│   └── Common/        # Shared utilities and models
+├── k8s/               # Kubernetes deployment manifests
+│   ├── namespace-and-config.yaml  # Namespace, ConfigMap, and Secret
+│   ├── mcp-server.yaml            # MCP Server deployment and service
+│   ├── agent-alpha.yaml           # AgentAlpha deployment
+│   └── agent-alpha-job.yaml       # Job template for one-time tasks
 ├── docs/                        # Comprehensive documentation
 │   ├── README.md               # Documentation overview
 │   ├── getting-started.md      # Setup and usage guide
+│   ├── aks-deployment.md       # AKS deployment guide
 │   ├── vscode-debugging.md     # VS Code debugging and transport guide
 │   ├── mcp-server.md          # Server implementation details
 │   ├── mcp-client.md          # Client usage and features
 │   └── architecture.md        # System architecture
+├── build-images.sh             # Docker image build script
+├── deploy-to-aks.sh            # AKS deployment script
+├── .dockerignore               # Docker build exclusions
 ├── .vscode/                    # VS Code configuration
 │   ├── launch.json            # Debug configurations
 │   └── tasks.json             # Build tasks

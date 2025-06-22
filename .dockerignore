@@ -1,0 +1,55 @@
+# .dockerignore for agents repository
+
+# .NET build artifacts
+**/bin/
+**/obj/
+**/out/
+**/TestResults/
+
+# IDE files
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitmodules
+
+# Documentation and scripts that aren't needed in container
+README.md
+docs/
+*.md
+*.sh
+
+# Test files
+tests/
+
+# Environment files
+.env
+.env.*
+
+# Docker files
+Dockerfile*
+.dockerignore
+
+# Kubernetes files
+k8s/
+
+# Temporary files
+tmp/
+temp/
+
+# Node modules (if any)
+node_modules/
+
+# Logs
+*.log
+logs/

@@ -1,0 +1,82 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: agent-alpha-task
+  namespace: agents
+  labels:
+    app: agent-alpha-job
+spec:
+  template:
+    metadata:
+      labels:
+        app: agent-alpha-job
+    spec:
+      containers:
+      - name: agent-alpha
+        image: agent-alpha:latest  # Replace with your registry/image
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: agents-secrets
+              key: OPENAI_API_KEY
+        - name: MCP_TRANSPORT
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: MCP_TRANSPORT
+        - name: MCP_SERVER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: MCP_SERVER_URL
+        - name: AGENT_MAX_ITERATIONS
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: AGENT_MAX_ITERATIONS
+        - name: AGENT_TIMEOUT_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: AGENT_TIMEOUT_SECONDS
+        - name: ASPNETCORE_ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: ASPNETCORE_ENVIRONMENT
+        # Custom task - modify this command as needed
+        command: ["dotnet", "AgentAlpha.dll"]
+        args: ["Calculate the sum of 15 and 27, then multiply by 2"]
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+      restartPolicy: Never
+      # Ensure the agent waits for the MCP server to be ready
+      initContainers:
+      - name: wait-for-mcp-server
+        image: busybox:1.35
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Waiting for MCP server to be ready..."
+          until nc -z mcp-server 5000; do
+            echo "MCP server not ready, waiting..."
+            sleep 2
+          done
+          echo "MCP server is ready!"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+  backoffLimit: 3
+  activeDeadlineSeconds: 600  # 10 minutes timeout

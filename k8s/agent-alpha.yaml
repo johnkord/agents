@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-alpha
+  namespace: agents
+  labels:
+    app: agent-alpha
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-alpha
+  template:
+    metadata:
+      labels:
+        app: agent-alpha
+    spec:
+      containers:
+      - name: agent-alpha
+        image: agent-alpha:latest  # Replace with your registry/image
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: agents-secrets
+              key: OPENAI_API_KEY
+        - name: MCP_TRANSPORT
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: MCP_TRANSPORT
+        - name: MCP_SERVER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: MCP_SERVER_URL
+        - name: AGENT_MAX_ITERATIONS
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: AGENT_MAX_ITERATIONS
+        - name: AGENT_TIMEOUT_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: AGENT_TIMEOUT_SECONDS
+        - name: ASPNETCORE_ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: ASPNETCORE_ENVIRONMENT
+        - name: LOGGING__LOGLEVEL__DEFAULT
+          valueFrom:
+            configMapKeyRef:
+              name: agents-config
+              key: LOGGING__LOGLEVEL__DEFAULT
+        # Override the default entrypoint to run in interactive mode
+        # You can customize this command based on your needs
+        command: ["dotnet", "AgentAlpha.dll"]
+        args: ["test"]  # Start with test mode, can be changed to specific tasks
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - dotnet
+            - --list-runtimes
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - dotnet
+            - --list-runtimes
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+      restartPolicy: Always
+      # Ensure the agent waits for the MCP server to be ready
+      initContainers:
+      - name: wait-for-mcp-server
+        image: busybox:1.35
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Waiting for MCP server to be ready..."
+          until nc -z mcp-server 5000; do
+            echo "MCP server not ready, waiting..."
+            sleep 2
+          done
+          echo "MCP server is ready!"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
