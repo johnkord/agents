@@ -85,11 +85,25 @@ namespace AgentAlpha
                 var mcpService = new McpClientService(loggerFactory);
                 await using var _ = mcpService; // Ensure disposal
                 
-                await mcpService.ConnectAsync(
-                    "Test Agent MCP Server",
-                    "dotnet",
-                    ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
-                );
+                // Get transport configuration from environment variables
+                var transportType = GetMcpTransportType();
+                
+                if (transportType == McpTransportType.Http)
+                {
+                    var serverUrl = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
+                    Console.WriteLine($"Connecting to MCP Server via HTTP at {serverUrl}...");
+                    await mcpService.ConnectAsync(McpTransportType.Http, "Test Agent MCP Server", serverUrl: serverUrl);
+                }
+                else
+                {
+                    Console.WriteLine("Connecting to MCP Server via stdio...");
+                    await mcpService.ConnectAsync(
+                        McpTransportType.Stdio,
+                        "Test Agent MCP Server",
+                        "dotnet",
+                        ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
+                    );
+                }
                 
                 Console.WriteLine("✅ Successfully connected to MCP Server");
                 
@@ -118,6 +132,17 @@ namespace AgentAlpha
                 Console.WriteLine($"❌ MCP connection test failed: {ex.Message}");
             }
         }
+        
+        static McpTransportType GetMcpTransportType()
+        {
+            var transport = Environment.GetEnvironmentVariable("MCP_TRANSPORT")?.ToLowerInvariant();
+            return transport switch
+            {
+                "http" or "sse" => McpTransportType.Http,
+                "stdio" => McpTransportType.Stdio,
+                _ => McpTransportType.Stdio // Default to stdio for backward compatibility
+            };
+        }
     }
 
     public class SimpleAgentAlpha
@@ -143,11 +168,25 @@ namespace AgentAlpha
             var mcpService = new McpClientService(_loggerFactory);
             await using var _ = mcpService; // Ensure disposal
             
-            await mcpService.ConnectAsync(
-                "Agent MCP Server",
-                "dotnet",
-                ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
-            );
+            // Get transport configuration from environment variables
+            var transportType = GetMcpTransportType();
+            
+            if (transportType == McpTransportType.Http)
+            {
+                var serverUrl = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
+                Console.WriteLine($"Connecting to MCP Server via HTTP at {serverUrl}...");
+                await mcpService.ConnectAsync(McpTransportType.Http, "Agent MCP Server", serverUrl: serverUrl);
+            }
+            else
+            {
+                Console.WriteLine("Connecting to MCP Server via stdio...");
+                await mcpService.ConnectAsync(
+                    McpTransportType.Stdio,
+                    "Agent MCP Server",
+                    "dotnet",
+                    ["run", "--project", "../../MCPServer/MCPServer/MCPServer.csproj"]
+                );
+            }
             
             _logger.LogInformation("Connected to MCP Server");
             
@@ -305,6 +344,17 @@ namespace AgentAlpha
             }
 
             return (responseContent, toolCalls);
+        }
+        
+        private static McpTransportType GetMcpTransportType()
+        {
+            var transport = Environment.GetEnvironmentVariable("MCP_TRANSPORT")?.ToLowerInvariant();
+            return transport switch
+            {
+                "http" or "sse" => McpTransportType.Http,
+                "stdio" => McpTransportType.Stdio,
+                _ => McpTransportType.Stdio // Default to stdio for backward compatibility
+            };
         }
     }
 
