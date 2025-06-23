@@ -87,6 +87,11 @@ public class AgentAlphaIntegrationTests
         Assert.Contains("OpenAI", agentSource);
         Assert.Contains("MCP", agentSource);
         Assert.Contains("CallToolAsync", agentSource);
-        Assert.Contains("SimpleAgentAlpha", agentSource);
+        
+        // Check for new component-based architecture
+        Assert.Contains("TaskExecutor", agentSource);
+        Assert.Contains("ConnectionManager", agentSource);
+        Assert.Contains("ToolManager", agentSource);
+        Assert.Contains("ConversationManager", agentSource);
     }
 }
