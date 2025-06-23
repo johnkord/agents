@@ -349,3 +349,4 @@ FodyWeavers.xsd
 .env
 logs/**
 *.db
+**/*.db

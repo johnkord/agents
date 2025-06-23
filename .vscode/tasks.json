@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build-all",
+            "label": "build:all",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -24,7 +24,7 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build-mcp-server",
+            "label": "build:mcp-server",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -43,7 +43,7 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build-agent-alpha",
+            "label": "build:agent-alpha",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -62,7 +62,7 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build-mcp-client",
+            "label": "build:mcp-client",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -81,7 +81,7 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "clean",
+            "label": "clean:all",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -97,7 +97,7 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "restore",
+            "label": "restore:all",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -113,7 +113,7 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "test",
+            "label": "test:all",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -129,7 +129,7 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build-approval-service",
+            "label": "build:approval-service",
             "command": "dotnet",
             "type": "process",
             "args": [

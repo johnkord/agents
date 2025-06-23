@@ -2,23 +2,23 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch MCP Server",
+            "name": "ApprovalService",
             "type": "coreclr",
             "request": "launch",
-            "program": "${workspaceFolder}/src/MCPServer/bin/Debug/net8.0/MCPServer.dll",
+            "program": "${workspaceFolder}/src/ApprovalService/bin/Debug/net8.0/ApprovalService.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/src/MCPServer",
+            "cwd": "${workspaceFolder}/src/ApprovalService",
             "console": "integratedTerminal",
             "stopAtEntry": false,
-            "preLaunchTask": "build-mcp-server",
+            "preLaunchTask": "build:approval-service",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
-                "ASPNETCORE_URLS": "http://localhost:3000"
+                "ASPNETCORE_URLS": "http://localhost:5000"
             },
             "envFile": "${workspaceFolder}/.env"
         },
         {
-            "name": "Launch MCP Server (SSE Mode)",
+            "name": "MCP Server (SSE Mode)",
             "type": "coreclr",
             "request": "launch",
             "program": "${workspaceFolder}/src/MCPServer/bin/Debug/net8.0/MCPServer.dll",
@@ -26,7 +26,7 @@
             "cwd": "${workspaceFolder}/src/MCPServer",
             "console": "integratedTerminal",
             "stopAtEntry": false,
-            "preLaunchTask": "build-mcp-server",
+            "preLaunchTask": "build:mcp-server",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
                 "ASPNETCORE_URLS": "http://localhost:3000",
@@ -35,31 +35,7 @@
             "envFile": "${workspaceFolder}/.env"
         },
         {
-            "name": "Launch AgentAlpha",
-            "type": "coreclr",
-            "request": "launch",
-            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
-            "args": ["test"],
-            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
-            "console": "integratedTerminal",
-            "stopAtEntry": false,
-            "preLaunchTask": "build-agent-alpha",
-            "envFile": "${workspaceFolder}/.env"
-        },
-        {
-            "name": "Launch AgentAlpha (Interactive)",
-            "type": "coreclr",
-            "request": "launch",
-            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
-            "console": "integratedTerminal",
-            "stopAtEntry": false,
-            "preLaunchTask": "build-agent-alpha",
-            "envFile": "${workspaceFolder}/.env"
-        },
-        {
-            "name": "Launch AgentAlpha with SSE",
+            "name": "AgentAlpha (SSE)",
             "type": "coreclr",
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
@@ -67,38 +43,11 @@
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",
             "stopAtEntry": false,
-            "preLaunchTask": "build-agent-alpha",
+            "preLaunchTask": "build:agent-alpha",
             "env": {
                 "MCP_TRANSPORT": "sse",
                 "MCP_SERVER_URL": "http://localhost:3000"
             },
-            "envFile": "${workspaceFolder}/.env"
-        },
-        {
-            "name": "Launch ApprovalService",
-            "type": "coreclr",
-            "request": "launch",
-            "program": "${workspaceFolder}/src/ApprovalService/bin/Debug/net8.0/ApprovalService.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/ApprovalService",
-            "console": "integratedTerminal",
-            "stopAtEntry": false,
-            "preLaunchTask": "build-approval-service",
-            "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development",
-                "ASPNETCORE_URLS": "http://localhost:5000"
-            },
-            "envFile": "${workspaceFolder}/.env"
-        },
-        {
-            "name": ".NET Core Launch (MCPServer)",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/MCPServer/bin/Debug/net7.0/MCPServer.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/MCPServer",
-            "console": "internalConsole",
             "envFile": "${workspaceFolder}/.env"
         }
     ]

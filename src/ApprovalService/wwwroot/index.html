@@ -53,7 +53,8 @@
             border-radius: 3px;
             font-family: monospace;
             margin: 10px 0;
-            white-space: pre-wrap;
+            white-space: pre;           /* was pre-wrap – keeps exact json indent */
+            overflow-x: auto;           /* allow horizontal scroll if needed */
         }
         .actions {
             margin-top: 10px;
@@ -163,9 +164,7 @@
                         <div class="timestamp">
                             📅 ${new Date(approval.createdAt).toLocaleString()}
                         </div>
-                        <div class="arguments">
-                            ${JSON.stringify(approval.arguments, null, 2)}
-                        </div>
+                        <pre class="arguments"></pre>
                         <div class="actions">
                             <button class="btn btn-approve" 
                                     ${!canApprove ? 'disabled' : ''} 
@@ -179,6 +178,9 @@
                             </button>
                         </div>
                     `;
+                    /* NEW: pretty-print arguments without extra leading spaces */
+                    requestDiv.querySelector('.arguments').textContent =
+                        JSON.stringify(approval.arguments, null, 2);
                     
                     container.appendChild(requestDiv);
                 });
