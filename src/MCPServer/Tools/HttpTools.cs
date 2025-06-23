@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Net.Http.Headers;
 using System.Text;
 using MCPServer.ToolApproval; // +import
+using System.Collections.Generic;
 
 namespace MCPServer.Tools;
 
@@ -22,6 +23,21 @@ public static class HttpTools
         string body            = "",
         string headersCsv       = "" /* key:value,key:value */ )
     {
+        // Check for approval before executing the dangerous operation
+        var args = new Dictionary<string, object?>
+        {
+            ["method"] = method,
+            ["url"] = url,
+            ["body"] = body,
+            ["headersCsv"] = headersCsv
+        };
+
+        var approved = ToolApprovalManager.Instance.EnsureApproved("http_request", args);
+        if (!approved)
+        {
+            return "Error: Tool execution was denied by approval system.";
+        }
+
         try
         {
             using var requestMessage = new HttpRequestMessage(new HttpMethod(method.ToUpperInvariant()), url);

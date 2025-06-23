@@ -2,6 +2,7 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text.Json;
 using MCPServer.ToolApproval;
+using System.Collections.Generic;
 
 namespace MCPServer.Tools;
 
@@ -30,6 +31,19 @@ public class FileTools
     [RequiresApproval] // writes data
     public static string WriteFile(string filePath, string content)
     {
+        // Check for approval before executing the dangerous operation
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["content"] = content
+        };
+
+        var approved = ToolApprovalManager.Instance.EnsureApproved("write_file", args);
+        if (!approved)
+        {
+            return "Error: Tool execution was denied by approval system.";
+        }
+
         try
         {
             // Ensure the directory exists
@@ -98,6 +112,18 @@ public class FileTools
     [RequiresApproval] // destructive
     public static string DeleteFile(string filePath)
     {
+        // Check for approval before executing the dangerous operation
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath
+        };
+
+        var approved = ToolApprovalManager.Instance.EnsureApproved("delete_file", args);
+        if (!approved)
+        {
+            return "Error: Tool execution was denied by approval system.";
+        }
+
         try
         {
             if (!File.Exists(filePath))
@@ -116,6 +142,18 @@ public class FileTools
     [RequiresApproval] // creates data
     public static string CreateDirectory(string directoryPath)
     {
+        // Check for approval before executing the dangerous operation
+        var args = new Dictionary<string, object?>
+        {
+            ["directoryPath"] = directoryPath
+        };
+
+        var approved = ToolApprovalManager.Instance.EnsureApproved("create_directory", args);
+        if (!approved)
+        {
+            return "Error: Tool execution was denied by approval system.";
+        }
+
         try
         {
             if (Directory.Exists(directoryPath))
