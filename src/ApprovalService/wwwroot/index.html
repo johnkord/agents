@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool Approval Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        .request {
+            border: 1px solid #ddd;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .request.pending {
+            border-left: 4px solid #ffa500;
+        }
+        .request.approved {
+            border-left: 4px solid #28a745;
+            background-color: #f8fff8;
+        }
+        .request.denied {
+            border-left: 4px solid #dc3545;
+            background-color: #fff8f8;
+        }
+        .tool-name {
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .arguments {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+        .actions {
+            margin-top: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-approve {
+            background-color: #28a745;
+            color: white;
+        }
+        .btn-deny {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .status.pending {
+            background-color: #ffa500;
+            color: white;
+        }
+        .status.approved {
+            background-color: #28a745;
+            color: white;
+        }
+        .status.denied {
+            background-color: #dc3545;
+            color: white;
+        }
+        .refresh-btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 Tool Approval Dashboard</h1>
+            <p>Review and approve tool execution requests</p>
+        </div>
+        
+        <button class="refresh-btn" onclick="loadApprovals()">🔄 Refresh</button>
+        
+        <div id="loading" class="loading">Loading approval requests...</div>
+        <div id="approvals-container"></div>
+    </div>
+
+    <script>
+        async function loadApprovals() {
+            const container = document.getElementById('approvals-container');
+            const loading = document.getElementById('loading');
+            
+            loading.style.display = 'block';
+            container.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/approvals');
+                const approvals = await response.json();
+                
+                loading.style.display = 'none';
+                
+                if (approvals.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #666;">No approval requests found.</p>';
+                    return;
+                }
+                
+                approvals.forEach(approval => {
+                    const requestDiv = document.createElement('div');
+                    requestDiv.className = `request ${approval.status.toLowerCase()}`;
+                    
+                    const statusClass = approval.status.toLowerCase();
+                    const canApprove = approval.status === 'Pending';
+                    
+                    requestDiv.innerHTML = `
+                        <div class="tool-name">
+                            🛠️ ${approval.toolName}
+                            <span class="status ${statusClass}">${approval.status}</span>
+                        </div>
+                        <div class="timestamp">
+                            📅 ${new Date(approval.createdAt).toLocaleString()}
+                        </div>
+                        <div class="arguments">
+                            ${JSON.stringify(approval.arguments, null, 2)}
+                        </div>
+                        <div class="actions">
+                            <button class="btn btn-approve" 
+                                    ${!canApprove ? 'disabled' : ''} 
+                                    onclick="approveRequest('${approval.id}')">
+                                ✅ Approve
+                            </button>
+                            <button class="btn btn-deny" 
+                                    ${!canApprove ? 'disabled' : ''} 
+                                    onclick="denyRequest('${approval.id}')">
+                                ❌ Deny
+                            </button>
+                        </div>
+                    `;
+                    
+                    container.appendChild(requestDiv);
+                });
+            } catch (error) {
+                loading.style.display = 'none';
+                container.innerHTML = `<p style="color: red; text-align: center;">Error loading approvals: ${error.message}</p>`;
+            }
+        }
+        
+        async function approveRequest(id) {
+            await updateApproval(id, 'approve');
+        }
+        
+        async function denyRequest(id) {
+            await updateApproval(id, 'deny');
+        }
+        
+        async function updateApproval(id, action) {
+            try {
+                const response = await fetch(`/api/approvals/${id}/${action}`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    loadApprovals(); // Refresh the list
+                } else {
+                    alert(`Failed to ${action} request`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        // Load approvals on page load
+        loadApprovals();
+        
+        // Auto-refresh every 5 seconds
+        setInterval(loadApprovals, 5000);
+    </script>
+</body>
+</html>
