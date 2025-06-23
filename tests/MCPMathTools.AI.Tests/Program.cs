@@ -4,6 +4,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using System.Text.Json;
 using System.Text;
+using System.IO;
 
 namespace MCPMathTools.AI.Tests;
 
@@ -142,21 +143,23 @@ public class Program
             tool_choice = "auto"
         };
 
-        var json = JsonSerializer.Serialize(requestData);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var reqJson = JsonSerializer.Serialize(requestData);
+        var content = new StringContent(reqJson, Encoding.UTF8, "application/json");
 
         httpClient.DefaultRequestHeaders.Clear();
         httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
 
         var response = await httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
-        var responseJson = await response.Content.ReadAsStringAsync();
+        var respJson = await response.Content.ReadAsStringAsync();
+
+        LogOpenAiInteraction(reqJson, respJson);
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new Exception($"OpenAI API error: {response.StatusCode} - {responseJson}");
+            throw new Exception($"OpenAI API error: {response.StatusCode} - {respJson}");
         }
 
-        var result = JsonSerializer.Deserialize<JsonElement>(responseJson);
+        var result = JsonSerializer.Deserialize<JsonElement>(respJson);
         var message = result.GetProperty("choices")[0].GetProperty("message");
 
         var responseContent = message.TryGetProperty("content", out var contentProp) ? contentProp.GetString() ?? "" : "";
@@ -168,6 +171,22 @@ public class Program
         }
 
         return (responseContent, toolCalls);
+    }
+
+    /* ---------- helper -------------------------------------------------- */
+    private static void LogOpenAiInteraction(string requestJson, string responseJson)
+    {
+        try
+        {
+            Directory.CreateDirectory("logs");
+            var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmssfff");
+            var path  = Path.Combine("logs", $"openai_{stamp}.json");
+            File.WriteAllText(path,
+$"""
+{{ "timestamp": "{stamp}", "request": {requestJson}, "response": {responseJson} }}
+""");
+        }
+        catch { /* ignore logging failures */ }
     }
 
     public class ToolCall

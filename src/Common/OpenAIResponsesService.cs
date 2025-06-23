@@ -1,4 +1,5 @@
 using System;
+using System.IO;                              // NEW
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -40,24 +41,44 @@ public sealed class OpenAIResponsesService : IOpenAIResponsesService, IDisposabl
         ResponsesCreateRequest request,
         CancellationToken cancellationToken = default)
     {
-        var content = new StringContent(
-            JsonSerializer.Serialize(request, _json),
-            Encoding.UTF8,
-            "application/json");
+        var reqJson = JsonSerializer.Serialize(request, _json);                 // ← capture
+        var content = new StringContent(reqJson, Encoding.UTF8, "application/json");
 
         using var httpResponse = await _http.PostAsync(
             "https://api.openai.com/v1/responses",
             content,
             cancellationToken);
 
-        var json = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
+        var respJson = await httpResponse.Content.ReadAsStringAsync(cancellationToken); // ← capture
+
+        LogOpenAiInteraction(reqJson, respJson);                                // NEW
 
         if (!httpResponse.IsSuccessStatusCode)
             throw new InvalidOperationException(
-                $"OpenAI API error: {httpResponse.StatusCode} – {json}");
+                $"OpenAI API error: {httpResponse.StatusCode} – {respJson}");
 
-        return JsonSerializer.Deserialize<ResponsesCreateResponse>(json, _json)
+        return JsonSerializer.Deserialize<ResponsesCreateResponse>(respJson, _json)
                ?? throw new InvalidOperationException("Invalid response payload");
+    }
+
+    /* ---------- helper -------------------------------------------------- */
+    private static void LogOpenAiInteraction(string requestJson, string responseJson)
+    {
+        try
+        {
+            Directory.CreateDirectory("logs");
+            var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmssfff");
+            var path  = Path.Combine("logs", $"openai_{stamp}.json");
+            File.WriteAllText(
+                path,
+                JsonSerializer.Serialize(new
+                {
+                    timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmssfff"),
+                    request   = JsonSerializer.Deserialize<object>(requestJson),
+                    response  = JsonSerializer.Deserialize<object>(responseJson)
+                }));
+        }
+        catch { /* swallow – logging must never break main flow */ }
     }
 
     /* ------------------------------------------------------------------ */

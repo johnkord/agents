@@ -130,6 +130,7 @@ public class TaskExecutor : ITaskExecutor
             if (response.HasToolCalls)
             {
                 var toolSummaries = new List<string>();
+                var taskCompleted = false;       // NEW
 
                 foreach (var toolCall in response.ToolCalls)
                 {
@@ -141,12 +142,20 @@ public class TaskExecutor : ITaskExecutor
 
                     var result = await _toolManager.ExecuteToolAsync(_connectionManager, toolCall.Name, toolCall.Arguments);
                     toolSummaries.Add($"Tool '{toolCall.Name}' called with args {toolCall.Arguments}. Result: {result}");
+
+                    if (toolCall.Name.Equals("complete_task", StringComparison.OrdinalIgnoreCase))
+                        taskCompleted = true;    // NEW
                 }
 
-                // Add tool results back to conversation
                 _conversationManager.AddToolResults(toolSummaries);
-                var summary = string.Join("\n", toolSummaries);
-                Console.WriteLine($"🔧 {summary}");
+                Console.WriteLine($"🔧 {string.Join("\n", toolSummaries)}");
+
+                if (taskCompleted)               // NEW
+                {
+                    Console.WriteLine("✅ Task completed!");
+                    return;
+                }
+
                 continue; // go to next iteration
             }
 
