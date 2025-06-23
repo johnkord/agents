@@ -14,18 +14,20 @@ namespace MCPServer.ToolApproval;
 public class RestApprovalProvider : IApprovalProvider
 {
     private readonly HttpClient _httpClient;
-    private readonly string _baseUrl;
+    private readonly Uri _baseUri;
     private readonly TimeSpan _pollInterval;
     private readonly TimeSpan _timeout;
 
     public string ProviderName => "REST";
 
-    public RestApprovalProvider(string baseUrl, 
-                               HttpClient? httpClient = null,
-                               TimeSpan? pollInterval = null, 
-                               TimeSpan? timeout = null)
+    public RestApprovalProvider(string baseUrl, HttpClient? httpClient = null, 
+                               TimeSpan? pollInterval = null, TimeSpan? timeout = null)
     {
-        _baseUrl = baseUrl.TrimEnd('/');
+        // --- fix: normalise base URL ----------------------------------------
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            throw new ArgumentException("Base URL must not be empty.", nameof(baseUrl));
+
+        _baseUri = new Uri(baseUrl.EndsWith('/') ? baseUrl : baseUrl + '/'); // <—
         _httpClient = httpClient ?? new HttpClient();
         _pollInterval = pollInterval ?? TimeSpan.FromSeconds(2);
         _timeout = timeout ?? TimeSpan.FromMinutes(10);
@@ -33,24 +35,25 @@ public class RestApprovalProvider : IApprovalProvider
 
     public async Task<bool> RequestApprovalAsync(ApprovalInvocationToken token, CancellationToken cancellationToken = default)
     {
-        // Submit approval request
-        var requestData = new
+        // ---------- fixed payload -------------------------------------------------
+        var request = new ApprovalRequestDto
         {
-            id = token.Id,
-            toolName = token.ToolName,
-            arguments = token.Arguments,
-            createdAt = token.CreatedAt,
-            status = "Pending"
+            Id         = token.Id,
+            ToolName   = token.ToolName,
+            Arguments  = token.Arguments,
+            CreatedAt  = token.CreatedAt,
+            Status     = ApprovalStatus.Pending        // enum → serialises as 0
         };
 
-        var requestJson = JsonSerializer.Serialize(requestData);
-        var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+        var requestJson = JsonSerializer.Serialize(request);           // PascalCase + enum ‑ ok
+        var content     = new StringContent(requestJson, Encoding.UTF8, "application/json");
+        // -------------------------------------------------------------------------
 
-        var submitResponse = await _httpClient.PostAsync($"{_baseUrl}/api/approvals", content, cancellationToken);
+        var submitResponse = await _httpClient.PostAsync(BuildUri("api/approvals"), content, cancellationToken);
         submitResponse.EnsureSuccessStatusCode();
 
-        Console.Error.WriteLine($"Tool approval request submitted to: {_baseUrl}/api/approvals");
-        Console.Error.WriteLine($"You can approve/deny at: {_baseUrl}/swagger");
+        Console.Error.WriteLine($"Tool approval request submitted to: {_baseUri}api/approvals");
+        Console.Error.WriteLine($"You can approve/deny at: {_baseUri}swagger");
         Console.Error.WriteLine($"Waiting for approval decision...");
 
         // Poll for approval decision
@@ -59,7 +62,7 @@ public class RestApprovalProvider : IApprovalProvider
         {
             try
             {
-                var statusResponse = await _httpClient.GetAsync($"{_baseUrl}/api/approvals/{token.Id}", cancellationToken);
+                var statusResponse = await _httpClient.GetAsync(BuildUri($"api/approvals/{token.Id}"), cancellationToken);
                 
                 if (statusResponse.IsSuccessStatusCode)
                 {
@@ -93,8 +96,22 @@ public class RestApprovalProvider : IApprovalProvider
         throw new TimeoutException($"Approval request for tool '{token.ToolName}' timed out after {_timeout.TotalMinutes} minutes");
     }
 
+    private Uri BuildUri(string relativePath)       // helper => safe URI composition
+        => new(_baseUri, relativePath);
+
     public void Dispose()
     {
         _httpClient?.Dispose();
     }
+
+    // ---------- helper DTO (local to file) ---------------------------------------
+    private sealed class ApprovalRequestDto
+    {
+        public Guid                                     Id         { get; init; }
+        public string                                   ToolName   { get; init; } = "";
+        public IReadOnlyDictionary<string, object?>     Arguments  { get; init; } = new Dictionary<string, object?>();
+        public DateTimeOffset                           CreatedAt  { get; init; }
+        public ApprovalStatus                           Status     { get; init; }
+    }
+    // -----------------------------------------------------------------------------
 }

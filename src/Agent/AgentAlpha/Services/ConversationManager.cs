@@ -49,9 +49,6 @@ public class ConversationManager : IConversationManager
         {
             var response = await _openAi.CreateResponseAsync(request);
             
-            // Log the full response for debugging
-            _logger.LogDebug("OpenAI Response: {Response}", JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true }));
-
             // Extract assistant text
             var assistantText = response.Output?
                 .OfType<OutputMessage>()

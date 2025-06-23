@@ -12,10 +12,18 @@ public sealed class ToolApprovalManager
 {
     public static ToolApprovalManager Instance { get; } = new();
 
-    private const string ConnectionString = "Data Source=tool_approval.db";
+    // Use env-driven config (TOOL_APPROVAL_DB) with a sensible default.
+    private static readonly string ConnectionString =
+        Environment.GetEnvironmentVariable("TOOL_APPROVAL_DB") switch
+        {
+            { Length: > 0 } env => env,
+            _                   => "Data Source=tool_approval.db"
+        };
+
     private readonly IApprovalProvider _approvalProvider;
 
-    private ToolApprovalManager() : this(new ApprovalProviderConfiguration())
+    // ← use env-driven config
+    private ToolApprovalManager() : this(ApprovalProviderConfigFactory.FromEnvironment())
     {
     }
 

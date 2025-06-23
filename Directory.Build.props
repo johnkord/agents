@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Enforce warnings as errors for all projects in the repo -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

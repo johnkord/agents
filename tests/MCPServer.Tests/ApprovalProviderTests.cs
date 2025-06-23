@@ -94,11 +94,12 @@ namespace MCPServer.Tests.ToolApproval
             var tempDir = $"/tmp/test-approvals-{Guid.NewGuid()}";
             var provider = new FileApprovalProvider(tempDir);
 
-            // Directory should be created during construction
             Assert.True(System.IO.Directory.Exists(tempDir));
 
-            // Clean up
             System.IO.Directory.Delete(tempDir, true);
+
+            // Prevent CS1998 warning
+            await Task.CompletedTask;
         }
 
         private static ApprovalInvocationToken CreateTestToken()

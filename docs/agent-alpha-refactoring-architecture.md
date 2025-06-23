@@ -5,14 +5,11 @@
 This document outlines the new modular architecture for AgentAlpha, designed to improve maintainability, testability, and extensibility by separating concerns into distinct components.
 
 ## Current State Problems
-
-The current `SimpleAgentAlpha` class (673 lines) has multiple responsibilities:
-- MCP server connection management
-- OpenAI API interaction
-- Tool discovery and execution
-- Message flow management
-- Hard-coded tool parameter schemas
-- Complex nested switch statements for tool handling
+- Previously the legacy class `SimpleAgentAlpha` (≈673 lines) handled
+  MCP connections, OpenAI interaction, tool discovery and execution,
+  and message flow in a single file.  
+- That file has been deleted; the new modular services now provide the
+  same functionality in a cleaner, testable manner.
 
 ## New Architecture
 

@@ -348,3 +348,4 @@ FodyWeavers.xsd
 *.sln.iml
 .env
 logs/**
+*.db

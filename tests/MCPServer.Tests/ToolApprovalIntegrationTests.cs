@@ -73,6 +73,9 @@ namespace MCPServer.Tests.ToolApproval
             var hasApprovalAttr = dangerousMethod.GetCustomAttribute<RequiresApprovalAttribute>();
             Assert.NotNull(hasApprovalAttr);
             Assert.True(hasApprovalAttr.Required);
+
+            // Prevent CS1998 (“async method lacks 'await'”) – no functional impact
+            await Task.CompletedTask;
         }
 
         [Fact]

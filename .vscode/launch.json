@@ -89,6 +89,17 @@
                 "ASPNETCORE_URLS": "http://localhost:5000"
             },
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": ".NET Core Launch (MCPServer)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/MCPServer/bin/Debug/net7.0/MCPServer.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/MCPServer",
+            "console": "internalConsole",
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }
