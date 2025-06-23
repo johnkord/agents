@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using MCPClient;
 using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
+using AgentAlpha.Models;
 using System.Text.Json;                 // +NEW
 
 namespace AgentAlpha.Services;
@@ -33,27 +34,67 @@ public class TaskExecutor : ITaskExecutor
 
     public async Task ExecuteAsync(string task)
     {
-        _logger.LogInformation("Starting task execution: {Task}", task);
+        // Maintain backwards compatibility by creating a simple request
+        var request = TaskExecutionRequest.FromTask(task);
+        await ExecuteAsync(request);
+    }
 
+    public async Task ExecuteAsync(TaskExecutionRequest request)
+    {
+        _logger.LogInformation("Starting task execution: {Task}", request.Task);
+
+        // Apply request-specific configuration overrides
+        var effectiveConfig = ApplyRequestOverrides(request);
+        
         try
         {
             // Step 1: Connect to MCP Server
             await ConnectToMcpServerAsync();
 
             // Step 2: Discover and filter tools
-            var availableTools = await DiscoverToolsAsync();
+            var availableTools = await DiscoverToolsAsync(request.ToolFilter ?? effectiveConfig.ToolFilter);
 
             // Step 3: Initialize conversation
-            InitializeConversation(task);
+            InitializeConversation(request);
 
-            // Step 4: Execute conversation loop
-            await ExecuteConversationLoopAsync(availableTools);
+            // Step 4: Execute conversation loop with timeout if specified
+            if (request.Timeout.HasValue)
+            {
+                using var cts = new CancellationTokenSource(request.Timeout.Value);
+                await ExecuteConversationLoopAsync(availableTools, effectiveConfig, cts.Token);
+            }
+            else
+            {
+                await ExecuteConversationLoopAsync(availableTools, effectiveConfig);
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Task execution failed");
             throw;
         }
+    }
+
+    private AgentConfiguration ApplyRequestOverrides(TaskExecutionRequest request)
+    {
+        // Create a copy of the base configuration with request-specific overrides
+        var config = new AgentConfiguration
+        {
+            OpenAiApiKey = _config.OpenAiApiKey,
+            Model = request.Model ?? _config.Model,
+            MaxIterations = request.MaxIterations ?? _config.MaxIterations,
+            Transport = _config.Transport,
+            ServerUrl = _config.ServerUrl,
+            ToolFilter = request.ToolFilter ?? _config.ToolFilter
+        };
+        
+        if (request.VerboseLogging)
+        {
+            _logger.LogInformation("Request overrides applied - Model: {Model}, MaxIterations: {MaxIterations}, Priority: {Priority}", 
+                config.Model, config.MaxIterations, request.Priority);
+        }
+        
+        return config;
     }
 
     private async Task ConnectToMcpServerAsync()
@@ -75,10 +116,11 @@ public class TaskExecutor : ITaskExecutor
         }
     }
 
-    private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverToolsAsync()
+    private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverToolsAsync(ToolFilterConfig? toolFilter = null)
     {
+        var filterConfig = toolFilter ?? _config.ToolFilter;
         var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
-        var filteredTools = _toolManager.ApplyFilters(allTools, _config.ToolFilter);
+        var filteredTools = _toolManager.ApplyFilters(allTools, filterConfig);
 
         Console.WriteLine($"🔧 Discovered {allTools.Count} tools total, {filteredTools.Count} after filtering: " +
                          $"{string.Join(", ", filteredTools.Take(5).Select(t => t.Name))}" +
@@ -86,16 +128,16 @@ public class TaskExecutor : ITaskExecutor
 
         if (filteredTools.Count != allTools.Count)
         {
-            var excluded = allTools.Where(t => !_config.ToolFilter.ShouldIncludeTool(t.Name)).Select(t => t.Name);
+            var excluded = allTools.Where(t => !filterConfig.ShouldIncludeTool(t.Name)).Select(t => t.Name);
             Console.WriteLine($"🚫 Excluded tools: {string.Join(", ", excluded)}");
         }
 
         return filteredTools.Select(t => _toolManager.CreateOpenAiToolDefinition(t)).ToArray();
     }
 
-    private void InitializeConversation(string task)
+    private void InitializeConversation(TaskExecutionRequest request)
     {
-        var systemPrompt = """
+        var systemPrompt = request.SystemPrompt ?? """
             You are AgentAlpha, a helpful AI assistant that can perform various tasks using available tools.
             
             Available capabilities include:
@@ -114,14 +156,31 @@ public class TaskExecutor : ITaskExecutor
             If you're unsure about a tool's parameters, start with simpler operations and build up.
             """;
 
-        _conversationManager.InitializeConversation(systemPrompt, task);
-        Console.WriteLine($"📝 Task: {task}");
+        _conversationManager.InitializeConversation(systemPrompt, request.Task);
+        Console.WriteLine($"📝 Task: {request.Task}");
+        
+        if (request.Model != null)
+        {
+            Console.WriteLine($"🤖 Model: {request.Model}");
+        }
+        
+        if (request.Temperature.HasValue)
+        {
+            Console.WriteLine($"🌡️ Temperature: {request.Temperature:F1}");
+        }
+        
+        if (request.Priority != TaskPriority.Normal)
+        {
+            Console.WriteLine($"⚡ Priority: {request.Priority}");
+        }
     }
 
-    private async Task ExecuteConversationLoopAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools)
+    private async Task ExecuteConversationLoopAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools, AgentConfiguration config, CancellationToken cancellationToken = default)
     {
-        for (int i = 0; i < _config.MaxIterations; i++)
+        for (int i = 0; i < config.MaxIterations; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             Console.WriteLine($"\n--- Iteration {i + 1} ---");
 
             // Process one iteration of the conversation
@@ -135,7 +194,7 @@ public class TaskExecutor : ITaskExecutor
 
                 foreach (var toolCall in response.ToolCalls)
                 {
-                    if (!_config.ToolFilter.ShouldIncludeTool(toolCall.Name))
+                    if (!config.ToolFilter.ShouldIncludeTool(toolCall.Name))
                     {
                         toolSummaries.Add($"Tool '{toolCall.Name}' call blocked by tool filter configuration.");
                         continue;
@@ -184,6 +243,6 @@ public class TaskExecutor : ITaskExecutor
             _conversationManager.AddAssistantMessage(response.AssistantText);
         }
 
-        Console.WriteLine($"⚠️  Reached maximum iterations ({_config.MaxIterations}).");
+        Console.WriteLine($"⚠️  Reached maximum iterations ({config.MaxIterations}).");
     }
 }

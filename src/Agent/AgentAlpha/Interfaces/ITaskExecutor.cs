@@ -1,3 +1,5 @@
+using AgentAlpha.Models;
+
 namespace AgentAlpha.Interfaces;
 
 /// <summary>
@@ -9,4 +11,9 @@ public interface ITaskExecutor
     /// Execute a task from start to finish
     /// </summary>
     Task ExecuteAsync(string task);
+    
+    /// <summary>
+    /// Execute a task with full request parameters
+    /// </summary>
+    Task ExecuteAsync(TaskExecutionRequest request);
 }
