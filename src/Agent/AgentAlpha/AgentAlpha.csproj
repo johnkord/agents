@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="../../Common/Common.csproj" />
     <ProjectReference Include="../../MCPClient/MCPClient.csproj" />
+    <ProjectReference Include="../../MCPServer/MCPServer.csproj" />
   </ItemGroup>
 
 </Project>

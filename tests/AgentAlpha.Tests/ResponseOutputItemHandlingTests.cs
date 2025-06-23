@@ -4,6 +4,7 @@ using System.Text.Json;
 using Xunit;
 using OpenAIIntegration.Model;
 using AgentAlpha;
+using AgentAlpha.Configuration;
 
 namespace AgentAlpha.Tests;
 

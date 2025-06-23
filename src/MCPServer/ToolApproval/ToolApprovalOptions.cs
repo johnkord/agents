@@ -18,6 +18,39 @@ public class ToolApprovalOptions
     public RemoteApprovalConfig? RemoteConfig { get; set; }
 
     /// <summary>
+    /// Create tool approval options from environment variables
+    /// </summary>
+    public static ToolApprovalOptions FromEnvironment()
+    {
+        var backendType = Environment.GetEnvironmentVariable("TOOL_APPROVAL_BACKEND")?.ToLowerInvariant() switch
+        {
+            "remote" => ApprovalBackendType.Remote,
+            "console" => ApprovalBackendType.Console,
+            _ => ApprovalBackendType.Console
+        };
+
+        var options = new ToolApprovalOptions
+        {
+            BackendType = backendType
+        };
+
+        if (backendType == ApprovalBackendType.Remote)
+        {
+            options.RemoteConfig = new RemoteApprovalConfig
+            {
+                BaseUrl = Environment.GetEnvironmentVariable("TOOL_APPROVAL_BASE_URL") ?? "http://localhost:3001",
+                ApiKey = Environment.GetEnvironmentVariable("TOOL_APPROVAL_API_KEY"),
+                ApprovalTimeout = TimeSpan.FromSeconds(
+                    int.TryParse(Environment.GetEnvironmentVariable("TOOL_APPROVAL_TIMEOUT"), out var timeout) 
+                        ? timeout 
+                        : 300)
+            };
+        }
+
+        return options;
+    }
+
+    /// <summary>
     /// Creates an approval backend based on the current configuration.
     /// </summary>
     /// <returns>An instance of IApprovalBackend</returns>
