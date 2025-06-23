@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Threading.Tasks;
 using MCPServer.ToolApproval;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -12,7 +13,7 @@ namespace YourNamespaceHere
         // ---------- helpers ----------
         private static McpServerTool DummyTool(string name = "dummy") =>
             McpServerTool.Create(
-                async (RequestContext<CallToolRequestParams> ctx) => new CallToolResult(),
+                () => "ok",                 // simpler delegate – no unknown types
                 new() { Name = name });
 
         private static MethodInfo Method<T>(string name) =>

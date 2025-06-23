@@ -181,10 +181,15 @@ public class Program
             Directory.CreateDirectory("logs");
             var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmssfff");
             var path  = Path.Combine("logs", $"openai_{stamp}.json");
-            File.WriteAllText(path,
-$"""
-{{ "timestamp": "{stamp}", "request": {requestJson}, "response": {responseJson} }}
-""");
+
+            var wrapper = new
+            {
+                timestamp = stamp,
+                request   = JsonSerializer.Deserialize<JsonElement>(requestJson),
+                response  = JsonSerializer.Deserialize<JsonElement>(responseJson)
+            };
+
+            File.WriteAllText(path, JsonSerializer.Serialize(wrapper));
         }
         catch { /* ignore logging failures */ }
     }

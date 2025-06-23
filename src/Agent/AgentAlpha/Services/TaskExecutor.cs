@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using MCPClient;
 using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
+using System.Text.Json;                 // +NEW
 
 namespace AgentAlpha.Services;
 
@@ -140,11 +141,21 @@ public class TaskExecutor : ITaskExecutor
                         continue;
                     }
 
-                    var result = await _toolManager.ExecuteToolAsync(_connectionManager, toolCall.Name, toolCall.Arguments);
-                    toolSummaries.Add($"Tool '{toolCall.Name}' called with args {toolCall.Arguments}. Result: {result}");
+                    var result = await _toolManager.ExecuteToolAsync(
+                        _connectionManager,
+                        toolCall.Name,
+                        toolCall.Arguments ?? new Dictionary<string, object?>()); // ← warning fixed
+
+                    // --- changed: pretty-print arguments ------------------
+                    var argsJson = toolCall.Arguments?.Count > 0
+                        ? JsonSerializer.Serialize(toolCall.Arguments)
+                        : "{}";
+                    toolSummaries.Add(
+                        $"Tool '{toolCall.Name}' called with args {argsJson}. Result: {result}");
+                    // ------------------------------------------------------
 
                     if (toolCall.Name.Equals("complete_task", StringComparison.OrdinalIgnoreCase))
-                        taskCompleted = true;    // NEW
+                        taskCompleted = true;
                 }
 
                 _conversationManager.AddToolResults(toolSummaries);

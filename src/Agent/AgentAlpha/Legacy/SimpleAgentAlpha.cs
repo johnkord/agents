@@ -167,9 +167,14 @@ internal sealed class SimpleAgentAlpha
                             // -----------------------------------------------------
 
                             var mcpRes = await mcp.CallToolAsync(name, args);
-                            var txt = mcpRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text
-                                      ?? "<no text>";
-                            followUpSummaries.Add($"Function '{name}' called via MCP. Result: {txt}");
+                            var txt    = mcpRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text
+                                         ?? "<no text>";
+
+                            // --- changed -----------------------------------
+                            var argsJson = args.Count > 0 ? JsonSerializer.Serialize(args) : "{}";
+                            followUpSummaries.Add(
+                                $"Function '{name}' called via MCP with args {argsJson}. Result: {txt}");
+                            // ----------------------------------------------
                         }
                         break;
                     }
