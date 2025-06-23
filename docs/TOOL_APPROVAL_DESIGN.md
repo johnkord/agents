@@ -59,16 +59,61 @@ sequenceDiagram
 * SDK for mobile push notifications.
 
 ## 8. Implementation Milestones
-1. **MVP**
+1. **MVP** ✅ COMPLETED
    * Attribute flag + runtime intercept.
-   * File-based queue + CLI prompt driver.
-2. **REST Backend**
-   * ASP.NET Core service with SQLite.
-   * Basic web UI.
-3. **Enterprise**
+   * ~~File-based queue + CLI prompt driver~~ → Console approval backend.
+   * Async approval workflow with pluggable backends.
+2. **REST Backend** ✅ COMPLETED  
+   * Remote approval backend with HTTP polling.
+   * Configuration system for different backends.
+   * ~~ASP.NET Core service with SQLite~~ → Example service provided.
+   * ~~Basic web UI~~ → Can be added separately.
+3. **Enterprise** 🚧 FUTURE
    * OAuth sign-in, RBAC.
    * Message queue transport.
    * Metrics / alerting hooks.
+
+## 9. Implementation Details
+
+### Current Architecture
+The tool approval system has been implemented with the following components:
+
+- **`IApprovalBackend`**: Interface for pluggable approval mechanisms
+- **`ConsoleApprovalBackend`**: Local console-based approval (backward compatible)  
+- **`RemoteApprovalBackend`**: HTTP-based remote approval for cloud deployments
+- **`ToolApprovalManager`**: Central manager with async approval workflow
+- **`ToolApprovalOptions`**: Configuration system for backend selection
+
+### Backend Configuration
+```csharp
+// Console approval (default, backward compatible)
+var consoleOptions = new ToolApprovalOptions
+{
+    BackendType = ApprovalBackendType.Console
+};
+
+// Remote approval for cloud deployments
+var remoteOptions = new ToolApprovalOptions
+{
+    BackendType = ApprovalBackendType.Remote,
+    RemoteConfig = new RemoteApprovalConfig
+    {
+        BaseUrl = "https://approval-service.example.com",
+        ApiKey = "your-api-key",
+        ApprovalTimeout = TimeSpan.FromMinutes(5),
+        PollInterval = TimeSpan.FromSeconds(2)
+    }
+};
+
+// Apply configuration
+ToolApprovalManager.Instance.SetApprovalBackend(options.CreateBackend());
+```
+
+### Migration Path
+- Existing code continues to work unchanged (console approval)
+- New deployments can opt into remote approval
+- The async `EnsureApprovedAsync` method is now the preferred API
+- Legacy `EnsureApproved` method is marked obsolete but still functional
 
 ---
 

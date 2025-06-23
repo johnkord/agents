@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;                    // + new
 using System.Text.Json;                              // + new
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;                         // + new
 using ModelContextProtocol.Protocol;
 
@@ -11,10 +13,22 @@ public sealed class ToolApprovalManager
     public static ToolApprovalManager Instance { get; } = new();
 
     private const string ConnectionString = "Data Source=tool_approval.db";
+    private IApprovalBackend _approvalBackend;
 
     private ToolApprovalManager()
     {
         EnsureDatabase();
+        // Default to console approval backend for backward compatibility
+        _approvalBackend = new ConsoleApprovalBackend();
+    }
+
+    /// <summary>
+    /// Sets the approval backend to use for processing approval requests.
+    /// </summary>
+    /// <param name="backend">The approval backend to use</param>
+    public void SetApprovalBackend(IApprovalBackend backend)
+    {
+        _approvalBackend = backend ?? throw new ArgumentNullException(nameof(backend));
     }
 
     private static void EnsureDatabase()
@@ -35,22 +49,47 @@ public sealed class ToolApprovalManager
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Legacy synchronous method for backward compatibility.
+    /// Use EnsureApprovedAsync for new code.
+    /// </summary>
+    [Obsolete("Use EnsureApprovedAsync instead")]
     public bool EnsureApproved(string toolName, IReadOnlyDictionary<string, object?> args)
+    {
+        return EnsureApprovedAsync(toolName, args).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Asynchronously requests approval for a tool invocation.
+    /// </summary>
+    /// <param name="toolName">Name of the tool being invoked</param>
+    /// <param name="args">Arguments passed to the tool</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>True if approved, false if denied</returns>
+    public async Task<bool> EnsureApprovedAsync(string toolName, IReadOnlyDictionary<string, object?> args, CancellationToken cancellationToken = default)
     {
         var token = new ApprovalInvocationToken(
             Guid.NewGuid(), toolName, args, DateTimeOffset.UtcNow);
 
         InsertToken(token);
 
-        // --- very simple synchronous CLI driver --------------------------
-        Console.Error.WriteLine(
-            $"Tool '{toolName}' requested with args: {JsonSerializer.Serialize(args)}");
-        Console.Error.Write("Approve? [y/N] ");
-        var answer   = Console.ReadLine();
-        var approved = string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase);
-
-        UpdateStatus(token.Id, approved ? ApprovalStatus.Approved : ApprovalStatus.Denied);
-        return approved;
+        try
+        {
+            var approved = await _approvalBackend.RequestApprovalAsync(token, cancellationToken);
+            UpdateStatus(token.Id, approved ? ApprovalStatus.Approved : ApprovalStatus.Denied);
+            return approved;
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateStatus(token.Id, ApprovalStatus.Denied);
+            throw;
+        }
+        catch (Exception)
+        {
+            // For safety, deny approval on any error
+            UpdateStatus(token.Id, ApprovalStatus.Denied);
+            throw;
+        }
     }
 
     // ---------------------- persistence helpers --------------------------

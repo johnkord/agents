@@ -347,3 +347,7 @@ FodyWeavers.xsd
 .idea/
 *.sln.iml
 .env
+
+# Tool approval database files
+tool_approval.db
+tool_approval.db-*
