@@ -1,0 +1,16 @@
+apiVersion: v2
+name: agents
+description: A Helm chart for Agents MCP system on AKS
+version: 0.1.0
+appVersion: "1.0"
+keywords:
+  - mcp
+  - agents
+  - ai
+  - azure
+home: https://github.com/johnkord/agents
+sources:
+  - https://github.com/johnkord/agents
+maintainers:
+  - name: johnkord
+    url: https://github.com/johnkord

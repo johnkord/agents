@@ -1,0 +1,34 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agents-ingress
+  namespace: agents
+  annotations:
+    kubernetes.io/ingress.class: "azure/application-gateway"
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    appgw.ingress.kubernetes.io/use-private-ip: "false"
+    appgw.ingress.kubernetes.io/backend-protocol: "http"
+    appgw.ingress.kubernetes.io/request-timeout: "60"
+spec:
+  tls:
+  - hosts:
+    - agents.yourdomain.com
+    secretName: agents-tls-secret
+  rules:
+  - host: agents.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: approval-service-service
+            port:
+              number: 5000
+      - path: /mcp
+        pathType: Prefix
+        backend:
+          service:
+            name: mcpserver-service
+            port:
+              number: 3000

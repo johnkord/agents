@@ -1,0 +1,125 @@
+{{- if .Values.agentAlpha.enabled }}
+{{- if eq .Values.agentAlpha.type "job" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agents.fullname" . }}-agent-alpha-job
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent-alpha
+spec:
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "agents.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: agent-alpha
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "agents.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: agent-alpha
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ include "agents.imageRegistry" . }}/{{ .Values.images.agentAlpha.repository }}:{{ .Values.images.agentAlpha.tag }}"
+          imagePullPolicy: {{ .Values.images.agentAlpha.pullPolicy }}
+          command: ["dotnet", "AgentAlpha.dll", "test"]
+          env:
+            - name: MCP_SERVER_URL
+              value: "http://{{ include "agents.fullname" . }}-mcpserver:3000"
+            - name: REST_BASE_URL
+              value: "http://{{ include "agents.fullname" . }}-approval-service:5000"
+          envFrom:
+            - configMapRef:
+                name: {{ include "agents.fullname" . }}-config
+            - secretRef:
+                name: {{ include "agents.fullname" . }}-secrets
+          resources:
+            {{- toYaml .Values.agentAlpha.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- else if eq .Values.agentAlpha.type "cronjob" }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "agents.fullname" . }}-agent-alpha-cronjob
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent-alpha
+spec:
+  schedule: {{ .Values.agentAlpha.cronjob.schedule | quote }}
+  suspend: {{ .Values.agentAlpha.cronjob.suspend }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          {{- with .Values.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          labels:
+            {{- include "agents.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: agent-alpha
+        spec:
+          restartPolicy: OnFailure
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "agents.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: agent-alpha
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              image: "{{ include "agents.imageRegistry" . }}/{{ .Values.images.agentAlpha.repository }}:{{ .Values.images.agentAlpha.tag }}"
+              imagePullPolicy: {{ .Values.images.agentAlpha.pullPolicy }}
+              command: ["dotnet", "AgentAlpha.dll", "test"]
+              env:
+                - name: MCP_SERVER_URL
+                  value: "http://{{ include "agents.fullname" . }}-mcpserver:3000"
+                - name: REST_BASE_URL
+                  value: "http://{{ include "agents.fullname" . }}-approval-service:5000"
+              envFrom:
+                - configMapRef:
+                    name: {{ include "agents.fullname" . }}-config
+                - secretRef:
+                    name: {{ include "agents.fullname" . }}-secrets
+              resources:
+                {{- toYaml .Values.agentAlpha.resources | nindent 16 }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
+{{- end }}

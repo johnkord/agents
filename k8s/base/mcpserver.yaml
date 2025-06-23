@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcpserver
+  namespace: agents
+  labels:
+    app: mcpserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcpserver
+  template:
+    metadata:
+      labels:
+        app: mcpserver
+    spec:
+      containers:
+      - name: mcpserver
+        image: mcpserver:latest
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: ASPNETCORE_URLS
+          value: "http://+:3000"
+        - name: MCP_SERVER_URL
+          value: "http://mcpserver-service:3000"
+        envFrom:
+        - configMapRef:
+            name: agents-config
+        - secretRef:
+            name: agents-secrets
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          tcpSocket:
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcpserver-service
+  namespace: agents
+spec:
+  selector:
+    app: mcpserver
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP

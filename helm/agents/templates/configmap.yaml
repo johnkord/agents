@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agents.fullname" . }}-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+data:
+  ASPNETCORE_ENVIRONMENT: {{ .Values.config.aspnetcore.environment | quote }}
+  MCP_TRANSPORT: {{ .Values.config.mcp.transport | quote }}
+  LOGGING__LOGLEVEL__DEFAULT: {{ .Values.config.logging.level.default | quote }}
+  LOGGING__LOGLEVEL__MICROSOFT: {{ .Values.config.logging.level.microsoft | quote }}
+  LOGGING__LOGLEVEL__MICROSOFT_HOSTING_LIFETIME: {{ .Values.config.logging.level.microsoftHostingLifetime | quote }}
+  AGENT_MAX_ITERATIONS: {{ .Values.config.agent.maxIterations | quote }}
+  AGENT_TIMEOUT_SECONDS: {{ .Values.config.agent.timeoutSeconds | quote }}
+  APPROVAL_PROVIDER_TYPE: {{ .Values.config.approval.providerType | quote }}
+  FILE_APPROVAL_DIRECTORY: {{ .Values.config.approval.file.directory | quote }}
+  FILE_APPROVAL_POLL_INTERVAL: {{ .Values.config.approval.file.pollInterval | quote }}
+  FILE_APPROVAL_TIMEOUT: {{ .Values.config.approval.file.timeout | quote }}
+  REST_POLL_INTERVAL: {{ .Values.config.approval.rest.pollInterval | quote }}
+  REST_TIMEOUT: {{ .Values.config.approval.rest.timeout | quote }}

@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agents
+  labels:
+    name: agents
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agents-config
+  namespace: agents
+data:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  MCP_TRANSPORT: "sse"
+  LOGGING__LOGLEVEL__DEFAULT: "Information"
+  LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+  LOGGING__LOGLEVEL__MICROSOFT_HOSTING_LIFETIME: "Information"
+  AGENT_MAX_ITERATIONS: "10"
+  AGENT_TIMEOUT_SECONDS: "300"
+  APPROVAL_PROVIDER_TYPE: "Rest"
+  FILE_APPROVAL_DIRECTORY: "/tmp/approvals"
+  FILE_APPROVAL_POLL_INTERVAL: "00:00:01"
+  FILE_APPROVAL_TIMEOUT: "00:05:00"
+  REST_POLL_INTERVAL: "00:00:02"
+  REST_TIMEOUT: "00:10:00"
