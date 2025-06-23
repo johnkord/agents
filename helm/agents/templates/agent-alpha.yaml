@@ -33,7 +33,40 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ include "agents.imageRegistry" . }}/{{ .Values.images.agentAlpha.repository }}:{{ .Values.images.agentAlpha.tag }}"
           imagePullPolicy: {{ .Values.images.agentAlpha.pullPolicy }}
-          command: ["dotnet", "AgentAlpha.dll", "test"]
+          command: {{ .Values.agentAlpha.command | toJson }}
+          args:
+            {{- if .Values.agentAlpha.args }}
+            {{- toYaml .Values.agentAlpha.args | nindent 12 }}
+            {{- else }}
+            {{- if .Values.agentAlpha.parameters.model }}
+            - "--model"
+            - {{ .Values.agentAlpha.parameters.model | quote }}
+            {{- end }}
+            {{- if .Values.agentAlpha.parameters.temperature }}
+            - "--temperature"
+            - {{ .Values.agentAlpha.parameters.temperature | quote }}
+            {{- end }}
+            {{- if .Values.agentAlpha.parameters.maxIterations }}
+            - "--max-iterations"
+            - {{ .Values.agentAlpha.parameters.maxIterations | quote }}
+            {{- end }}
+            {{- if .Values.agentAlpha.parameters.priority }}
+            - "--priority"
+            - {{ .Values.agentAlpha.parameters.priority | quote }}
+            {{- end }}
+            {{- if .Values.agentAlpha.parameters.timeoutMinutes }}
+            - "--timeout"
+            - {{ .Values.agentAlpha.parameters.timeoutMinutes | quote }}
+            {{- end }}
+            {{- if .Values.agentAlpha.parameters.verboseLogging }}
+            - "--verbose"
+            {{- end }}
+            {{- if .Values.agentAlpha.parameters.systemPrompt }}
+            - "--system-prompt"
+            - {{ .Values.agentAlpha.parameters.systemPrompt | quote }}
+            {{- end }}
+            - {{ .Values.agentAlpha.task | quote }}
+            {{- end }}
           env:
             - name: MCP_SERVER_URL
               value: "http://{{ include "agents.fullname" . }}-mcpserver:3000"
@@ -96,7 +129,40 @@ spec:
                 {{- toYaml .Values.securityContext | nindent 16 }}
               image: "{{ include "agents.imageRegistry" . }}/{{ .Values.images.agentAlpha.repository }}:{{ .Values.images.agentAlpha.tag }}"
               imagePullPolicy: {{ .Values.images.agentAlpha.pullPolicy }}
-              command: ["dotnet", "AgentAlpha.dll", "test"]
+              command: {{ .Values.agentAlpha.command | toJson }}
+              args:
+                {{- if .Values.agentAlpha.args }}
+                {{- toYaml .Values.agentAlpha.args | nindent 16 }}
+                {{- else }}
+                {{- if .Values.agentAlpha.parameters.model }}
+                - "--model"
+                - {{ .Values.agentAlpha.parameters.model | quote }}
+                {{- end }}
+                {{- if .Values.agentAlpha.parameters.temperature }}
+                - "--temperature"
+                - {{ .Values.agentAlpha.parameters.temperature | quote }}
+                {{- end }}
+                {{- if .Values.agentAlpha.parameters.maxIterations }}
+                - "--max-iterations"
+                - {{ .Values.agentAlpha.parameters.maxIterations | quote }}
+                {{- end }}
+                {{- if .Values.agentAlpha.parameters.priority }}
+                - "--priority"
+                - {{ .Values.agentAlpha.parameters.priority | quote }}
+                {{- end }}
+                {{- if .Values.agentAlpha.parameters.timeoutMinutes }}
+                - "--timeout"
+                - {{ .Values.agentAlpha.parameters.timeoutMinutes | quote }}
+                {{- end }}
+                {{- if .Values.agentAlpha.parameters.verboseLogging }}
+                - "--verbose"
+                {{- end }}
+                {{- if .Values.agentAlpha.parameters.systemPrompt }}
+                - "--system-prompt"
+                - {{ .Values.agentAlpha.parameters.systemPrompt | quote }}
+                {{- end }}
+                - {{ .Values.agentAlpha.task | quote }}
+                {{- end }}
               env:
                 - name: MCP_SERVER_URL
                   value: "http://{{ include "agents.fullname" . }}-mcpserver:3000"

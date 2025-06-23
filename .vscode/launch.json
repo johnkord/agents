@@ -49,6 +49,70 @@
                 "MCP_SERVER_URL": "http://localhost:3000"
             },
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (Enhanced - GPT-4)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": ["--model", "gpt-4o", "--temperature", "0.7", "--verbose", "Analyze the repository structure and suggest improvements"],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (Creative Writing)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": ["--model", "gpt-4o", "--temperature", "0.9", "--system-prompt", "You are a creative writing assistant who helps with storytelling", "--priority", "High", "Write a short story about an AI agent"],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (Precise Math)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": ["--model", "gpt-3.5-turbo", "--temperature", "0.1", "--system-prompt", "You are a precise mathematics tutor", "--timeout", "2", "Calculate the area of a circle with radius 5.7 meters"],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (Quick Test)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": ["--max-iterations", "3", "--verbose", "test"],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }

@@ -9,6 +9,7 @@ resources:
 patchesStrategicMerge:
 - ingress-patch.yaml
 - approval-service-patch.yaml
+- agent-alpha-patch.yaml
 
 images:
 - name: mcpserver
