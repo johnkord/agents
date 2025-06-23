@@ -3,6 +3,8 @@ using System.Collections.Generic;                    // + new
 using System.Text.Json;                              // + new
 using Microsoft.Data.Sqlite;                         // + new
 using ModelContextProtocol.Protocol;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace MCPServer.ToolApproval;
 
@@ -11,9 +13,15 @@ public sealed class ToolApprovalManager
     public static ToolApprovalManager Instance { get; } = new();
 
     private const string ConnectionString = "Data Source=tool_approval.db";
+    private readonly IApprovalProvider _approvalProvider;
 
-    private ToolApprovalManager()
+    private ToolApprovalManager() : this(new ApprovalProviderConfiguration())
     {
+    }
+
+    public ToolApprovalManager(ApprovalProviderConfiguration config)
+    {
+        _approvalProvider = ApprovalProviderFactory.CreateProvider(config);
         EnsureDatabase();
     }
 
@@ -37,20 +45,29 @@ public sealed class ToolApprovalManager
 
     public bool EnsureApproved(string toolName, IReadOnlyDictionary<string, object?> args)
     {
+        // For backwards compatibility, use sync version that blocks on async
+        return EnsureApprovedAsync(toolName, args).GetAwaiter().GetResult();
+    }
+
+    public async Task<bool> EnsureApprovedAsync(string toolName, IReadOnlyDictionary<string, object?> args, CancellationToken cancellationToken = default)
+    {
         var token = new ApprovalInvocationToken(
             Guid.NewGuid(), toolName, args, DateTimeOffset.UtcNow);
 
         InsertToken(token);
 
-        // --- very simple synchronous CLI driver --------------------------
-        Console.Error.WriteLine(
-            $"Tool '{toolName}' requested with args: {JsonSerializer.Serialize(args)}");
-        Console.Error.Write("Approve? [y/N] ");
-        var answer   = Console.ReadLine();
-        var approved = string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase);
-
-        UpdateStatus(token.Id, approved ? ApprovalStatus.Approved : ApprovalStatus.Denied);
-        return approved;
+        try
+        {
+            var approved = await _approvalProvider.RequestApprovalAsync(token, cancellationToken);
+            UpdateStatus(token.Id, approved ? ApprovalStatus.Approved : ApprovalStatus.Denied);
+            return approved;
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus(token.Id, ApprovalStatus.Denied);
+            Console.Error.WriteLine($"Approval request failed: {ex.Message}");
+            return false;
+        }
     }
 
     // ---------------------- persistence helpers --------------------------
