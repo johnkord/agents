@@ -1,0 +1,147 @@
+# Default values for agents.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+global:
+  namespace: agents
+  registry: your-registry.azurecr.io
+
+images:
+  mcpserver:
+    repository: mcpserver
+    tag: latest
+    pullPolicy: IfNotPresent
+  approvalService:
+    repository: approval-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  agentAlpha:
+    repository: agent-alpha
+    tag: latest
+    pullPolicy: IfNotPresent
+
+config:
+  aspnetcore:
+    environment: Production
+  mcp:
+    transport: sse
+  logging:
+    level:
+      default: Information
+      microsoft: Warning
+      microsoftHostingLifetime: Information
+  agent:
+    maxIterations: 10
+    timeoutSeconds: 300
+  approval:
+    providerType: Rest
+    file:
+      directory: /tmp/approvals
+      pollInterval: "00:00:01"
+      timeout: "00:05:00"
+    rest:
+      pollInterval: "00:00:02"
+      timeout: "00:10:00"
+
+secrets:
+  openaiApiKey: ""  # Set this value during deployment
+  restAuthToken: ""  # Set this value during deployment
+
+mcpserver:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+approvalService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 5000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  persistence:
+    enabled: true
+    storageClass: managed-csi
+    size: 1Gi
+
+agentAlpha:
+  enabled: true
+  type: job  # can be 'job' or 'cronjob'
+  cronjob:
+    schedule: "0 */6 * * *"  # Every 6 hours
+    suspend: false
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+ingress:
+  enabled: true
+  className: "azure/application-gateway"
+  annotations:
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    appgw.ingress.kubernetes.io/use-private-ip: "false"
+    appgw.ingress.kubernetes.io/backend-protocol: "http"
+    appgw.ingress.kubernetes.io/request-timeout: "60"
+  hosts:
+    - host: agents.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service:
+            name: approval-service
+            port: 5000
+        - path: /mcp
+          pathType: Prefix
+          service:
+            name: mcpserver
+            port: 3000
+  tls:
+    - secretName: agents-tls-secret
+      hosts:
+        - agents.yourdomain.com
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

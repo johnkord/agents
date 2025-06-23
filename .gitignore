@@ -350,3 +350,15 @@ FodyWeavers.xsd
 logs/**
 *.db
 **/*.db
+
+# Kubernetes secrets with real values
+k8s/*/secrets-local.yaml
+helm/*/values-local.yaml
+
+# Container build artifacts
+.docker/
+*.tar
+
+# Temporary deployment files
+k8s-temp/
+helm-temp/

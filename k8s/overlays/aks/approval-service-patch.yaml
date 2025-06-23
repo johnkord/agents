@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: approval-service
+  namespace: agents
+spec:
+  template:
+    spec:
+      containers:
+      - name: approval-service
+        volumeMounts:
+        - name: approval-data
+          mountPath: /app/data
+      volumes:
+      - name: approval-data
+        persistentVolumeClaim:
+          claimName: approval-data-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: approval-data-pvc
+  namespace: agents
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: managed-csi

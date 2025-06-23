@@ -147,6 +147,34 @@ This repository enables building AI agents for:
 - **Content Creation**: Writing, editing, and content management assistants
 - **Research Assistance**: Information gathering and analysis agents
 
+## Kubernetes Deployment
+
+This repository includes comprehensive Kubernetes support for deploying on Azure Kubernetes Service (AKS):
+
+### Quick Deploy to AKS
+
+```bash
+# Build and push images
+./scripts/build-and-push.sh your-registry.azurecr.io
+
+# Deploy with Helm
+./scripts/helm-deploy.sh your-registry.azurecr.io agents.yourdomain.com your-openai-api-key
+
+# Or deploy with Kustomize
+./scripts/kustomize-deploy.sh your-registry.azurecr.io agents.yourdomain.com
+```
+
+### What's Included
+
+- **Dockerfiles** for all applications (MCPServer, ApprovalService, AgentAlpha)
+- **Kubernetes manifests** with proper resource management and security
+- **Helm chart** for easy deployment and configuration management
+- **Kustomize overlays** for environment-specific configurations
+- **Ingress configuration** for Azure Application Gateway
+- **Automated scripts** for build and deployment
+
+See [k8s/README.md](k8s/README.md) for detailed deployment instructions.
+
 ## Contributing
 
 This repository serves as a foundation for AI agent development. When adding new agents:

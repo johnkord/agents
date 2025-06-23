@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: agents
+
+resources:
+- ../../base
+
+patchesStrategicMerge:
+- ingress-patch.yaml
+- approval-service-patch.yaml
+
+images:
+- name: mcpserver
+  newName: your-registry.azurecr.io/mcpserver
+  newTag: latest
+- name: approval-service
+  newName: your-registry.azurecr.io/approval-service
+  newTag: latest
+- name: agent-alpha
+  newName: your-registry.azurecr.io/agent-alpha
+  newTag: latest
+
+commonLabels:
+  environment: aks
