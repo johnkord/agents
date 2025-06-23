@@ -73,6 +73,22 @@
                 "MCP_SERVER_URL": "http://localhost:3000"
             },
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Launch ApprovalService",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/ApprovalService/bin/Debug/net8.0/ApprovalService.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/ApprovalService",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build-approval-service",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:5000"
+            },
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }
