@@ -63,7 +63,7 @@
             "type": "coreclr",
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
-            "args": ["test"],
+            "args": ["I'm running in a linux terminal and I want to list all the files in my current directory"],
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",
             "stopAtEntry": false,

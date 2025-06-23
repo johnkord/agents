@@ -1,6 +1,7 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text.RegularExpressions;
+using MCPServer.ToolApproval;
 
 namespace MCPServer.Tools;
 
@@ -8,6 +9,7 @@ namespace MCPServer.Tools;
 public class TextTools
 {
     [McpServerTool(Name = "search_text"), Description("Search for a pattern in text and return matching lines.")]
+    [RequiresApproval(false)]
     public static string SearchText(string text, string pattern, bool caseSensitive = false)
     {
         try
@@ -36,6 +38,7 @@ public class TextTools
     }
 
     [McpServerTool(Name = "replace_text"), Description("Replace all occurrences of a pattern with replacement text.")]
+    [RequiresApproval(false)]
     public static string ReplaceText(string text, string searchPattern, string replacement, bool caseSensitive = false)
     {
         try
@@ -60,6 +63,7 @@ public class TextTools
     }
 
     [McpServerTool(Name = "extract_lines"), Description("Extract specific lines from text by line numbers.")]
+    [RequiresApproval(false)]
     public static string ExtractLines(string text, string lineNumbers)
     {
         try
@@ -118,6 +122,7 @@ public class TextTools
     }
 
     [McpServerTool(Name = "word_count"), Description("Count words, characters, and lines in text.")]
+    [RequiresApproval(false)]
     public static string WordCount(string text)
     {
         try
@@ -140,6 +145,7 @@ public class TextTools
     }
 
     [McpServerTool(Name = "format_text"), Description("Apply formatting to text (uppercase, lowercase, title case).")]
+    [RequiresApproval(false)]
     public static string FormatText(string text, string format)
     {
         try
@@ -163,6 +169,7 @@ public class TextTools
     }
 
     [McpServerTool(Name = "split_text"), Description("Split text by a delimiter and return the parts.")]
+    [RequiresApproval(false)]
     public static string SplitText(string text, string delimiter, int maxParts = 0)
     {
         try

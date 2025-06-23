@@ -12,7 +12,11 @@ namespace MCPClient
             Console.WriteLine("MCP Client Starting...");
             
             // Create a simple console logger
-            using var loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder => builder.AddConsole());
+            using var loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder => 
+            {
+                builder.AddConsole();
+                builder.SetMinimumLevel(LogLevel.Debug);
+            });
             var logger = loggerFactory.CreateLogger<Program>();
             
             var mcpService = new McpClientService(loggerFactory);

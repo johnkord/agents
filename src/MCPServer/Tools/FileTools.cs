@@ -1,6 +1,7 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text.Json;
+using MCPServer.ToolApproval;
 
 namespace MCPServer.Tools;
 
@@ -8,6 +9,7 @@ namespace MCPServer.Tools;
 public class FileTools
 {
     [McpServerTool(Name = "read_file"), Description("Read the contents of a file.")]
+    [RequiresApproval(false)]
     public static string ReadFile(string filePath)
     {
         try
@@ -25,6 +27,7 @@ public class FileTools
     }
 
     [McpServerTool(Name = "write_file"), Description("Write text content to a file.")]
+    [RequiresApproval] // writes data
     public static string WriteFile(string filePath, string content)
     {
         try
@@ -46,6 +49,7 @@ public class FileTools
     }
 
     [McpServerTool(Name = "list_directory"), Description("List files and directories in a given path.")]
+    [RequiresApproval(false)]
     public static string ListDirectory(string directoryPath)
     {
         try
@@ -76,6 +80,7 @@ public class FileTools
     }
 
     [McpServerTool(Name = "file_exists"), Description("Check if a file exists at the given path.")]
+    [RequiresApproval(false)]
     public static string FileExists(string filePath)
     {
         try
@@ -90,6 +95,7 @@ public class FileTools
     }
 
     [McpServerTool(Name = "delete_file"), Description("Delete a file at the given path.")]
+    [RequiresApproval] // destructive
     public static string DeleteFile(string filePath)
     {
         try
@@ -107,6 +113,7 @@ public class FileTools
     }
 
     [McpServerTool(Name = "create_directory"), Description("Create a new directory at the given path.")]
+    [RequiresApproval] // creates data
     public static string CreateDirectory(string directoryPath)
     {
         try
@@ -124,6 +131,7 @@ public class FileTools
     }
 
     [McpServerTool(Name = "get_file_info"), Description("Get information about a file (size, creation date, etc.).")]
+    [RequiresApproval(false)]
     public static string GetFileInfo(string filePath)
     {
         try

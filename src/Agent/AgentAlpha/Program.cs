@@ -83,7 +83,7 @@ internal class Program
 
         /* --- configuration / logging --------------------------------------- */
         var config        = new ConfigurationBuilder().AddEnvironmentVariables().Build();
-        var loggerFactory = LoggerFactory.Create(b => b.AddConsole().SetMinimumLevel(LogLevel.Warning));
+        var loggerFactory = LoggerFactory.Create(b => b.AddConsole().SetMinimumLevel(LogLevel.Debug));
         var logger        = loggerFactory.CreateLogger<Program>();
 
         var openAiApiKey = config["OPENAI_API_KEY"];
@@ -276,6 +276,8 @@ internal sealed class SimpleAgentAlpha
             new { role = "user",   content = task }
         };
 
+        Console.WriteLine($"📝 Task: {task}");
+
         const int MaxIterations = 10;
         for (int i = 0; i < MaxIterations; i++)
         {
@@ -283,13 +285,20 @@ internal sealed class SimpleAgentAlpha
 
             var req = new ResponsesCreateRequest
             {
-                Model      = "gpt-3.5-turbo",
+                Model      = "gpt-4o",
                 Input      = msgs.ToArray(),
                 Tools      = openAiTools,
                 ToolChoice = "auto"
             };
 
             var res = await _openAi.CreateResponseAsync(req);
+
+            // --- NEW: show the entire response from OpenAI ---------------------------
+            Console.WriteLine("🔄 Full OpenAI response:");
+            Console.WriteLine(JsonSerializer.Serialize(
+                res,
+                new JsonSerializerOptions { WriteIndented = true }));
+            // -------------------------------------------------------------------------
 
             /* -------- extract normal assistant text ------------------------ */
             string assistantText = res.Output?
@@ -305,48 +314,61 @@ internal sealed class SimpleAgentAlpha
                 switch (item)
                 {
                     case FunctionToolCall funcCall:
-                        {
-                            // Handle FunctionToolCall by invoking MCP Client+Server
-                            var name = funcCall.Name;
-                            if (!string.IsNullOrEmpty(name))
-                            {
-                                if (!_toolFilter.ShouldIncludeTool(name))
-                                {
-                                    followUpSummaries.Add($"Function '{name}' call blocked by tool filter configuration.");
-                                    break;
-                                }
+                    {
+                        var name = funcCall.Name;
+                        _logger.LogDebug("OpenAI FunctionToolCall detected: {Name}  Args: {Args}",
+                                         name, funcCall.Arguments?.GetRawText());
 
-                                var args = funcCall.Arguments?.ValueKind == JsonValueKind.Object
-                                    ? JsonSerializer.Deserialize<Dictionary<string, object?>>(funcCall.Arguments.Value.GetRawText())!
-                                    : new Dictionary<string, object?>();
-                                var mcpRes = await mcp.CallToolAsync(name, args);
-                                var txt = mcpRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text
-                                          ?? "<no text>";
-                                followUpSummaries.Add($"Function '{name}' called via MCP. Result: {txt}");
+                        if (!string.IsNullOrEmpty(name))
+                        {
+                            if (!_toolFilter.ShouldIncludeTool(name))
+                            {
+                                followUpSummaries.Add($"Function '{name}' call blocked by tool filter configuration.");
+                                break;
                             }
-                            break;
+
+                            // --- changed: robust argument extraction -------------
+                            Dictionary<string, object?> args = funcCall.Arguments switch
+                            {
+                                { ValueKind: JsonValueKind.Object } v  => DeserializeArguments(v),
+                                { ValueKind: JsonValueKind.String } v  => ParseStringArguments(v.GetString()),
+                                _                                        => new()
+                            };
+                            // -----------------------------------------------------
+
+                            var mcpRes = await mcp.CallToolAsync(name, args);
+                            var txt = mcpRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text
+                                      ?? "<no text>";
+                            followUpSummaries.Add($"Function '{name}' called via MCP. Result: {txt}");
                         }
+                        break;
+                    }
+                    // --------------------------------------------------------
+
                     case McpToolCall call:
-                        {
-                            var name = call.Name;
-                            if (!string.IsNullOrEmpty(name))
-                            {
-                                if (!_toolFilter.ShouldIncludeTool(name))
-                                {
-                                    followUpSummaries.Add($"Tool '{name}' call blocked by tool filter configuration.");
-                                    break;
-                                }
+                    {
+                        var name = call.Name;
+                        _logger.LogDebug("OpenAI McpToolCall detected: {Name}  Args: {Args}",
+                                         name, call.Arguments);
 
-                                var args = string.IsNullOrWhiteSpace(call.Arguments)
-                                    ? new Dictionary<string, object?>()
-                                    : JsonSerializer.Deserialize<Dictionary<string, object?>>(call.Arguments!)!;
-                                var mcpRes = await mcp.CallToolAsync(name, args);
-                                var txt = mcpRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text
-                                          ?? "<no text>";
-                                followUpSummaries.Add($"Tool '{name}' called with args {call.Arguments}. Result: {txt}");
+                        if (!string.IsNullOrEmpty(name))
+                        {
+                            if (!_toolFilter.ShouldIncludeTool(name))
+                            {
+                                followUpSummaries.Add($"Tool '{name}' call blocked by tool filter configuration.");
+                                break;
                             }
-                            break;
+
+                            var args = string.IsNullOrWhiteSpace(call.Arguments)
+                                ? new Dictionary<string, object?>()
+                                : DeserializeArguments(JsonDocument.Parse(call.Arguments!).RootElement);
+                            var mcpRes = await mcp.CallToolAsync(name, args);
+                            var txt = mcpRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text
+                                      ?? "<no text>";
+                            followUpSummaries.Add($"Tool '{name}' called with args {call.Arguments}. Result: {txt}");
                         }
+                        break;
+                    }                  // ← remove redundant outer break
                     case McpListTools list:
                         {
                             var toolsList = await mcp.ListToolsAsync();
@@ -574,6 +596,17 @@ internal sealed class SimpleAgentAlpha
                 required = new string[] { }
             },
 
+            // Shell tool ---------------------------------------------------
+            "run_command" => new
+            {
+                type = "object",
+                properties = new
+                {
+                    command = new { type = "string", description = "Command to execute in the shell" }
+                },
+                required = new[] { "command" }
+            },
+
             // Tools with no parameters
             "get_current_time" or "get_system_info" or "get_current_directory" or "generate_uuid" => new
             {
@@ -590,5 +623,52 @@ internal sealed class SimpleAgentAlpha
                 required = new string[] { }
             }
         };
+    }
+
+    /// <summary>
+    /// Convert JsonElement→Dictionary with primitive .NET types
+    /// </summary>
+    private static Dictionary<string, object?> DeserializeArguments(JsonElement jsonObj)
+        => JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(jsonObj.GetRawText())!
+           .ToDictionary(kvp => kvp.Key, kvp => ConvertJsonElement(kvp.Value));
+
+    private static object? ConvertJsonElement(JsonElement e) => e.ValueKind switch
+    {
+        JsonValueKind.String  => e.GetString(),
+        JsonValueKind.Number  => e.TryGetInt64(out var l) ? l : e.GetDouble(),
+        JsonValueKind.True    => true,
+        JsonValueKind.False   => false,
+        JsonValueKind.Null    => null,
+        _                     => e.GetRawText() // fall back to raw JSON for objects/arrays
+    };
+
+    // -------------------- helper added ----------------------------------
+    /// <summary>
+    /// Converts a string payload into argument dictionary.
+    /// If the string itself is JSON&nbsp;→ parse it, otherwise assume it’s the shell
+    /// command (for run_command).
+    /// </summary>
+    private static Dictionary<string, object?> ParseStringArguments(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return new();
+
+        raw = raw.Trim();
+
+        // If it looks like JSON, try to parse it.
+        if (raw.StartsWith("{"))
+        {
+            try
+            {
+                return DeserializeArguments(JsonDocument.Parse(raw).RootElement);
+            }
+            catch
+            {
+                // fall through – treat as plain string below
+            }
+        }
+
+        // Fallback: single “command” parameter.
+        return new Dictionary<string, object?> { ["command"] = raw };
     }
 }

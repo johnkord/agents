@@ -58,13 +58,17 @@ namespace MCPServer
                 consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
             });
 
+            builder.Logging.SetMinimumLevel(LogLevel.Debug);
+
             builder.Services
                 .AddMcpServer()
                 .WithStdioServerTransport()
-                .WithTools<MathTools>()
-                .WithTools<FileTools>()
-                .WithTools<TextTools>()
-                .WithTools<SystemTools>();
+                .WithTools<ShellTools>()
+                //.WithTools<MathTools>()
+                //.WithTools<FileTools>()
+                //.WithTools<TextTools>()
+                //.WithTools<SystemTools>()
+                ;
 
             var host = builder.Build();
             
@@ -82,14 +86,16 @@ namespace MCPServer
             {
                 consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Information;
             });
-            
+
             builder.Services
                 .AddMcpServer()
                 .WithHttpTransport()
-                .WithTools<MathTools>()
-                .WithTools<FileTools>()
-                .WithTools<TextTools>()
-                .WithTools<SystemTools>();
+                .WithTools<ShellTools>()
+                //.WithTools<MathTools>()
+                //.WithTools<FileTools>()
+                //.WithTools<TextTools>()
+                //.WithTools<SystemTools>();
+                ;
 
             var app = builder.Build();
             
