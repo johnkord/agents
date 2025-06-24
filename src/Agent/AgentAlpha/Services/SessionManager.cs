@@ -3,6 +3,8 @@ using Microsoft.Data.Sqlite;
 using System.Text.Json;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
+using System;
+using System.IO;
 
 namespace AgentAlpha.Services;
 
@@ -17,7 +19,19 @@ public class SessionManager : ISessionManager
     public SessionManager(ILogger<SessionManager> logger, string? databasePath = null)
     {
         _logger = logger;
-        var dbPath = databasePath ?? "agent_sessions.db";
+        
+        // Use environment variable for database path with fallback to parameter or default
+        var dbPath = Environment.GetEnvironmentVariable("AGENT_SESSION_DB_PATH") 
+                    ?? databasePath 
+                    ?? "/app/data/agent_sessions.db";
+                    
+        // Ensure directory exists
+        var directory = Path.GetDirectoryName(dbPath);
+        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+                    
         _connectionString = $"Data Source={dbPath}";
         EnsureDatabase();
     }

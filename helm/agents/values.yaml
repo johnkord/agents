@@ -108,6 +108,11 @@ agentAlpha:
     limits:
       memory: "256Mi"
       cpu: "200m"
+      
+  persistence:
+    enabled: true
+    storageClass: managed-csi
+    size: 1Gi
 
 ingress:
   enabled: true

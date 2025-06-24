@@ -171,6 +171,11 @@ This repository includes comprehensive Kubernetes support for deploying on Azure
 ./scripts/kustomize-deploy.sh your-registry.azurecr.io agents.yourdomain.com
 ```
 
+### Complete Deployment Guide
+
+For a comprehensive step-by-step deployment guide with commands to run on your Linux machine, see:
+- **[Complete AKS Deployment Guide](docs/aks-complete-deployment-guide.md)** - Complete instructions from zero to running agents
+
 ### What's Included
 
 - **Dockerfiles** for all applications (MCPServer, ApprovalService, AgentAlpha)
@@ -179,6 +184,7 @@ This repository includes comprehensive Kubernetes support for deploying on Azure
 - **Kustomize overlays** for environment-specific configurations
 - **Ingress configuration** for Azure Application Gateway
 - **Automated scripts** for build and deployment
+- **Persistent SQLite databases** across pod restarts
 
 See [k8s/README.md](k8s/README.md) for detailed deployment instructions.
 
