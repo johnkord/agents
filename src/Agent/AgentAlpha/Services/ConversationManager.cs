@@ -35,6 +35,29 @@ public class ConversationManager : IConversationManager
         _logger.LogInformation("Initialized conversation with task: {Task}", userTask);
     }
 
+    public void InitializeFromSession(AgentSession session, string newUserTask)
+    {
+        _messages.Clear();
+        
+        // Load existing conversation messages from session
+        var existingMessages = session.GetConversationMessages();
+        _messages.AddRange(existingMessages);
+        
+        // Add the new user task
+        if (!string.IsNullOrEmpty(newUserTask))
+        {
+            _messages.Add(new { role = "user", content = newUserTask });
+        }
+        
+        _logger.LogInformation("Initialized conversation from session {SessionId} with new task: {Task}", 
+            session.SessionId, newUserTask);
+    }
+
+    public IEnumerable<object> GetCurrentMessages()
+    {
+        return _messages.ToList(); // Return a copy to avoid external modification
+    }
+
     public async Task<ConversationResponse> ProcessIterationAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools)
     {
         var request = new ResponsesCreateRequest

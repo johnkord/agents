@@ -14,6 +14,16 @@ public interface IConversationManager
     void InitializeConversation(string systemPrompt, string userTask);
     
     /// <summary>
+    /// Initialize conversation from an existing session
+    /// </summary>
+    void InitializeFromSession(AgentSession session, string newUserTask);
+    
+    /// <summary>
+    /// Get current conversation messages for session persistence
+    /// </summary>
+    IEnumerable<object> GetCurrentMessages();
+    
+    /// <summary>
     /// Process one iteration of the conversation
     /// </summary>
     Task<ConversationResponse> ProcessIterationAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools);
