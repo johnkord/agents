@@ -182,13 +182,26 @@ public class TaskExecutor : ITaskExecutor
         }
         else if (!string.IsNullOrEmpty(request.SessionName))
         {
-            // Create new session
-            var session = await _sessionManager.CreateSessionAsync(request.SessionName);
-            request.SessionId = session.SessionId; // Set for later saving
-            
-            _conversationManager.InitializeConversation(systemPrompt, request.Task);
-            Console.WriteLine($"💾 Created new session: {session.Name} ({session.SessionId})");
-            Console.WriteLine($"📝 Task: {request.Task}");
+            // Check if session with this name already exists
+            var existingSession = await _sessionManager.GetSessionByNameAsync(request.SessionName);
+            if (existingSession != null)
+            {
+                // Resume existing session
+                request.SessionId = existingSession.SessionId; // Set for later saving
+                _conversationManager.InitializeFromSession(existingSession, request.Task);
+                Console.WriteLine($"🔄 Resuming session: {existingSession.Name} ({existingSession.SessionId})");
+                Console.WriteLine($"📝 New task: {request.Task}");
+            }
+            else
+            {
+                // Create new session
+                var session = await _sessionManager.CreateSessionAsync(request.SessionName);
+                request.SessionId = session.SessionId; // Set for later saving
+                
+                _conversationManager.InitializeConversation(systemPrompt, request.Task);
+                Console.WriteLine($"💾 Created new session: {session.Name} ({session.SessionId})");
+                Console.WriteLine($"📝 Task: {request.Task}");
+            }
         }
         else
         {
