@@ -65,6 +65,10 @@ namespace MCPServer
                 .WithStdioServerTransport()
                 .WithTools<ShellTools>()
                 .WithTools<TaskCompletionTool>()
+                .WithTools<GitHubTools>()
+                .WithTools<AzureDevOpsTools>()
+                .WithTools<OpenAIVectorStoreTools>()
+                .WithTools<CodeReviewTools>()
                 //.WithTools<MathTools>()
                 //.WithTools<FileTools>()
                 //.WithTools<TextTools>()
@@ -74,7 +78,7 @@ namespace MCPServer
             var host = builder.Build();
             
             Console.WriteLine("MCP Server Starting (stdio mode)...");
-            Console.WriteLine("Available tools: add, subtract, multiply, divide, read_file, write_file, list_directory, search_text, get_current_time, and more...");
+            Console.WriteLine("Available tools: GitHub PR review, Azure DevOps PR review, OpenAI Vector Store, Code Review analysis, and more...");
             
             await host.RunAsync();
         }
@@ -93,6 +97,10 @@ namespace MCPServer
                 .WithHttpTransport()
                 .WithTools<ShellTools>()
                 .WithTools<TaskCompletionTool>()
+                .WithTools<GitHubTools>()
+                .WithTools<AzureDevOpsTools>()
+                .WithTools<OpenAIVectorStoreTools>()
+                .WithTools<CodeReviewTools>()
                 //.WithTools<MathTools>()
                 //.WithTools<FileTools>()
                 //.WithTools<TextTools>()
@@ -104,7 +112,7 @@ namespace MCPServer
             app.MapMcp();
             
             Console.WriteLine("MCP Server Starting (SSE mode)...");
-            Console.WriteLine("Available tools: add, subtract, multiply, divide, read_file, write_file, list_directory, search_text, get_current_time, and more...");
+            Console.WriteLine("Available tools: GitHub PR review, Azure DevOps PR review, OpenAI Vector Store, Code Review analysis, and more...");
             Console.WriteLine($"Server listening on: {builder.Configuration["ASPNETCORE_URLS"] ?? "http://localhost:5000"}");
             
             await app.RunAsync();
