@@ -235,12 +235,14 @@ public class TaskExecutor : ITaskExecutor
             // Check if task is complete
             if (_conversationManager.IsTaskComplete(response.AssistantText))
             {
+                _logger.LogInformation("Task completion detected in iteration {Iteration}", i + 1);
                 Console.WriteLine("✅ Task completed!");
                 return;
             }
 
-            // Add assistant message to conversation
+            // Add assistant message to conversation for next iteration
             _conversationManager.AddAssistantMessage(response.AssistantText);
+            _logger.LogDebug("Added assistant response to conversation for iteration {Iteration}", i + 1);
         }
 
         Console.WriteLine($"⚠️  Reached maximum iterations ({config.MaxIterations}).");
