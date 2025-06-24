@@ -58,11 +58,12 @@ public class TaskExecutor : ITaskExecutor
             // Step 1: Connect to MCP Server
             await ConnectToMcpServerAsync();
 
-            // Step 2: Discover tools and select relevant ones for the task
-            var availableTools = await DiscoverAndSelectToolsAsync(request);
+            // Step 2: Initialize conversation and determine if we're resuming a session
+            var isResumingSession = await InitializeConversationAsync(request);
 
-            // Step 3: Initialize conversation
-            await InitializeConversationAsync(request);
+            // Step 3: Discover tools and select relevant ones for the task
+            // If resuming a session with a new task, use LLM to select tools for the new task
+            var availableTools = await DiscoverAndSelectToolsAsync(request, isResumingSession);
 
             // Step 4: Execute conversation loop with timeout if specified
             if (request.Timeout.HasValue)
@@ -126,7 +127,7 @@ public class TaskExecutor : ITaskExecutor
         }
     }
 
-    private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverAndSelectToolsAsync(TaskExecutionRequest request)
+    private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverAndSelectToolsAsync(TaskExecutionRequest request, bool isResumingSession = false)
     {
         var filterConfig = request.ToolFilter ?? _config.ToolFilter;
         
@@ -152,7 +153,8 @@ public class TaskExecutor : ITaskExecutor
                 filteredTools, 
                 _config.ToolSelection.MaxToolsPerRequest);
             
-            Console.WriteLine($"🎯 Selected {selectedTools.Length} relevant tools: " +
+            var selectionContext = isResumingSession ? "for new task in session" : "for task";
+            Console.WriteLine($"🎯 Selected {selectedTools.Length} relevant tools {selectionContext}: " +
                             $"{string.Join(", ", selectedTools.Take(5).Select(t => t.Name))}" +
                             $"{(selectedTools.Length > 5 ? "..." : "")}");
             
@@ -174,7 +176,7 @@ public class TaskExecutor : ITaskExecutor
         }
     }
 
-    private async Task InitializeConversationAsync(TaskExecutionRequest request)
+    private async Task<bool> InitializeConversationAsync(TaskExecutionRequest request)
     {
         var systemPrompt = request.SystemPrompt ?? """
             You are AgentAlpha, a helpful AI assistant that can perform various tasks using available tools.
@@ -204,6 +206,8 @@ public class TaskExecutor : ITaskExecutor
             """;
 
         // Handle session-based initialization
+        bool isResumingSession = false;
+        
         if (!string.IsNullOrEmpty(request.SessionId))
         {
             // Load existing session
@@ -213,6 +217,7 @@ public class TaskExecutor : ITaskExecutor
                 _conversationManager.InitializeFromSession(session, request.Task);
                 Console.WriteLine($"🔄 Resuming session: {session.Name} ({session.SessionId})");
                 Console.WriteLine($"📝 New task: {request.Task}");
+                isResumingSession = true;
             }
             else
             {
@@ -232,6 +237,7 @@ public class TaskExecutor : ITaskExecutor
                 _conversationManager.InitializeFromSession(existingSession, request.Task);
                 Console.WriteLine($"🔄 Resuming session: {existingSession.Name} ({existingSession.SessionId})");
                 Console.WriteLine($"📝 New task: {request.Task}");
+                isResumingSession = true;
             }
             else
             {
@@ -265,6 +271,8 @@ public class TaskExecutor : ITaskExecutor
         {
             Console.WriteLine($"⚡ Priority: {request.Priority}");
         }
+        
+        return isResumingSession;
     }
 
     private async Task ExecuteConversationLoopAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools, AgentConfiguration config, CancellationToken cancellationToken = default)
