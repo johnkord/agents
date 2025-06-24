@@ -84,6 +84,9 @@ The applications use the following environment variables (configured via ConfigM
 | `MCP_TRANSPORT` | sse | Transport type (stdio/sse) |
 | `LOGGING__LOGLEVEL__DEFAULT` | Information | Default log level |
 | `AGENT_MAX_ITERATIONS` | 10 | Maximum agent iterations |
+| `AGENT_MODEL` | gpt-3.5-turbo | Default OpenAI model for AgentAlpha |
+| `AGENT_TEMPERATURE` | 0.7 | Default temperature for AgentAlpha responses |
+| `AGENT_TIMEOUT_MINUTES` | 5 | Default timeout for AgentAlpha tasks |
 | `APPROVAL_PROVIDER_TYPE` | Rest | Approval provider type |
 
 ### Secrets
@@ -174,10 +177,12 @@ kubectl scale deployment agents-approval-service --replicas=2 -n agents
 
 ### AgentAlpha
 
-AgentAlpha runs as jobs:
+AgentAlpha runs as jobs and now supports comprehensive parameter configuration:
 
 - **Job**: One-time execution
 - **CronJob**: Scheduled execution (default: every 6 hours)
+
+#### Enhanced Configuration
 
 Configure in Helm values:
 
@@ -187,6 +192,51 @@ agentAlpha:
   cronjob:
     schedule: "0 */6 * * *"
     suspend: false
+  
+  # Task and parameters
+  task: "Monitor cluster health and report status"
+  parameters:
+    model: "gpt-4o"           # OpenAI model
+    temperature: 0.7          # Response creativity (0.0-1.0)
+    maxIterations: 15         # Conversation iterations
+    priority: "High"          # Task priority
+    timeoutMinutes: 10        # Task timeout
+    verboseLogging: true      # Enable detailed logging
+    systemPrompt: "You are a Kubernetes monitoring specialist"
+```
+
+#### Parameter Examples
+
+```bash
+# Deploy with GPT-4 and high creativity
+helm install agents ./helm/agents \
+  --set agentAlpha.parameters.model="gpt-4o" \
+  --set agentAlpha.parameters.temperature=0.9
+
+# Deploy with custom system prompt
+helm install agents ./helm/agents \
+  --set agentAlpha.task="Analyze performance metrics" \
+  --set agentAlpha.parameters.systemPrompt="You are a performance analyst"
+
+# Deploy with resource optimization
+helm install agents ./helm/agents \
+  --set agentAlpha.parameters.model="gpt-3.5-turbo" \
+  --set agentAlpha.parameters.maxIterations=5 \
+  --set agentAlpha.parameters.timeoutMinutes=3
+```
+
+#### Kustomize Overlays
+
+The AKS overlay demonstrates environment-specific configuration:
+
+```yaml
+# k8s/overlays/aks/agent-alpha-patch.yaml
+spec:
+  template:
+    spec:
+      containers:
+      - name: agent-alpha
+        args: ["--model", "gpt-4o", "--temperature", "0.8", "--priority", "High", "--verbose", "Environment-specific task"]
 ```
 
 ## Troubleshooting

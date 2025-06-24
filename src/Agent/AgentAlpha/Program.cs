@@ -8,6 +8,7 @@ using System.Text.Json;
 using MCPClient;
 using System.Linq;               // NEW
 using AgentAlpha.Configuration;   // NEW
+using AgentAlpha.Models;         // NEW
 
 namespace AgentAlpha;
 
@@ -18,10 +19,8 @@ internal class Program
         Console.WriteLine("AI Agent Starting...");
 
         /* --- acquire task -------------------------------------------------- */
-        string task = args.Length > 0
-            ? string.Join(" ", args)
-            : PromptForTask();
-        if (string.IsNullOrWhiteSpace(task)) return;
+        var request = ParseTaskExecutionRequest(args);
+        if (string.IsNullOrWhiteSpace(request.Task)) return;
 
         /* --- configuration / logging --------------------------------------- */
         var loggerFactory = LoggerFactory.Create(b => b.AddConsole().SetMinimumLevel(LogLevel.Debug));
@@ -31,7 +30,7 @@ internal class Program
         
         if (string.IsNullOrEmpty(agentConfig.OpenAiApiKey))
         {
-            if (task.Equals("test", StringComparison.OrdinalIgnoreCase))
+            if (request.Task.Equals("test", StringComparison.OrdinalIgnoreCase))
             {
                 await TestMcpConnection(loggerFactory);
                 return;
@@ -57,7 +56,7 @@ internal class Program
                 agentConfig,
                 loggerFactory.CreateLogger<Services.TaskExecutor>());
 
-            await taskExecutor.ExecuteAsync(task);
+            await taskExecutor.ExecuteAsync(request);
         }
         catch (HttpRequestException httpEx) when (httpEx.Message.Contains("api.openai.com"))
         {
@@ -84,6 +83,88 @@ internal class Program
     {
         Console.Write("Enter a task for the agent: ");
         return Console.ReadLine() ?? "";
+    }
+
+    /* --------------------------------------------------------------------- */
+    private static TaskExecutionRequest ParseTaskExecutionRequest(string[] args)
+    {
+        if (args.Length == 0)
+        {
+            // Interactive mode
+            var task = PromptForTask();
+            return TaskExecutionRequest.FromTask(task);
+        }
+
+        var request = new TaskExecutionRequest();
+        var taskParts = new List<string>();
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            
+            switch (arg.ToLowerInvariant())
+            {
+                case "--model" or "-m":
+                    if (i + 1 < args.Length)
+                    {
+                        request.Model = args[++i];
+                    }
+                    break;
+                    
+                case "--temperature" or "-t":
+                    if (i + 1 < args.Length && double.TryParse(args[++i], out var temp))
+                    {
+                        request.Temperature = Math.Clamp(temp, 0.0, 1.0);
+                    }
+                    break;
+                    
+                case "--max-iterations" or "--iterations":
+                    if (i + 1 < args.Length && int.TryParse(args[++i], out var iterations))
+                    {
+                        request.MaxIterations = Math.Max(1, iterations);
+                    }
+                    break;
+                    
+                case "--priority":
+                    if (i + 1 < args.Length && Enum.TryParse<TaskPriority>(args[++i], true, out var priority))
+                    {
+                        request.Priority = priority;
+                    }
+                    break;
+                    
+                case "--timeout":
+                    if (i + 1 < args.Length && int.TryParse(args[++i], out var timeoutMinutes))
+                    {
+                        request.Timeout = TimeSpan.FromMinutes(timeoutMinutes);
+                    }
+                    break;
+                    
+                case "--verbose" or "-v":
+                    request.VerboseLogging = true;
+                    break;
+                    
+                case "--system-prompt":
+                    if (i + 1 < args.Length)
+                    {
+                        request.SystemPrompt = args[++i];
+                    }
+                    break;
+                    
+                default:
+                    // Part of the task description
+                    taskParts.Add(arg);
+                    break;
+            }
+        }
+
+        request.Task = string.Join(" ", taskParts);
+        
+        if (request.VerboseLogging && !string.IsNullOrEmpty(request.Task))
+        {
+            Console.WriteLine($"🔍 Parsed request - Task: '{request.Task}', Model: {request.Model ?? "default"}, Temperature: {request.Temperature?.ToString() ?? "default"}");
+        }
+
+        return request;
     }
 
     /* ---------------- MCP test helper ------------------------------------ */

@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: agent-alpha-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: agent-alpha
+        args: ["--model", "gpt-4o", "--temperature", "0.8", "--priority", "High", "--verbose", "Analyze this AKS deployment and provide optimization recommendations"]
+        env:
+        - name: AGENT_MODEL
+          value: "gpt-4o"
+        - name: AGENT_TEMPERATURE
+          value: "0.8"
+        - name: AGENT_MAX_ITERATIONS
+          value: "15"
+        - name: AGENT_TIMEOUT_MINUTES
+          value: "10"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: agent-alpha-cronjob
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: agent-alpha
+            args: ["--model", "gpt-3.5-turbo", "--temperature", "0.5", "--system-prompt", "You are a Kubernetes monitoring agent", "--verbose", "Check cluster health and report status"]
+            env:
+            - name: AGENT_MODEL
+              value: "gpt-3.5-turbo"
+            - name: AGENT_TEMPERATURE
+              value: "0.5"
+            - name: AGENT_MAX_ITERATIONS
+              value: "8"
+            - name: AGENT_TIMEOUT_MINUTES
+              value: "3"

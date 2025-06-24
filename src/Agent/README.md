@@ -71,6 +71,72 @@ dotnet run
 # Enter task when prompted
 ```
 
+### Enhanced Input Parameters
+
+The agent now supports rich command-line parameters for advanced task execution:
+
+**Basic usage (unchanged):**
+```bash
+dotnet run "Calculate 25 + 17"
+```
+
+**With specific OpenAI model:**
+```bash
+dotnet run --model "gpt-3.5-turbo" "Calculate 25 + 17"
+dotnet run -m "gpt-4o" "Write a creative story"
+```
+
+**With temperature control (0.0-1.0):**
+```bash
+dotnet run --temperature 0.2 "Analyze this data precisely"
+dotnet run -t 0.8 "Write a creative poem"
+```
+
+**With iteration limits:**
+```bash
+dotnet run --max-iterations 5 "Quick calculation"
+dotnet run --iterations 15 "Complex analysis task"
+```
+
+**With task priority:**
+```bash
+dotnet run --priority High "Urgent calculation needed"
+dotnet run --priority Low "Background analysis"
+```
+
+**With execution timeout (in minutes):**
+```bash
+dotnet run --timeout 5 "Time-critical task"
+```
+
+**With verbose logging:**
+```bash
+dotnet run --verbose "Debug this complex issue"
+dotnet run -v "Show detailed execution steps"
+```
+
+**With custom system prompt:**
+```bash
+dotnet run --system-prompt "You are a math tutor" "Help me understand calculus"
+```
+
+**Combined parameters:**
+```bash
+dotnet run --model "gpt-4o" --temperature 0.7 --priority High --verbose "Creative writing task with detailed logging"
+```
+
+### Parameter Reference
+
+| Parameter | Short | Description | Example |
+|-----------|-------|-------------|---------|
+| `--model` | `-m` | OpenAI model to use | `gpt-4o`, `gpt-3.5-turbo` |
+| `--temperature` | `-t` | Response creativity (0.0-1.0) | `0.2` (precise), `0.8` (creative) |
+| `--max-iterations` | `--iterations` | Max conversation loops | `5`, `15` |
+| `--priority` | | Task priority level | `Low`, `Normal`, `High` |
+| `--timeout` | | Execution timeout in minutes | `5`, `10`, `30` |
+| `--verbose` | `-v` | Enable detailed logging | (flag, no value) |
+| `--system-prompt` | | Custom system prompt | `"You are a code reviewer"` |
+
 ## Architecture
 
 The agent implements a simple ReAct (Reasoning and Acting) loop:

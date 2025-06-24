@@ -15,12 +15,21 @@ spec:
       containers:
       - name: agent-alpha
         image: agent-alpha:latest
-        command: ["dotnet", "AgentAlpha.dll", "test"]
+        command: ["dotnet", "AgentAlpha.dll"]
+        args: ["--verbose", "test"]  # Can be overridden in overlays
         env:
         - name: MCP_SERVER_URL
           value: "http://mcpserver-service:3000"
         - name: REST_BASE_URL
           value: "http://approval-service-service:5000"
+        - name: AGENT_MODEL
+          value: "gpt-3.5-turbo"  # Default model
+        - name: AGENT_TEMPERATURE
+          value: "0.7"  # Default temperature
+        - name: AGENT_MAX_ITERATIONS
+          value: "10"  # Default max iterations
+        - name: AGENT_TIMEOUT_MINUTES
+          value: "5"  # Default timeout in minutes
         envFrom:
         - configMapRef:
             name: agents-config
@@ -55,12 +64,21 @@ spec:
           containers:
           - name: agent-alpha
             image: agent-alpha:latest
-            command: ["dotnet", "AgentAlpha.dll", "test"]
+            command: ["dotnet", "AgentAlpha.dll"]
+            args: ["--verbose", "test"]  # Can be overridden in overlays
             env:
             - name: MCP_SERVER_URL
               value: "http://mcpserver-service:3000"
             - name: REST_BASE_URL
               value: "http://approval-service-service:5000"
+            - name: AGENT_MODEL
+              value: "gpt-3.5-turbo"  # Default model
+            - name: AGENT_TEMPERATURE
+              value: "0.7"  # Default temperature
+            - name: AGENT_MAX_ITERATIONS
+              value: "10"  # Default max iterations
+            - name: AGENT_TIMEOUT_MINUTES
+              value: "5"  # Default timeout in minutes
             envFrom:
             - configMapRef:
                 name: agents-config
