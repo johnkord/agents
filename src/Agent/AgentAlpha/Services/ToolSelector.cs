@@ -193,10 +193,11 @@ public class ToolSelector : IToolSelector
             };
 
             var response = await _openAi.CreateResponseAsync(request);
-            var content = response.Output?
+            var outputMessage = response.Output?
                 .OfType<OutputMessage>()
-                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase))
-                ?.Content?.ToString() ?? "";
+                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase));
+                
+            var content = ExtractTextFromContent(outputMessage?.Content);
 
             // Parse the JSON response
             var selectedToolNames = JsonSerializer.Deserialize<string[]>(content.Trim()) ?? Array.Empty<string>();
@@ -239,7 +240,7 @@ public class ToolSelector : IToolSelector
         {
             [new[] { "math", "calculate", "add", "subtract", "multiply", "divide", "number" }] = 
                 new[] { "add", "subtract", "multiply", "divide" },
-            [new[] { "file", "read", "write", "directory", "folder", "save", "load" }] = 
+            [new[] { "file", "files", "read", "write", "directory", "folder", "save", "load", "list" }] = 
                 new[] { "read_file", "write_file", "list_directory", "file_info" },
             [new[] { "text", "search", "replace", "word", "count", "format" }] = 
                 new[] { "search_in_file", "replace_in_file", "word_count" },
@@ -332,10 +333,11 @@ public class ToolSelector : IToolSelector
             };
 
             var response = await _openAi.CreateResponseAsync(request);
-            var content = response.Output?
+            var outputMessage = response.Output?
                 .OfType<OutputMessage>()
-                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase))
-                ?.Content?.ToString() ?? "";
+                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase));
+                
+            var content = ExtractTextFromContent(outputMessage?.Content);
 
             var selectedToolNames = JsonSerializer.Deserialize<string[]>(content.Trim()) ?? Array.Empty<string>();
             
@@ -382,5 +384,26 @@ public class ToolSelector : IToolSelector
             .ToList();
         
         return string.Join("\n", recentMessages);
+    }
+    
+    /// <summary>
+    /// Extracts text content from OpenAI response content JsonElement
+    /// </summary>
+    private static string ExtractTextFromContent(JsonElement? content)
+    {
+        if (!content.HasValue || content.Value.ValueKind != JsonValueKind.Array)
+            return "";
+
+        foreach (var item in content.Value.EnumerateArray())
+        {
+            if (item.TryGetProperty("type", out var typeElement) && 
+                typeElement.GetString() == "output_text" &&
+                item.TryGetProperty("text", out var textElement))
+            {
+                return textElement.GetString() ?? "";
+            }
+        }
+        
+        return "";
     }
 }
