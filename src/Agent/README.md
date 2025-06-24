@@ -190,7 +190,6 @@ AgentAlpha can handle a wide variety of tasks using its enhanced tool set:
 - Maximum 10 iterations to prevent infinite loops
 - Requires OpenAI API key for reasoning and task planning
 - File operations are limited to local file system access
-- No persistent memory between sessions
 - No web browsing or external API access (currently)
 
 ## Enhanced Features
@@ -200,6 +199,9 @@ AgentAlpha automatically discovers and adapts to available tools, with proper pa
 
 ### Intelligent Task Planning  
 The agent breaks down complex tasks into manageable steps and provides clear feedback on progress and results.
+
+### Persistent Session Support
+AgentAlpha now supports persistent sessions that maintain conversation history and context across multiple task executions. Sessions are stored in a local SQLite database and can be referenced for continued work.
 
 ### Robust Error Handling
 Each tool includes comprehensive error handling with clear, actionable error messages to guide users.
@@ -224,5 +226,40 @@ This agent demonstrates how to integrate:
 3. **Test Connection**: Run `dotnet run "test"` to verify MCP server connectivity
 4. **Try Examples**: Start with simple tasks like "What time is it?" or "List the current directory"
 5. **Advanced Usage**: Combine multiple tools for complex workflows
+
+## Using Persistent Sessions
+
+AgentAlpha supports persistent sessions that maintain conversation history and context across multiple task executions:
+
+### Creating a New Session
+```bash
+# Create a named session
+dotnet run --session-name "My Project Session" "Help me plan a software project"
+
+# The session ID will be displayed and can be used later
+```
+
+### Resuming an Existing Session
+```bash
+# Continue from where you left off
+dotnet run --session "session-id-here" "Continue with the next step"
+```
+
+### Session Features
+- **Conversation History**: All previous interactions are preserved
+- **Context Continuity**: The agent remembers what has been discussed
+- **SQLite Storage**: Sessions are stored locally in `agent_sessions.db`
+- **Automatic Saving**: Session state is saved after each task completion
+
+### Command Line Options
+- `--session-name "Name"`: Create a new named session
+- `--session "session-id"`: Resume an existing session by ID
+- `--session-id "session-id"`: Alternative syntax for resuming sessions
+
+### Session Management
+Sessions are automatically saved and can be:
+- **Resumed**: Pick up where you left off with full context
+- **Listed**: View all available sessions (feature for future CLI enhancement)
+- **Archived**: Mark completed sessions as archived
 
 For more detailed enhancement plans and architectural details, see `docs/agent-alpha-enhancement-plan.md`.
