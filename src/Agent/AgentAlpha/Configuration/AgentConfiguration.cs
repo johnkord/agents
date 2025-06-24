@@ -39,6 +39,11 @@ public class AgentConfiguration
     public ToolFilterConfig ToolFilter { get; set; } = new();
     
     /// <summary>
+    /// Maximum number of messages to keep in conversation history (0 = unlimited)
+    /// </summary>
+    public int MaxConversationMessages { get; set; } = 0;
+    
+    /// <summary>
     /// Create configuration from environment variables
     /// </summary>
     public static AgentConfiguration FromEnvironment()
@@ -57,6 +62,12 @@ public class AgentConfiguration
         };
 
         config.ToolFilter = ToolFilterConfig.FromEnvironment();
+        
+        // Parse MaxConversationMessages from environment
+        if (int.TryParse(Environment.GetEnvironmentVariable("MAX_CONVERSATION_MESSAGES"), out var maxMessages))
+        {
+            config.MaxConversationMessages = maxMessages;
+        }
         
         return config;
     }

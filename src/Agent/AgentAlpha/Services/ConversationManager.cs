@@ -94,15 +94,29 @@ public class ConversationManager : IConversationManager
     {
         _messages.Add(new { role = "assistant", content });
         _logger.LogDebug("Added assistant message to conversation");
+        
+        // Optimize conversation length after adding messages
+        OptimizeConversationLength();
     }
 
     public void AddToolResults(IEnumerable<string> toolSummaries)
     {
         var summary = string.Join("\n", toolSummaries);
-        _messages.Add(new { role = "assistant", content = summary });
-        _messages.Add(new { role = "user", content = $"I executed the requested tools.\n{summary}\n\nIs the task complete?" });
+        
+        // Simplified approach: Add tool results as a single assistant message
+        // This reduces redundancy compared to the previous approach
+        _messages.Add(new { role = "assistant", content = $"Tool results:\n{summary}" });
+        
+        // Only add continuation prompt if there are actual results to show
+        if (toolSummaries.Any())
+        {
+            _messages.Add(new { role = "user", content = "Please continue or let me know if the task is complete." });
+        }
         
         _logger.LogDebug("Added tool results to conversation: {Summary}", summary);
+        
+        // Optimize conversation length if configured
+        OptimizeConversationLength();
     }
 
     public bool IsTaskComplete(string assistantResponse)
@@ -122,6 +136,51 @@ public class ConversationManager : IConversationManager
         }
 
         return false;
+    }
+
+    public ConversationStatistics GetConversationStatistics()
+    {
+        var systemCount = 0;
+        var userCount = 0;
+        var assistantCount = 0;
+        var estimatedTokens = 0;
+
+        foreach (var message in _messages)
+        {
+            var roleProperty = message.GetType().GetProperty("role");
+            var contentProperty = message.GetType().GetProperty("content");
+            
+            if (roleProperty != null && contentProperty != null)
+            {
+                var role = roleProperty.GetValue(message)?.ToString() ?? "";
+                var content = contentProperty.GetValue(message)?.ToString() ?? "";
+                
+                // Count messages by role
+                switch (role.ToLowerInvariant())
+                {
+                    case "system":
+                        systemCount++;
+                        break;
+                    case "user":
+                        userCount++;
+                        break;
+                    case "assistant":
+                        assistantCount++;
+                        break;
+                }
+                
+                // Rough token estimation (4 characters per token on average)
+                estimatedTokens += content.Length / 4;
+            }
+        }
+
+        return new ConversationStatistics(
+            TotalMessages: _messages.Count,
+            SystemMessages: systemCount,
+            UserMessages: userCount,
+            AssistantMessages: assistantCount,
+            EstimatedTokens: estimatedTokens
+        );
     }
 
     private bool IsSubstantialCompleteResponse(string response)
@@ -147,6 +206,67 @@ public class ConversationManager : IConversationManager
 
         // If it has a title and multiple paragraphs, it's likely a complete creative work
         return hasTitle && hasMultipleParagraphs;
+    }
+
+    /// <summary>
+    /// Optimize conversation length by removing older messages if conversation gets too long
+    /// </summary>
+    private void OptimizeConversationLength()
+    {
+        if (_config.MaxConversationMessages <= 0 || _messages.Count <= _config.MaxConversationMessages)
+        {
+            return; // No optimization needed
+        }
+
+        var systemMessages = new List<object>();
+        var conversationMessages = new List<object>();
+
+        // Separate system messages from conversation messages
+        foreach (var message in _messages)
+        {
+            if (IsSystemMessage(message))
+            {
+                systemMessages.Add(message);
+            }
+            else
+            {
+                conversationMessages.Add(message);
+            }
+        }
+
+        // Keep system messages and recent conversation messages
+        var keepCount = _config.MaxConversationMessages - systemMessages.Count;
+        if (keepCount > 0 && conversationMessages.Count > keepCount)
+        {
+            // Keep the most recent messages
+            conversationMessages = conversationMessages.Skip(conversationMessages.Count - keepCount).ToList();
+            
+            _logger.LogDebug("Optimized conversation: keeping {SystemCount} system messages and {ConversationCount} recent conversation messages", 
+                systemMessages.Count, conversationMessages.Count);
+        }
+
+        // Rebuild messages list
+        _messages.Clear();
+        _messages.AddRange(systemMessages);
+        _messages.AddRange(conversationMessages);
+    }
+
+    /// <summary>
+    /// Check if a message is a system message
+    /// </summary>
+    private static bool IsSystemMessage(object message)
+    {
+        if (message == null) return false;
+        
+        // Use reflection to check the role property
+        var roleProperty = message.GetType().GetProperty("role");
+        if (roleProperty != null)
+        {
+            var role = roleProperty.GetValue(message)?.ToString();
+            return "system".Equals(role, StringComparison.OrdinalIgnoreCase);
+        }
+        
+        return false;
     }
 
     private List<Models.ToolCall> ExtractToolCalls(ResponsesCreateResponse response)

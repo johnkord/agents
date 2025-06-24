@@ -42,4 +42,9 @@ public interface IConversationManager
     /// Check if the task appears to be completed based on assistant response
     /// </summary>
     bool IsTaskComplete(string assistantResponse);
+    
+    /// <summary>
+    /// Get conversation statistics for monitoring
+    /// </summary>
+    ConversationStatistics GetConversationStatistics();
 }
