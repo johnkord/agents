@@ -271,6 +271,11 @@ public class TaskExecutor : ITaskExecutor
                 _conversationManager.AddToolResults(toolSummaries);
                 Console.WriteLine($"🔧 {string.Join("\n", toolSummaries)}");
 
+                // Log conversation statistics for monitoring
+                var stats = _conversationManager.GetConversationStatistics();
+                _logger.LogDebug("Conversation stats: {TotalMessages} messages ({EstimatedTokens} estimated tokens)", 
+                    stats.TotalMessages, stats.EstimatedTokens);
+
                 if (taskCompleted)               // NEW
                 {
                     Console.WriteLine("✅ Task completed!");
