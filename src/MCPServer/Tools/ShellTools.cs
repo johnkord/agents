@@ -33,21 +33,22 @@ public class ShellTools
 
         try
         {
-            // Detect the correct shell executable if user only passed a single string (Unix)
-            if (string.IsNullOrWhiteSpace(arguments))
+            // Always execute through shell to support full bash functionality including pipes, redirections, etc.
+            // Combine command and arguments into a single shell command string
+            string fullCommand = string.IsNullOrWhiteSpace(arguments) 
+                ? command 
+                : $"{command} {arguments}";
+
+            // Execute through appropriate shell based on platform
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                // On Linux/macOS we can call bash -c "<command>"
-                // On Windows we fall back to powershell -Command "<command>"
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    arguments = $"-Command \"{command}\"";
-                    command   = "powershell";
-                }
-                else
-                {
-                    arguments = $"-c \"{command}\"";
-                    command   = "/bin/bash";
-                }
+                arguments = $"-Command \"{fullCommand}\"";
+                command   = "powershell";
+            }
+            else
+            {
+                arguments = $"-c \"{fullCommand}\"";
+                command   = "/bin/bash";
             }
 
             using var proc = new Process
