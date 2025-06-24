@@ -84,7 +84,46 @@ public class ConversationManager : IConversationManager
 
     public bool IsTaskComplete(string assistantResponse)
     {
-        return assistantResponse.Contains("TASK COMPLETED", StringComparison.OrdinalIgnoreCase);
+        // Check for explicit completion marker first
+        if (assistantResponse.Contains("TASK COMPLETED", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // For very substantial responses that appear to be complete creative content,
+        // consider the task done to prevent infinite repetition
+        if (IsSubstantialCompleteResponse(assistantResponse))
+        {
+            _logger.LogDebug("Detected completion based on substantial response content");
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool IsSubstantialCompleteResponse(string response)
+    {
+        // This is a conservative check for responses that are clearly complete creative works
+        // Characteristics of a complete response:
+        // - Very long (indicates substantial content)
+        // - Has structural elements (titles, paragraphs, proper formatting)
+        // - Appears to tell a complete story or creative work
+        
+        if (response.Length < 800) // Must be substantial
+            return false;
+
+        // Look for indicators of structured, complete content
+        var hasTitle = response.Contains("**Title:", StringComparison.OrdinalIgnoreCase) || 
+                      response.Contains("# ") ||
+                      response.StartsWith("**") && response.Contains("**", StringComparison.OrdinalIgnoreCase);
+        
+        var hasMultipleParagraphs = response.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length >= 5;
+        
+        var hasEndingIndicators = response.Contains("Thus,") || response.Contains("In the end,") || 
+                                 response.Contains("Finally,") || response.Contains("conclusion");
+
+        // If it has a title and multiple paragraphs, it's likely a complete creative work
+        return hasTitle && hasMultipleParagraphs;
     }
 
     private List<Models.ToolCall> ExtractToolCalls(ResponsesCreateResponse response)
