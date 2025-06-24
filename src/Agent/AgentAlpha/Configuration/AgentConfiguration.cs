@@ -1,5 +1,6 @@
 using ModelContextProtocol.Client;
 using MCPClient;
+using AgentAlpha.Models;
 
 namespace AgentAlpha.Configuration;
 
@@ -39,6 +40,11 @@ public class AgentConfiguration
     public ToolFilterConfig ToolFilter { get; set; } = new();
     
     /// <summary>
+    /// Tool selection configuration for context optimization
+    /// </summary>
+    public ToolSelectionConfig ToolSelection { get; set; } = new();
+    
+    /// <summary>
     /// Maximum number of messages to keep in conversation history (0 = unlimited)
     /// </summary>
     public int MaxConversationMessages { get; set; } = 0;
@@ -62,6 +68,23 @@ public class AgentConfiguration
         };
 
         config.ToolFilter = ToolFilterConfig.FromEnvironment();
+        
+        // Parse tool selection configuration from environment
+        if (int.TryParse(Environment.GetEnvironmentVariable("MAX_TOOLS_PER_REQUEST"), out var maxTools))
+        {
+            config.ToolSelection.MaxToolsPerRequest = maxTools;
+        }
+        
+        if (bool.TryParse(Environment.GetEnvironmentVariable("USE_LLM_TOOL_SELECTION"), out var useLLM))
+        {
+            config.ToolSelection.UseLLMSelection = useLLM;
+        }
+        
+        var selectionModel = Environment.GetEnvironmentVariable("TOOL_SELECTION_MODEL");
+        if (!string.IsNullOrEmpty(selectionModel))
+        {
+            config.ToolSelection.SelectionModel = selectionModel;
+        }
         
         // Parse MaxConversationMessages from environment
         if (int.TryParse(Environment.GetEnvironmentVariable("MAX_CONVERSATION_MESSAGES"), out var maxMessages))

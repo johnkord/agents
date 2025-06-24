@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MCPClient;
+using ModelContextProtocol.Client;
 using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
@@ -14,6 +15,7 @@ public class TaskExecutor : ITaskExecutor
 {
     private readonly IConnectionManager _connectionManager;
     private readonly IToolManager _toolManager;
+    private readonly IToolSelector _toolSelector;
     private readonly IConversationManager _conversationManager;
     private readonly ISessionManager _sessionManager;
     private readonly AgentConfiguration _config;
@@ -22,6 +24,7 @@ public class TaskExecutor : ITaskExecutor
     public TaskExecutor(
         IConnectionManager connectionManager,
         IToolManager toolManager,
+        IToolSelector toolSelector,
         IConversationManager conversationManager,
         ISessionManager sessionManager,
         AgentConfiguration config,
@@ -29,6 +32,7 @@ public class TaskExecutor : ITaskExecutor
     {
         _connectionManager = connectionManager;
         _toolManager = toolManager;
+        _toolSelector = toolSelector;
         _conversationManager = conversationManager;
         _sessionManager = sessionManager;
         _config = config;
@@ -54,8 +58,8 @@ public class TaskExecutor : ITaskExecutor
             // Step 1: Connect to MCP Server
             await ConnectToMcpServerAsync();
 
-            // Step 2: Discover and filter tools
-            var availableTools = await DiscoverToolsAsync(request.ToolFilter ?? effectiveConfig.ToolFilter);
+            // Step 2: Discover tools and select relevant ones for the task
+            var availableTools = await DiscoverAndSelectToolsAsync(request);
 
             // Step 3: Initialize conversation
             await InitializeConversationAsync(request);
@@ -122,23 +126,52 @@ public class TaskExecutor : ITaskExecutor
         }
     }
 
-    private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverToolsAsync(ToolFilterConfig? toolFilter = null)
+    private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverAndSelectToolsAsync(TaskExecutionRequest request)
     {
-        var filterConfig = toolFilter ?? _config.ToolFilter;
+        var filterConfig = request.ToolFilter ?? _config.ToolFilter;
+        
+        // Step 1: Discover all tools from MCP server
         var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
+        
+        // Step 2: Apply filtering configuration
         var filteredTools = _toolManager.ApplyFilters(allTools, filterConfig);
-
-        Console.WriteLine($"🔧 Discovered {allTools.Count} tools total, {filteredTools.Count} after filtering: " +
-                         $"{string.Join(", ", filteredTools.Take(5).Select(t => t.Name))}" +
-                         $"{(filteredTools.Count > 5 ? "..." : "")}");
-
+        
+        Console.WriteLine($"🔧 Discovered {allTools.Count} tools total, {filteredTools.Count} after filtering");
+        
         if (filteredTools.Count != allTools.Count)
         {
             var excluded = allTools.Where(t => !filterConfig.ShouldIncludeTool(t.Name)).Select(t => t.Name);
             Console.WriteLine($"🚫 Excluded tools: {string.Join(", ", excluded)}");
         }
-
-        return filteredTools.Select(t => _toolManager.CreateOpenAiToolDefinition(t)).ToArray();
+        
+        // Step 3: Use intelligent tool selection to reduce context size
+        try
+        {
+            var selectedTools = await _toolSelector.SelectToolsForTaskAsync(
+                request.Task, 
+                filteredTools, 
+                _config.ToolSelection.MaxToolsPerRequest);
+            
+            Console.WriteLine($"🎯 Selected {selectedTools.Length} relevant tools: " +
+                            $"{string.Join(", ", selectedTools.Take(5).Select(t => t.Name))}" +
+                            $"{(selectedTools.Length > 5 ? "..." : "")}");
+            
+            if (selectedTools.Length < filteredTools.Count)
+            {
+                var notSelected = filteredTools
+                    .Where(t => !selectedTools.Any(s => s.Name == t.Name))
+                    .Select(t => t.Name);
+                Console.WriteLine($"💡 Available for expansion: {notSelected.Count()} additional tools");
+            }
+            
+            return selectedTools;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Tool selection failed, falling back to all filtered tools");
+            Console.WriteLine($"⚠️  Tool selection failed, using all {filteredTools.Count} filtered tools");
+            return filteredTools.Select(t => _toolManager.CreateOpenAiToolDefinition(t)).ToArray();
+        }
     }
 
     private async Task InitializeConversationAsync(TaskExecutionRequest request)
@@ -228,14 +261,45 @@ public class TaskExecutor : ITaskExecutor
 
     private async Task ExecuteConversationLoopAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools, AgentConfiguration config, CancellationToken cancellationToken = default)
     {
+        // Keep track of currently available tools for dynamic expansion
+        var currentTools = availableTools.ToList();
+        var allAvailableTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
+        var filteredAvailableTools = _toolManager.ApplyFilters(allAvailableTools, config.ToolFilter);
+        
         for (int i = 0; i < config.MaxIterations; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             
             Console.WriteLine($"\n--- Iteration {i + 1} ---");
 
-            // Process one iteration of the conversation
-            var response = await _conversationManager.ProcessIterationAsync(availableTools);
+            // Process one iteration with potential tool expansion
+            var response = await _conversationManager.ProcessIterationWithExpansionAsync(
+                currentTools.ToArray(),
+                async () => await GetAdditionalToolsAsync(filteredAvailableTools, currentTools.ToArray()));
+
+            // Update current tools if expansion occurred
+            if (response.HasToolCalls)
+            {
+                // Check if any tool calls used tools not in our current set
+                var usedToolNames = response.ToolCalls.Select(tc => tc.Name).ToHashSet();
+                var newToolsUsed = usedToolNames.Where(name => !currentTools.Any(t => t.Name == name)).ToList();
+                
+                if (newToolsUsed.Count > 0)
+                {
+                    // Add the newly used tools to our current set for future iterations
+                    foreach (var toolName in newToolsUsed)
+                    {
+                        var tool = filteredAvailableTools.FirstOrDefault(t => t.Name == toolName);
+                        if (tool != null)
+                        {
+                            var toolDef = _toolManager.CreateOpenAiToolDefinition(tool);
+                            currentTools.Add(toolDef);
+                        }
+                    }
+                    
+                    Console.WriteLine($"🔧 Expanded tools for next iteration: +{newToolsUsed.Count} tools");
+                }
+            }
 
             // Handle tool calls if present
             if (response.HasToolCalls)
@@ -302,6 +366,26 @@ public class TaskExecutor : ITaskExecutor
         }
 
         Console.WriteLine($"⚠️  Reached maximum iterations ({config.MaxIterations}).");
+    }
+
+    private async Task<OpenAIIntegration.Model.ToolDefinition[]> GetAdditionalToolsAsync(
+        IList<McpClientTool> allAvailableTools, 
+        OpenAIIntegration.Model.ToolDefinition[] currentTools)
+    {
+        try
+        {
+            var conversationContext = _conversationManager.GetCurrentMessages();
+            return await _toolSelector.SelectAdditionalToolsAsync(
+                conversationContext,
+                allAvailableTools,
+                currentTools,
+                _config.ToolSelection.MaxAdditionalToolsPerIteration);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get additional tools");
+            return Array.Empty<OpenAIIntegration.Model.ToolDefinition>();
+        }
     }
 
     private async Task SaveSessionIfApplicableAsync(TaskExecutionRequest request)

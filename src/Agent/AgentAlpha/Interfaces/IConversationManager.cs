@@ -29,6 +29,13 @@ public interface IConversationManager
     Task<ConversationResponse> ProcessIterationAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools);
     
     /// <summary>
+    /// Process one iteration with dynamic tool expansion capability
+    /// </summary>
+    Task<ConversationResponse> ProcessIterationWithExpansionAsync(
+        OpenAIIntegration.Model.ToolDefinition[] currentTools,
+        Func<Task<OpenAIIntegration.Model.ToolDefinition[]>> getAdditionalTools);
+    
+    /// <summary>
     /// Add an assistant message to the conversation
     /// </summary>
     void AddAssistantMessage(string content);
