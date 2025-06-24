@@ -1,5 +1,7 @@
 using MCPServer.ToolApproval;
 using ApprovalService.Controllers;
+using System;
+using System.IO;
 
 namespace ApprovalService;
 
@@ -13,16 +15,27 @@ public interface IApprovalStore
 
 public class SqliteApprovalStore : IApprovalStore
 {
-    private const string ConnectionString = "Data Source=approval_service.db";
+    private readonly string _connectionString;
 
     public SqliteApprovalStore()
     {
+        // Use environment variable for database path with fallback to default
+        var databasePath = Environment.GetEnvironmentVariable("APPROVAL_SERVICE_DB_PATH") ?? "/app/data/approval_service.db";
+        _connectionString = $"Data Source={databasePath}";
+        
+        // Ensure directory exists
+        var directory = Path.GetDirectoryName(databasePath);
+        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+        
         EnsureDatabase();
     }
 
-    private static void EnsureDatabase()
+    private void EnsureDatabase()
     {
-        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(ConnectionString);
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -39,7 +52,7 @@ public class SqliteApprovalStore : IApprovalStore
 
     public async Task StoreApprovalRequestAsync(ApprovalRequest request)
     {
-        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(ConnectionString);
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString);
         await conn.OpenAsync();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -56,7 +69,7 @@ public class SqliteApprovalStore : IApprovalStore
 
     public async Task<ApprovalRequest?> GetApprovalRequestAsync(Guid id)
     {
-        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(ConnectionString);
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString);
         await conn.OpenAsync();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -88,7 +101,7 @@ public class SqliteApprovalStore : IApprovalStore
 
     public async Task<bool> UpdateApprovalStatusAsync(Guid id, ApprovalStatus status)
     {
-        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(ConnectionString);
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString);
         await conn.OpenAsync();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -105,7 +118,7 @@ public class SqliteApprovalStore : IApprovalStore
 
     public async Task<IEnumerable<ApprovalRequest>> GetPendingApprovalsAsync()
     {
-        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(ConnectionString);
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString);
         await conn.OpenAsync();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """

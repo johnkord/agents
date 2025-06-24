@@ -19,3 +19,5 @@ data:
   FILE_APPROVAL_TIMEOUT: {{ .Values.config.approval.file.timeout | quote }}
   REST_POLL_INTERVAL: {{ .Values.config.approval.rest.pollInterval | quote }}
   REST_TIMEOUT: {{ .Values.config.approval.rest.timeout | quote }}
+  APPROVAL_SERVICE_DB_PATH: "/app/data/approval_service.db"
+  AGENT_SESSION_DB_PATH: "/app/data/agent_sessions.db"
