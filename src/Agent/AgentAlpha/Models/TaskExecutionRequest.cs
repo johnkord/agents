@@ -53,6 +53,18 @@ public class TaskExecutionRequest
     public bool VerboseLogging { get; set; } = false;
     
     /// <summary>
+    /// Session ID for persistent session support (optional)
+    /// If specified, the agent will use/update the existing session
+    /// </summary>
+    public string? SessionId { get; set; }
+    
+    /// <summary>
+    /// Session name for creating new sessions (optional)
+    /// Used when SessionId is not specified but session persistence is desired
+    /// </summary>
+    public string? SessionName { get; set; }
+    
+    /// <summary>
     /// Create a basic request with just a task
     /// </summary>
     public static TaskExecutionRequest FromTask(string task)

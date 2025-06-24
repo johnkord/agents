@@ -15,6 +15,7 @@ public class TaskExecutor : ITaskExecutor
     private readonly IConnectionManager _connectionManager;
     private readonly IToolManager _toolManager;
     private readonly IConversationManager _conversationManager;
+    private readonly ISessionManager _sessionManager;
     private readonly AgentConfiguration _config;
     private readonly ILogger<TaskExecutor> _logger;
 
@@ -22,12 +23,14 @@ public class TaskExecutor : ITaskExecutor
         IConnectionManager connectionManager,
         IToolManager toolManager,
         IConversationManager conversationManager,
+        ISessionManager sessionManager,
         AgentConfiguration config,
         ILogger<TaskExecutor> logger)
     {
         _connectionManager = connectionManager;
         _toolManager = toolManager;
         _conversationManager = conversationManager;
+        _sessionManager = sessionManager;
         _config = config;
         _logger = logger;
     }
@@ -55,7 +58,7 @@ public class TaskExecutor : ITaskExecutor
             var availableTools = await DiscoverToolsAsync(request.ToolFilter ?? effectiveConfig.ToolFilter);
 
             // Step 3: Initialize conversation
-            InitializeConversation(request);
+            await InitializeConversationAsync(request);
 
             // Step 4: Execute conversation loop with timeout if specified
             if (request.Timeout.HasValue)
@@ -67,6 +70,9 @@ public class TaskExecutor : ITaskExecutor
             {
                 await ExecuteConversationLoopAsync(availableTools, effectiveConfig);
             }
+            
+            // Step 5: Save session if applicable
+            await SaveSessionIfApplicableAsync(request);
         }
         catch (Exception ex)
         {
@@ -135,7 +141,7 @@ public class TaskExecutor : ITaskExecutor
         return filteredTools.Select(t => _toolManager.CreateOpenAiToolDefinition(t)).ToArray();
     }
 
-    private void InitializeConversation(TaskExecutionRequest request)
+    private async Task InitializeConversationAsync(TaskExecutionRequest request)
     {
         var systemPrompt = request.SystemPrompt ?? """
             You are AgentAlpha, a helpful AI assistant that can perform various tasks using available tools.
@@ -156,8 +162,40 @@ public class TaskExecutor : ITaskExecutor
             If you're unsure about a tool's parameters, start with simpler operations and build up.
             """;
 
-        _conversationManager.InitializeConversation(systemPrompt, request.Task);
-        Console.WriteLine($"📝 Task: {request.Task}");
+        // Handle session-based initialization
+        if (!string.IsNullOrEmpty(request.SessionId))
+        {
+            // Load existing session
+            var session = await _sessionManager.GetSessionAsync(request.SessionId);
+            if (session != null)
+            {
+                _conversationManager.InitializeFromSession(session, request.Task);
+                Console.WriteLine($"🔄 Resuming session: {session.Name} ({session.SessionId})");
+                Console.WriteLine($"📝 New task: {request.Task}");
+            }
+            else
+            {
+                _logger.LogWarning("Session {SessionId} not found, starting new conversation", request.SessionId);
+                _conversationManager.InitializeConversation(systemPrompt, request.Task);
+                Console.WriteLine($"📝 Task: {request.Task}");
+            }
+        }
+        else if (!string.IsNullOrEmpty(request.SessionName))
+        {
+            // Create new session
+            var session = await _sessionManager.CreateSessionAsync(request.SessionName);
+            request.SessionId = session.SessionId; // Set for later saving
+            
+            _conversationManager.InitializeConversation(systemPrompt, request.Task);
+            Console.WriteLine($"💾 Created new session: {session.Name} ({session.SessionId})");
+            Console.WriteLine($"📝 Task: {request.Task}");
+        }
+        else
+        {
+            // Standard non-persistent conversation
+            _conversationManager.InitializeConversation(systemPrompt, request.Task);
+            Console.WriteLine($"📝 Task: {request.Task}");
+        }
         
         if (request.Model != null)
         {
@@ -246,5 +284,30 @@ public class TaskExecutor : ITaskExecutor
         }
 
         Console.WriteLine($"⚠️  Reached maximum iterations ({config.MaxIterations}).");
+    }
+
+    private async Task SaveSessionIfApplicableAsync(TaskExecutionRequest request)
+    {
+        if (!string.IsNullOrEmpty(request.SessionId))
+        {
+            try
+            {
+                var session = await _sessionManager.GetSessionAsync(request.SessionId);
+                if (session != null)
+                {
+                    // Update the session with current conversation state
+                    var currentMessages = _conversationManager.GetCurrentMessages();
+                    session.SetConversationMessages(currentMessages);
+                    session.Status = SessionStatus.Active; // Keep as active for continued use
+                    
+                    await _sessionManager.SaveSessionAsync(session);
+                    _logger.LogInformation("Saved session state for {SessionId}", request.SessionId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save session {SessionId}", request.SessionId);
+            }
+        }
     }
 }

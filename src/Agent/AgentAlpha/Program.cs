@@ -44,6 +44,7 @@ internal class Program
             // Create services using dependency injection pattern
             var connectionManager = new Services.ConnectionManager(loggerFactory);
             var toolManager = new Services.ToolManager(loggerFactory.CreateLogger<Services.ToolManager>());
+            var sessionManager = new Services.SessionManager(loggerFactory.CreateLogger<Services.SessionManager>());
             var openAiService = new OpenAIResponsesService(agentConfig.OpenAiApiKey);
             var conversationManager = new Services.ConversationManager(
                 openAiService, 
@@ -53,6 +54,7 @@ internal class Program
                 connectionManager,
                 toolManager,
                 conversationManager,
+                sessionManager,
                 agentConfig,
                 loggerFactory.CreateLogger<Services.TaskExecutor>());
 
@@ -147,6 +149,20 @@ internal class Program
                     if (i + 1 < args.Length)
                     {
                         request.SystemPrompt = args[++i];
+                    }
+                    break;
+                    
+                case "--session" or "--session-id":
+                    if (i + 1 < args.Length)
+                    {
+                        request.SessionId = args[++i];
+                    }
+                    break;
+                    
+                case "--session-name":
+                    if (i + 1 < args.Length)
+                    {
+                        request.SessionName = args[++i];
                     }
                     break;
                     
