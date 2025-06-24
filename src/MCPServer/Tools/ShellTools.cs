@@ -13,15 +13,13 @@ public class ShellTools
     [McpServerTool(Name = "run_command"), Description("Run a shell command and capture its output.")]
     [RequiresApproval] // dangerous
     public static string RunCommand(
-        string command,
-        string arguments = "",
+        string script,
         int timeoutSeconds = 30)
     {
         // Check for approval before executing the dangerous operation
         var args = new Dictionary<string, object?>
         {
-            ["command"] = command,
-            ["arguments"] = arguments,
+            ["script"] = script,
             ["timeoutSeconds"] = timeoutSeconds
         };
 
@@ -33,21 +31,22 @@ public class ShellTools
 
         try
         {
-            // Detect the correct shell executable if user only passed a single string (Unix)
-            if (string.IsNullOrWhiteSpace(arguments))
+            // Always execute through shell to support full bash functionality including pipes, redirections, etc.
+            // Use the script parameter directly since it contains the full command
+            string fullCommand = script;
+            string command;
+            string arguments;
+
+            // Execute through appropriate shell based on platform
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                // On Linux/macOS we can call bash -c "<command>"
-                // On Windows we fall back to powershell -Command "<command>"
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    arguments = $"-Command \"{command}\"";
-                    command   = "powershell";
-                }
-                else
-                {
-                    arguments = $"-c \"{command}\"";
-                    command   = "/bin/bash";
-                }
+                arguments = $"-Command \"{fullCommand}\"";
+                command   = "powershell";
+            }
+            else
+            {
+                arguments = $"-c \"{fullCommand}\"";
+                command   = "/bin/bash";
             }
 
             using var proc = new Process
