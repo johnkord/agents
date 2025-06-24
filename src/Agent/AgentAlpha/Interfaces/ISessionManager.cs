@@ -18,6 +18,11 @@ public interface ISessionManager
     Task<AgentSession?> GetSessionAsync(string sessionId);
     
     /// <summary>
+    /// Get a session by name (returns the most recent one if multiple exist)
+    /// </summary>
+    Task<AgentSession?> GetSessionByNameAsync(string name);
+    
+    /// <summary>
     /// Save or update a session
     /// </summary>
     Task SaveSessionAsync(AgentSession session);

@@ -87,6 +87,41 @@ public class SessionManager : ISessionManager
         return null;
     }
 
+    public async Task<AgentSession?> GetSessionByNameAsync(string name)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        using var cmd = conn.CreateCommand();
+        
+        cmd.CommandText = """
+            SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
+                   ConversationState, ConfigurationSnapshot, Metadata, Status
+            FROM AgentSessions 
+            WHERE Name = $name
+            ORDER BY LastUpdatedAt DESC
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("$name", name);
+
+        using var reader = await cmd.ExecuteReaderAsync();
+        if (await reader.ReadAsync())
+        {
+            return new AgentSession
+            {
+                SessionId = reader.GetString(0),
+                Name = reader.GetString(1),
+                CreatedAt = DateTime.Parse(reader.GetString(2)),
+                LastUpdatedAt = DateTime.Parse(reader.GetString(3)),
+                ConversationState = reader.GetString(4),
+                ConfigurationSnapshot = reader.GetString(5),
+                Metadata = reader.GetString(6),
+                Status = (SessionStatus)reader.GetInt32(7)
+            };
+        }
+
+        return null;
+    }
+
     public async Task SaveSessionAsync(AgentSession session)
     {
         using var conn = new SqliteConnection(_connectionString);

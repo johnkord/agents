@@ -173,6 +173,49 @@ public class SessionManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task GetSessionByNameAsync_ExistingSession_ShouldReturnSession()
+    {
+        // Arrange
+        var session = await _sessionManager.CreateSessionAsync("Test Session Name");
+
+        // Act
+        var retrievedSession = await _sessionManager.GetSessionByNameAsync("Test Session Name");
+
+        // Assert
+        Assert.NotNull(retrievedSession);
+        Assert.Equal(session.SessionId, retrievedSession.SessionId);
+        Assert.Equal("Test Session Name", retrievedSession.Name);
+        Assert.Equal(session.Status, retrievedSession.Status);
+    }
+
+    [Fact]
+    public async Task GetSessionByNameAsync_NonExistentSession_ShouldReturnNull()
+    {
+        // Act
+        var retrievedSession = await _sessionManager.GetSessionByNameAsync("Non-existent Session");
+
+        // Assert
+        Assert.Null(retrievedSession);
+    }
+
+    [Fact]
+    public async Task GetSessionByNameAsync_MultipleSessionsWithSameName_ShouldReturnMostRecent()
+    {
+        // Arrange
+        var session1 = await _sessionManager.CreateSessionAsync("Same Name");
+        await Task.Delay(10); // Ensure different timestamps
+        var session2 = await _sessionManager.CreateSessionAsync("Same Name");
+
+        // Act
+        var retrievedSession = await _sessionManager.GetSessionByNameAsync("Same Name");
+
+        // Assert
+        Assert.NotNull(retrievedSession);
+        Assert.Equal(session2.SessionId, retrievedSession.SessionId);
+        Assert.True(retrievedSession.LastUpdatedAt >= session1.LastUpdatedAt);
+    }
+
+    [Fact]
     public async Task ArchiveSessionAsync_NonExistentSession_ShouldReturnFalse()
     {
         // Act
