@@ -2,6 +2,8 @@
 
 This guide provides step-by-step instructions for deploying the Agents MCP system to Azure Kubernetes Service.
 
+> 📘 **For a complete step-by-step deployment guide**, see [Complete AKS Deployment Guide](./aks-complete-deployment-guide.md) which provides detailed commands from start to finish for deploying to an existing AKS cluster.
+
 ## Prerequisites
 
 ### 1. Azure Resources
