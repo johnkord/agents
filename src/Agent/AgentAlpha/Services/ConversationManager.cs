@@ -90,6 +90,43 @@ public class ConversationManager : IConversationManager
         }
     }
 
+    public async Task<ConversationResponse> ProcessIterationWithExpansionAsync(
+        OpenAIIntegration.Model.ToolDefinition[] currentTools,
+        Func<Task<OpenAIIntegration.Model.ToolDefinition[]>> getAdditionalTools)
+    {
+        // First, try with current tools
+        var response = await ProcessIterationAsync(currentTools);
+        
+        // If the assistant's response suggests it needs more tools, try expanding
+        if (!response.HasToolCalls && ContainsToolExpansionRequest(response.AssistantText))
+        {
+            _logger.LogInformation("Detected tool expansion request, getting additional tools");
+            
+            try
+            {
+                var additionalTools = await getAdditionalTools();
+                if (additionalTools.Length > 0)
+                {
+                    var expandedTools = currentTools.Concat(additionalTools).ToArray();
+                    _logger.LogInformation("Retrying with {Count} additional tools: {Tools}", 
+                        additionalTools.Length, string.Join(", ", additionalTools.Select(t => t.Name)));
+                    
+                    // Add a message about tool expansion
+                    _messages.Add(new { role = "system", content = $"Additional tools are now available: {string.Join(", ", additionalTools.Select(t => t.Name))}" });
+                    
+                    // Retry the request with expanded tools
+                    response = await ProcessIterationAsync(expandedTools);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to expand tools, continuing with original response");
+            }
+        }
+        
+        return response;
+    }
+
     public void AddAssistantMessage(string content)
     {
         _messages.Add(new { role = "assistant", content });
@@ -427,5 +464,32 @@ public class ConversationManager : IConversationManager
 
         // Fallback: single "command" parameter
         return new Dictionary<string, object?> { ["command"] = raw };
+    }
+
+    private bool ContainsToolExpansionRequest(string assistantText)
+    {
+        if (string.IsNullOrEmpty(assistantText))
+            return false;
+        
+        var lowerText = assistantText.ToLowerInvariant();
+        
+        // Look for phrases that indicate the assistant needs additional tools
+        var expansionIndicators = new[]
+        {
+            "i don't have",
+            "i need",
+            "would need",
+            "require",
+            "missing",
+            "unavailable",
+            "not available",
+            "no tool",
+            "can't find",
+            "cannot find",
+            "additional tool",
+            "more tool"
+        };
+        
+        return expansionIndicators.Any(indicator => lowerText.Contains(indicator));
     }
 }
