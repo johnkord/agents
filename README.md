@@ -50,6 +50,11 @@ This repository provides a foundation for building AI agents that leverage the M
    # Or with OpenAI API key for full agent functionality
    export OPENAI_API_KEY=your_api_key_here
    dotnet run "Calculate 15 + 27 and then multiply by 2"
+   
+   # Tool selection configuration (optional)
+   export MAX_TOOLS_PER_REQUEST=5        # Limit tools per request (default: 10)
+   export USE_LLM_TOOL_SELECTION=true    # Use LLM for tool selection (default: true)
+   export TOOL_SELECTION_MODEL=gpt-3.5-turbo  # Model for tool selection
    ```
 
 ### Alternative: SSE Transport
@@ -107,6 +112,7 @@ agents/
 - ✅ MCP Server with mathematical tools (add, subtract, multiply, divide)
 - ✅ Interactive MCP Client with command-line interface
 - ✅ AgentAlpha: AI agent with MCP Client integration and OpenAI API
+- ✅ **Intelligent Tool Selection**: Reduces OpenAI context costs by selecting only relevant tools
 - ✅ **VS Code debugging support** with launch.json and tasks.json
 - ✅ **Dual transport support**: stdio and SSE (Server-Sent Events)
 - ✅ **Environment configuration** with .env file support
@@ -135,6 +141,7 @@ Detailed documentation is available in the `docs/` directory:
 - 📖 [Getting Started Guide](docs/getting-started.md) - Setup and first steps
 - 🖥️ [MCP Server Documentation](docs/mcp-server.md) - Server implementation
 - 💻 [MCP Client Documentation](docs/mcp-client.md) - Client usage
+- 🎯 [Tool Selection System](docs/tool-selection-system.md) - Intelligent tool selection for cost optimization
 - 🏗️ [Architecture Overview](docs/architecture.md) - System design
 
 ## Use Cases
