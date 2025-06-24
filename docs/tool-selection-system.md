@@ -101,8 +101,10 @@ var keywordMappings = new Dictionary<string[], string[]>
 
 ### 3. Essential Tools
 Always includes critical tools regardless of task:
-- `complete_task`: Allows agent to signal task completion
+- `complete_task`: Allows agent to signal task completion (cannot be blacklisted)
 - Any tools marked as essential in configuration
+
+**Note**: The `complete_task` tool is protected and will always be included even if it appears in tool filter blacklists, as it's essential for proper task completion signaling.
 
 ## Dynamic Tool Expansion
 

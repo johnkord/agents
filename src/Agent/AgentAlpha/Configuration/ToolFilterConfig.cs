@@ -20,6 +20,10 @@ public sealed class ToolFilterConfig
     /// </summary>
     public bool ShouldIncludeTool(string toolName)
     {
+        // Always include complete_task tool - it should never be blacklisted
+        if (string.Equals(toolName, "complete_task", StringComparison.OrdinalIgnoreCase))
+            return true;
+
         // Blacklist takes precedence
         if (Blacklist.Contains(toolName))
             return false;

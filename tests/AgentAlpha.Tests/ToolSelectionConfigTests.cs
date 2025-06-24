@@ -1,5 +1,6 @@
 using Xunit;
 using AgentAlpha.Models;
+using AgentAlpha.Configuration;
 
 namespace AgentAlpha.Tests;
 
@@ -105,5 +106,92 @@ public class ToolSelectionTests
         Assert.Contains("complete_task", config.EssentialTools);
         Assert.Contains("custom_essential_tool", config.EssentialTools);
         Assert.Equal(2, config.EssentialTools.Count);
+    }
+
+    [Fact]
+    public void ToolFilterConfig_CompleteTask_CannotBeBlacklisted()
+    {
+        // Arrange
+        var filter = new ToolFilterConfig();
+        filter.Blacklist.Add("complete_task");
+        filter.Blacklist.Add("other_tool");
+        
+        // Act & Assert
+        Assert.True(filter.ShouldIncludeTool("complete_task"));
+        Assert.False(filter.ShouldIncludeTool("other_tool"));
+    }
+
+    [Fact]
+    public void ToolFilterConfig_CompleteTask_AlwaysIncluded_CaseInsensitive()
+    {
+        // Arrange
+        var filter = new ToolFilterConfig();
+        filter.Blacklist.Add("COMPLETE_TASK"); // Different case
+        filter.Blacklist.Add("Complete_Task"); // Mixed case
+        
+        // Act & Assert
+        Assert.True(filter.ShouldIncludeTool("complete_task"));
+        Assert.True(filter.ShouldIncludeTool("COMPLETE_TASK"));
+        Assert.True(filter.ShouldIncludeTool("Complete_Task"));
+    }
+
+    [Fact]
+    public void ToolFilterConfig_CompleteTask_IncludedEvenWithWhitelist()
+    {
+        // Arrange
+        var filter = new ToolFilterConfig();
+        filter.Whitelist.Add("some_other_tool");
+        // Note: complete_task is NOT in the whitelist
+        
+        // Act & Assert
+        Assert.True(filter.ShouldIncludeTool("complete_task"));
+        Assert.True(filter.ShouldIncludeTool("some_other_tool"));
+        Assert.False(filter.ShouldIncludeTool("not_in_whitelist"));
+    }
+
+    [Fact]
+    public void ToolFilterConfig_CompleteTask_IncludedEvenInBlacklistAndNotInWhitelist()
+    {
+        // Arrange
+        var filter = new ToolFilterConfig();
+        filter.Whitelist.Add("allowed_tool");
+        filter.Blacklist.Add("complete_task");
+        filter.Blacklist.Add("blocked_tool");
+        
+        // Act & Assert
+        Assert.True(filter.ShouldIncludeTool("complete_task")); // Always included despite being blacklisted
+        Assert.True(filter.ShouldIncludeTool("allowed_tool"));   // In whitelist
+        Assert.False(filter.ShouldIncludeTool("blocked_tool"));  // In blacklist
+        Assert.False(filter.ShouldIncludeTool("random_tool"));   // Not in whitelist
+    }
+
+    [Fact]
+    public void ToolFilterConfig_NormalFiltering_StillWorks()
+    {
+        // Arrange
+        var filter = new ToolFilterConfig();
+        filter.Blacklist.Add("blocked_tool");
+        
+        // Act & Assert
+        Assert.False(filter.ShouldIncludeTool("blocked_tool"));
+        Assert.True(filter.ShouldIncludeTool("allowed_tool"));
+    }
+
+    [Fact]
+    public void ToolFilterConfig_CompleteTask_NeverBlacklisted_IssueScenario()
+    {
+        // Arrange - Simulate the exact scenario from the issue
+        var filter = new ToolFilterConfig();
+        
+        // Act - Try to blacklist complete_task
+        filter.Blacklist.Add("complete_task");
+        filter.Blacklist.Add("dangerous_tool");
+        filter.Blacklist.Add("unwanted_tool");
+        
+        // Assert - complete_task should always be included despite being blacklisted
+        Assert.True(filter.ShouldIncludeTool("complete_task"), 
+            "complete_task tool should NEVER be blacklisted - it's essential for task completion signaling");
+        Assert.False(filter.ShouldIncludeTool("dangerous_tool"));
+        Assert.False(filter.ShouldIncludeTool("unwanted_tool"));
     }
 }
