@@ -362,3 +362,5 @@ helm/*/values-local.yaml
 # Temporary deployment files
 k8s-temp/
 helm-temp/
+
+env.sh

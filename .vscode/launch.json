@@ -39,7 +39,7 @@
             "type": "coreclr",
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
-            "args": ["--session-name","2025-06-23-s1","I'm running in a linux terminal and I want to list all the files in my current directory"],
+            "args": ["--session-name","2025-06-24-s2","I'm running in a linux terminal and I want to list all the files in my current directory"],
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",
             "stopAtEntry": false,
@@ -55,7 +55,23 @@
             "type": "coreclr",
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
-            "args": ["--session-name","2025-06-23-s1","I want to copy one of the files in this directory to foo.txt"],
+            "args": ["--session-name","2025-06-24-s2","I want to copy the file that comes last alphanumerically in this directory to a new file named foo.txt"],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (SSE) print out",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": ["--session-name","2025-06-24-s2","Give me a brief summary based on the filename of every file in the list"],
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",
             "stopAtEntry": false,
