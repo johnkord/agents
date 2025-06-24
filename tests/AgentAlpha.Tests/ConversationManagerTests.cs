@@ -163,6 +163,76 @@ public class ConversationManagerTests
     }
 
     [Fact]
+    public void IsTaskComplete_NaturalLanguageCompletion_ReturnsTrue()
+    {
+        // Arrange - This reproduces the exact issue from the bug report
+        var completionResponse = """
+            The task is complete. Here is a list of all the files in your current directory:
+
+            ```
+            .
+            ..
+            Dockerfile
+            MCPServer.csproj
+            Program.cs
+            ToolApproval
+            Tools
+            bin
+            obj
+            tool_approval.db
+            ```
+
+            If you need further assistance, feel free to ask!
+            """;
+
+        // Act
+        var result = _conversationManager.IsTaskComplete(completionResponse);
+
+        // Assert
+        Assert.True(result, "Response stating 'The task is complete' should be recognized as completion");
+    }
+
+    [Fact]
+    public void IsTaskComplete_ExactBugReportScenario_ReturnsTrue()
+    {
+        // Arrange - This reproduces the exact AI response format from the bug report 
+        var bugReportResponse = """
+            [
+                    {
+                      "type": "output_text",
+                      "annotations": [],
+                      "text": "The task is complete. Here is a list of all the files in your current directory:\n\n```\n.\n..\nDockerfile\nMCPServer.csproj\nProgram.cs\nToolApproval\nTools\nbin\nobj\ntool_approval.db\n```\n\nIf you need further assistance, feel free to ask!"
+                    }
+                  ]
+            """;
+
+        // Act
+        var result = _conversationManager.IsTaskComplete(bugReportResponse);
+
+        // Assert
+        Assert.True(result, "The exact response format from the bug report should be recognized as completion");
+    }
+
+    [Theory]
+    [InlineData("The task is complete.")]
+    [InlineData("Task completed successfully.")]
+    [InlineData("I have completed the task.")]
+    [InlineData("The task has been completed.")]
+    [InlineData("Task is now complete.")]
+    [InlineData("This completes the task.")]
+    public void IsTaskComplete_VariousCompletionPhrases_ReturnsTrue(string phrase)
+    {
+        // Arrange
+        var response = $"{phrase} Here are the results.";
+
+        // Act
+        var result = _conversationManager.IsTaskComplete(response);
+
+        // Assert
+        Assert.True(result, $"Response containing '{phrase}' should be recognized as completion");
+    }
+
+    [Fact]
     public void IsTaskComplete_LongResponseWithoutStructure_ReturnsFalse()
     {
         // Arrange - Long but not structured like a complete work
