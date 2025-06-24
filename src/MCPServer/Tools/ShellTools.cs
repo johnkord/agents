@@ -13,15 +13,13 @@ public class ShellTools
     [McpServerTool(Name = "run_command"), Description("Run a shell command and capture its output.")]
     [RequiresApproval] // dangerous
     public static string RunCommand(
-        string command,
-        string arguments = "",
+        string script,
         int timeoutSeconds = 30)
     {
         // Check for approval before executing the dangerous operation
         var args = new Dictionary<string, object?>
         {
-            ["command"] = command,
-            ["arguments"] = arguments,
+            ["script"] = script,
             ["timeoutSeconds"] = timeoutSeconds
         };
 
@@ -34,10 +32,10 @@ public class ShellTools
         try
         {
             // Always execute through shell to support full bash functionality including pipes, redirections, etc.
-            // Combine command and arguments into a single shell command string
-            string fullCommand = string.IsNullOrWhiteSpace(arguments) 
-                ? command 
-                : $"{command} {arguments}";
+            // Use the script parameter directly since it contains the full command
+            string fullCommand = script;
+            string command;
+            string arguments;
 
             // Execute through appropriate shell based on platform
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

@@ -34,14 +34,12 @@ namespace MCPServer.Tests
             Assert.NotNull(method);
             
             var parameters = method.GetParameters();
-            Assert.Equal(3, parameters.Length);
-            Assert.Equal("command", parameters[0].Name);
-            Assert.Equal("arguments", parameters[1].Name);
-            Assert.Equal("timeoutSeconds", parameters[2].Name);
+            Assert.Equal(2, parameters.Length);
+            Assert.Equal("script", parameters[0].Name);
+            Assert.Equal("timeoutSeconds", parameters[1].Name);
             
             Assert.Equal(typeof(string), parameters[0].ParameterType);
-            Assert.Equal(typeof(string), parameters[1].ParameterType);
-            Assert.Equal(typeof(int), parameters[2].ParameterType);
+            Assert.Equal(typeof(int), parameters[1].ParameterType);
         }
 
         [Fact]
