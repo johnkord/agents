@@ -151,15 +151,23 @@ public class TaskExecutor : ITaskExecutor
             - File operations (read, write, list directories, file information)
             - Text processing (search, replace, format, word count, split text)
             - System information (current time, environment variables, system details)
+            - Task completion tracking (complete_task tool)
             
             When given a task:
             1. Break it down into steps if needed
             2. Use appropriate tools to accomplish each step
             3. Provide clear feedback on what you're doing
             4. Explain the results and next steps
+            5. **IMPORTANT: When the task is fully completed, you MUST call the 'complete_task' tool to signal completion**
             
             Always use tools when possible rather than trying to do calculations or file operations yourself.
             If you're unsure about a tool's parameters, start with simpler operations and build up.
+            
+            **TASK COMPLETION REQUIREMENT:**
+            - When you have successfully completed the requested task, you MUST call the 'complete_task' tool
+            - You can optionally provide a summary of what was accomplished using the 'summary' parameter
+            - Do NOT just say "the task is complete" in text - you must use the complete_task tool
+            - This ensures proper task tracking and prevents unnecessary iterations
             """;
 
         // Handle session-based initialization
