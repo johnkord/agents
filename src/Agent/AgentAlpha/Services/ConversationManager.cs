@@ -127,6 +127,13 @@ public class ConversationManager : IConversationManager
             return true;
         }
 
+        // Check for natural language completion indicators
+        if (IsNaturalLanguageCompletion(assistantResponse))
+        {
+            _logger.LogDebug("Detected completion based on natural language completion phrase");
+            return true;
+        }
+
         // For very substantial responses that appear to be complete creative content,
         // consider the task done to prevent infinite repetition
         if (IsSubstantialCompleteResponse(assistantResponse))
@@ -206,6 +213,33 @@ public class ConversationManager : IConversationManager
 
         // If it has a title and multiple paragraphs, it's likely a complete creative work
         return hasTitle && hasMultipleParagraphs;
+    }
+
+    /// <summary>
+    /// Check if the response contains natural language completion indicators
+    /// </summary>
+    private bool IsNaturalLanguageCompletion(string response)
+    {
+        // Common phrases that indicate task completion in natural language
+        var completionPhrases = new[]
+        {
+            "the task is complete",
+            "task completed",
+            "task has been completed",
+            "i have completed the task",
+            "task is now complete",
+            "this completes the task"
+        };
+
+        foreach (var phrase in completionPhrases)
+        {
+            if (response.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
