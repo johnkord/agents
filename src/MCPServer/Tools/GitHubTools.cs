@@ -21,7 +21,6 @@ public class GitHubTools
     }
 
     [McpServerTool(Name = "github_get_pull_request"), Description("Get details of a specific pull request from GitHub repository.")]
-    [RequiresApproval]
     public static string GetPullRequest(
         string owner,
         string repo,
@@ -91,7 +90,6 @@ public class GitHubTools
     }
 
     [McpServerTool(Name = "github_get_pull_request_files"), Description("Get list of files changed in a pull request.")]
-    [RequiresApproval]
     public static string GetPullRequestFiles(
         string owner,
         string repo,
@@ -167,7 +165,6 @@ public class GitHubTools
     }
 
     [McpServerTool(Name = "github_get_pull_request_diff"), Description("Get the full diff of a pull request.")]
-    [RequiresApproval]
     public static string GetPullRequestDiff(
         string owner,
         string repo,
@@ -215,7 +212,6 @@ public class GitHubTools
     }
 
     [McpServerTool(Name = "github_get_pull_request_comments"), Description("Get comments on a pull request.")]
-    [RequiresApproval]
     public static string GetPullRequestComments(
         string owner,
         string repo,
@@ -289,7 +285,6 @@ public class GitHubTools
     }
 
     [McpServerTool(Name = "github_list_pull_requests"), Description("List pull requests in a repository.")]
-    [RequiresApproval]
     public static string ListPullRequests(
         string owner,
         string repo,

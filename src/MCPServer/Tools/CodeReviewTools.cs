@@ -10,7 +10,6 @@ namespace MCPServer.Tools;
 public class CodeReviewTools
 {
     [McpServerTool(Name = "analyze_pull_request_for_review"), Description("Analyze a pull request and provide comprehensive review insights combining file analysis with AI-powered code review.")]
-    [RequiresApproval]
     public static string AnalyzePullRequestForReview(
         string platform, // "github" or "azuredevops"
         string organization,
@@ -215,7 +214,6 @@ Provide specific, actionable feedback focusing on:
     }
 
     [McpServerTool(Name = "extract_code_patterns"), Description("Extract and analyze code patterns from pull request changes for review insights.")]
-    [RequiresApproval]
     public static string ExtractCodePatterns(string prFilesContent)
     {
         var args = new Dictionary<string, object?>

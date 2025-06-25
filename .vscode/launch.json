@@ -156,7 +156,7 @@
                 "--temperature", "0.3",
                 "--system-prompt", "You are a senior software engineer conducting a thorough but constructive pull request review. Focus on code quality, maintainability, and best practices.",
                 "--verbose",
-                "Please review GitHub PR #123 in microsoft/vscode repository. Analyze the code changes, provide constructive feedback, and highlight any potential issues or improvements."
+                "Please review GitHub PR https://github.com/microsoft/mssql-python/pull/104. Analyze the code changes, provide constructive feedback, and highlight any potential issues or improvements."
             ],
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",

@@ -20,7 +20,6 @@ public class AzureDevOpsTools
     }
 
     [McpServerTool(Name = "azdo_get_pull_request"), Description("Get details of a specific pull request from Azure DevOps repository.")]
-    [RequiresApproval]
     public static string GetPullRequest(
         string organization,
         string project,
@@ -93,7 +92,6 @@ public class AzureDevOpsTools
     }
 
     [McpServerTool(Name = "azdo_get_pull_request_commits"), Description("Get commits in an Azure DevOps pull request.")]
-    [RequiresApproval]
     public static string GetPullRequestCommits(
         string organization,
         string project,
@@ -161,7 +159,6 @@ public class AzureDevOpsTools
     }
 
     [McpServerTool(Name = "azdo_get_pull_request_changes"), Description("Get file changes in an Azure DevOps pull request.")]
-    [RequiresApproval]
     public static string GetPullRequestChanges(
         string organization,
         string project,
@@ -245,7 +242,6 @@ public class AzureDevOpsTools
     }
 
     [McpServerTool(Name = "azdo_get_pull_request_threads"), Description("Get comment threads on an Azure DevOps pull request.")]
-    [RequiresApproval]
     public static string GetPullRequestThreads(
         string organization,
         string project,
@@ -337,7 +333,6 @@ public class AzureDevOpsTools
     }
 
     [McpServerTool(Name = "azdo_list_pull_requests"), Description("List pull requests in an Azure DevOps repository.")]
-    [RequiresApproval]
     public static string ListPullRequests(
         string organization,
         string project,
@@ -410,7 +405,6 @@ public class AzureDevOpsTools
     }
 
     [McpServerTool(Name = "azdo_post_pull_request_comment"), Description("Post a comment thread on an Azure DevOps pull request.")]
-    [RequiresApproval]
     public static string PostPullRequestComment(
         string organization,
         string project,

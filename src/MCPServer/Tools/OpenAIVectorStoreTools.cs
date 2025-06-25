@@ -20,7 +20,6 @@ public class OpenAIVectorStoreTools
     }
 
     [McpServerTool(Name = "openai_create_vector_store"), Description("Create a new OpenAI vector store for code analysis.")]
-    [RequiresApproval]
     public static string CreateVectorStore(
         string name,
         int? expiresAfterDays = null,
@@ -109,7 +108,6 @@ public class OpenAIVectorStoreTools
     }
 
     [McpServerTool(Name = "openai_upload_file_to_vector_store"), Description("Upload a file to an OpenAI vector store.")]
-    [RequiresApproval]
     public static string UploadFileToVectorStore(
         string vectorStoreId,
         string filePath,
@@ -203,7 +201,6 @@ public class OpenAIVectorStoreTools
     }
 
     [McpServerTool(Name = "openai_query_vector_store"), Description("Query a vector store for similar content using a text query.")]
-    [RequiresApproval]
     public static string QueryVectorStore(
         string vectorStoreId,
         string query,
@@ -425,7 +422,6 @@ public class OpenAIVectorStoreTools
     }
 
     [McpServerTool(Name = "openai_list_vector_stores"), Description("List all vector stores in the OpenAI account.")]
-    [RequiresApproval]
     public static string ListVectorStores(int limit = 20)
     {
         var args = new Dictionary<string, object?>
@@ -493,7 +489,6 @@ public class OpenAIVectorStoreTools
     }
 
     [McpServerTool(Name = "openai_delete_vector_store"), Description("Delete a vector store.")]
-    [RequiresApproval]
     public static string DeleteVectorStore(string vectorStoreId)
     {
         var args = new Dictionary<string, object?>
