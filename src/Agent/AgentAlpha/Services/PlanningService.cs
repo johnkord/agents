@@ -63,7 +63,7 @@ Focus on creating a logical, executable plan that efficiently uses the available
                     new { role = "user", content = prompt }
                 },
                 Tools = new[] { planCreationTool },
-                ToolChoice = new { type = "function", function = new { name = "create_execution_plan" } }
+                ToolChoice = "required" // Force the model to call one of the available tools
             };
 
             var response = await _openAi.CreateResponseAsync(request);
@@ -145,7 +145,7 @@ Focus on creating a logical, executable plan that efficiently uses the available
                     new { role = "user", content = prompt }
                 },
                 Tools = new[] { planCreationTool },
-                ToolChoice = new { type = "function", function = new { name = "create_execution_plan" } }
+                ToolChoice = "required" // Force the model to call one of the available tools
             };
 
             var response = await _openAi.CreateResponseAsync(request);

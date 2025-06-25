@@ -94,6 +94,19 @@ public class TaskExecutor : ITaskExecutor
                     new { TaskRequest = request.Task, SessionName = request.SessionName });
                 request.SessionId = currentSession.SessionId; // Update request with new session ID
             }
+            else
+            {
+                // No session provided - create a default temporary session for activity logging
+                var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm");
+                var defaultSessionName = $"Session {timestamp}";
+                currentSession = await _sessionManager.CreateSessionAsync(defaultSessionName);
+                _activityLogger.SetCurrentSession(currentSession);
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.SessionStart,
+                    $"Created default session for task: {request.Task}",
+                    new { TaskRequest = request.Task, SessionName = defaultSessionName });
+                request.SessionId = currentSession.SessionId; // Update request with new session ID
+            }
 
             // Step 3: Create execution plan for the task
             TaskPlan? taskPlan = null;
