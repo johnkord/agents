@@ -17,8 +17,6 @@ public class CodeReviewTools
         string project,
         string repository,
         int pullRequestId,
-        string token,
-        string? openaiApiKey = null,
         string? vectorStoreId = null)
     {
         var args = new Dictionary<string, object?>
@@ -28,8 +26,6 @@ public class CodeReviewTools
             ["project"] = project,
             ["repository"] = repository,
             ["pullRequestId"] = pullRequestId,
-            ["token"] = "***",
-            ["openaiApiKey"] = openaiApiKey != null ? "***" : null,
             ["vectorStoreId"] = vectorStoreId
         };
 
@@ -55,15 +51,15 @@ public class CodeReviewTools
 
             if (platform.ToLower() == "github")
             {
-                prDetails = GitHubTools.GetPullRequest(organization, repository, pullRequestId, token);
-                prFiles = GitHubTools.GetPullRequestFiles(organization, repository, pullRequestId, token);
-                prComments = GitHubTools.GetPullRequestComments(organization, repository, pullRequestId, token);
+                prDetails = GitHubTools.GetPullRequest(organization, repository, pullRequestId);
+                prFiles = GitHubTools.GetPullRequestFiles(organization, repository, pullRequestId);
+                prComments = GitHubTools.GetPullRequestComments(organization, repository, pullRequestId);
             }
             else if (platform.ToLower() == "azuredevops")
             {
-                prDetails = AzureDevOpsTools.GetPullRequest(organization, project, repository, pullRequestId, token);
-                prFiles = AzureDevOpsTools.GetPullRequestChanges(organization, project, repository, pullRequestId, token);
-                prComments = AzureDevOpsTools.GetPullRequestThreads(organization, project, repository, pullRequestId, token);
+                prDetails = AzureDevOpsTools.GetPullRequest(organization, project, repository, pullRequestId);
+                prFiles = AzureDevOpsTools.GetPullRequestChanges(organization, project, repository, pullRequestId, "");
+                prComments = AzureDevOpsTools.GetPullRequestThreads(organization, project, repository, pullRequestId, "");
             }
             else
             {
@@ -94,7 +90,8 @@ public class CodeReviewTools
             result.AppendLine(codeAnalysis);
             result.AppendLine();
 
-            // AI-Powered Analysis (if OpenAI key and vector store provided)
+            // AI-Powered Analysis (if vector store provided and OpenAI key configured)
+            var openaiApiKey = ApiCredentialsManager.Instance.GetOpenAiApiKey();
             if (!string.IsNullOrEmpty(openaiApiKey) && !string.IsNullOrEmpty(vectorStoreId))
             {
                 result.AppendLine("🤖 AI-POWERED INSIGHTS");
@@ -123,7 +120,6 @@ Provide specific, actionable feedback focusing on:
                 var aiAnalysis = OpenAIVectorStoreTools.QueryVectorStore(
                     vectorStoreId, 
                     aiQuery, 
-                    openaiApiKey, 
                     5, 
                     "You are an expert code reviewer. Provide detailed, constructive feedback on code changes in pull requests."
                 );
