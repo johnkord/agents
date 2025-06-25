@@ -20,7 +20,7 @@ public class SqliteApprovalStore : IApprovalStore
     public SqliteApprovalStore()
     {
         // Use environment variable for database path with fallback to default
-        var databasePath = Environment.GetEnvironmentVariable("APPROVAL_SERVICE_DB_PATH") ?? "/app/data/approval_service.db";
+        var databasePath = Environment.GetEnvironmentVariable("APPROVAL_SERVICE_DB_PATH") ?? "./app/data/approval_service.db";
         _connectionString = $"Data Source={databasePath}";
         
         // Ensure directory exists

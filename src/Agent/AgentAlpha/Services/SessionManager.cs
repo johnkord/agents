@@ -20,10 +20,10 @@ public class SessionManager : ISessionManager
     {
         _logger = logger;
         
-        // Use environment variable for database path with fallback to parameter or default
+        // Use env var, explicit parameter, or fallback to relative path
         var dbPath = Environment.GetEnvironmentVariable("AGENT_SESSION_DB_PATH") 
                     ?? databasePath 
-                    ?? "/app/data/agent_sessions.db";
+                    ?? "./app/data/agent_sessions.db";   // was "/app/data/agent_sessions.db"
                     
         // Ensure directory exists
         var directory = Path.GetDirectoryName(dbPath);

@@ -79,9 +79,9 @@ internal class Program
             Console.WriteLine("   - You have sufficient API credits");
             logger.LogError(httpEx, "OpenAI API connection failed");
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            Console.WriteLine("❌ OpenAI API authentication failed. Please check your OPENAI_API_KEY.");
+            Console.WriteLine("❌ OpenAI API authentication failed. Please check your OPENAI_API_KEY.", ex);
         }
         catch (Exception ex)
         {
