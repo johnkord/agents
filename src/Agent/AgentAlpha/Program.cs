@@ -46,6 +46,10 @@ internal class Program
             var toolManager = new Services.ToolManager(loggerFactory.CreateLogger<Services.ToolManager>());
             var sessionManager = new Services.SessionManager(loggerFactory.CreateLogger<Services.SessionManager>());
             var openAiService = new OpenAIResponsesService(agentConfig.OpenAiApiKey);
+            var planningService = new Services.PlanningService(
+                openAiService,
+                loggerFactory.CreateLogger<Services.PlanningService>(),
+                agentConfig);
             var toolSelector = new Services.ToolSelector(
                 openAiService,
                 toolManager,
@@ -61,6 +65,7 @@ internal class Program
                 toolSelector,
                 conversationManager,
                 sessionManager,
+                planningService,
                 agentConfig,
                 loggerFactory.CreateLogger<Services.TaskExecutor>());
 

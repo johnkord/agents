@@ -18,6 +18,7 @@ public class TaskExecutor : ITaskExecutor
     private readonly IToolSelector _toolSelector;
     private readonly IConversationManager _conversationManager;
     private readonly ISessionManager _sessionManager;
+    private readonly IPlanningService _planningService;
     private readonly AgentConfiguration _config;
     private readonly ILogger<TaskExecutor> _logger;
 
@@ -27,6 +28,7 @@ public class TaskExecutor : ITaskExecutor
         IToolSelector toolSelector,
         IConversationManager conversationManager,
         ISessionManager sessionManager,
+        IPlanningService planningService,
         AgentConfiguration config,
         ILogger<TaskExecutor> logger)
     {
@@ -35,6 +37,7 @@ public class TaskExecutor : ITaskExecutor
         _toolSelector = toolSelector;
         _conversationManager = conversationManager;
         _sessionManager = sessionManager;
+        _planningService = planningService;
         _config = config;
         _logger = logger;
     }
@@ -61,27 +64,217 @@ public class TaskExecutor : ITaskExecutor
             // Step 2: Initialize conversation and determine if we're resuming a session
             var isResumingSession = await InitializeConversationAsync(request);
 
-            // Step 3: Discover tools and select relevant ones for the task
-            // If resuming a session with a new task, use LLM to select tools for the new task
-            var availableTools = await DiscoverAndSelectToolsAsync(request, isResumingSession);
+            // Step 3: Create execution plan for the task
+            TaskPlan? taskPlan = null;
+            
+            // Check if we're resuming a session with an existing plan
+            if (isResumingSession && !string.IsNullOrEmpty(request.SessionId))
+            {
+                var session = await _sessionManager.GetSessionAsync(request.SessionId);
+                var existingPlan = session?.GetCurrentPlan();
+                
+                if (existingPlan != null)
+                {
+                    Console.WriteLine("📋 Found existing plan in session");
+                    
+                    // Check if the existing plan is still relevant for the new task
+                    if (IsPlanRelevantForTask(existingPlan, request.Task))
+                    {
+                        Console.WriteLine("✅ Reusing existing plan for similar task");
+                        taskPlan = existingPlan;
+                    }
+                    else
+                    {
+                        Console.WriteLine("🔄 Refining existing plan for new task");
+                        // Refine the existing plan for the new task
+                        var discoveredTools = await DiscoverAvailableToolsAsync();
+                        var feedback = $"New task requirement: {request.Task}. Please adapt the existing plan accordingly.";
+                        taskPlan = await _planningService.RefinePlanAsync(existingPlan, feedback, discoveredTools);
+                    }
+                }
+            }
+            
+            // If we don't have a plan yet, create a new one
+            if (taskPlan == null)
+            {
+                taskPlan = await CreateTaskPlanAsync(request.Task);
+            }
+            
+            // Save the plan to the session if we have one
+            if (!string.IsNullOrEmpty(request.SessionId))
+            {
+                await SavePlanToSessionAsync(request.SessionId, taskPlan);
+            }
+            
+            // Display the plan to the user
+            DisplayTaskPlan(taskPlan);
 
-            // Step 4: Execute conversation loop with timeout if specified
+            // Step 4: Discover tools and select relevant ones based on the plan
+            var availableTools = await DiscoverAndSelectToolsForPlanAsync(taskPlan, request, isResumingSession);
+
+            // Step 5: Execute conversation loop with timeout if specified
             if (request.Timeout.HasValue)
             {
                 using var cts = new CancellationTokenSource(request.Timeout.Value);
-                await ExecuteConversationLoopAsync(availableTools, effectiveConfig, cts.Token);
+                await ExecuteConversationLoopAsync(availableTools, effectiveConfig, taskPlan, cts.Token);
             }
             else
             {
-                await ExecuteConversationLoopAsync(availableTools, effectiveConfig);
+                await ExecuteConversationLoopAsync(availableTools, effectiveConfig, taskPlan);
             }
             
-            // Step 5: Save session if applicable
+            // Step 6: Save session if applicable
             await SaveSessionIfApplicableAsync(request);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Task execution failed");
+            throw;
+        }
+    }
+
+    private bool IsPlanRelevantForTask(TaskPlan existingPlan, string newTask)
+    {
+        // Simple heuristic to check if the existing plan is still relevant
+        // Check for keyword overlap and task similarity
+        var existingTaskWords = existingPlan.Task.ToLowerInvariant()
+            .Split(new[] { ' ', ',', '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => w.Length > 3)
+            .ToHashSet();
+            
+        var newTaskWords = newTask.ToLowerInvariant()
+            .Split(new[] { ' ', ',', '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => w.Length > 3)
+            .ToHashSet();
+            
+        var commonWords = existingTaskWords.Intersect(newTaskWords).Count();
+        var totalUniqueWords = existingTaskWords.Union(newTaskWords).Count();
+        
+        // Consider plan relevant if there's significant word overlap (>30%)
+        var similarity = totalUniqueWords > 0 ? (double)commonWords / totalUniqueWords : 0;
+        
+        _logger.LogDebug("Plan relevance check: {Similarity:P0} similarity between tasks", similarity);
+        return similarity > 0.3;
+    }
+
+    private async Task<IList<McpClientTool>> DiscoverAvailableToolsAsync()
+    {
+        var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
+        return _toolManager.ApplyFilters(allTools, _config.ToolFilter);
+    }
+
+    private async Task SavePlanToSessionAsync(string sessionId, TaskPlan plan)
+    {
+        try
+        {
+            var session = await _sessionManager.GetSessionAsync(sessionId);
+            if (session != null)
+            {
+                session.SetCurrentPlan(plan);
+                await _sessionManager.SaveSessionAsync(session);
+                _logger.LogDebug("Saved plan to session {SessionId}", sessionId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save plan to session {SessionId}", sessionId);
+        }
+    }
+
+    private async Task ConsiderPlanUpdateAsync(TaskPlan taskPlan, List<string> executionFeedback, IList<McpClientTool> availableTools)
+    {
+        try
+        {
+            _logger.LogInformation("Considering plan update due to execution feedback");
+            
+            var feedback = $"Execution issues encountered: {string.Join("; ", executionFeedback)}. " +
+                          "Please refine the plan to address these issues and improve execution.";
+            
+            var refinedPlan = await _planningService.RefinePlanAsync(taskPlan, feedback, availableTools);
+            
+            // Check if the refined plan is significantly different
+            if (IsPlanSignificantlyDifferent(taskPlan, refinedPlan))
+            {
+                Console.WriteLine("🔄 Plan updated based on execution feedback");
+                
+                // Update the task plan reference (this would need to be passed by reference or managed differently in a real scenario)
+                taskPlan.Strategy = refinedPlan.Strategy;
+                taskPlan.Steps = refinedPlan.Steps;
+                taskPlan.RequiredTools = refinedPlan.RequiredTools;
+                taskPlan.Confidence = refinedPlan.Confidence;
+                taskPlan.CreatedAt = DateTime.UtcNow;
+                
+                // Provide updated plan context to the conversation
+                var updatedPlanContext = $"""
+                    📋 Plan updated based on execution feedback:
+                    New Strategy: {taskPlan.Strategy}
+                    Updated Steps: {string.Join(", ", taskPlan.Steps.Select(s => $"{s.StepNumber}. {s.Description}"))}
+                    
+                    Please follow the updated plan going forward.
+                    """;
+                _conversationManager.AddAssistantMessage(updatedPlanContext);
+                
+                _logger.LogInformation("Plan successfully updated with {StepCount} steps", taskPlan.Steps.Count);
+            }
+            else
+            {
+                _logger.LogDebug("Plan refinement did not result in significant changes");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update plan based on execution feedback");
+        }
+    }
+
+    private bool IsPlanSignificantlyDifferent(TaskPlan originalPlan, TaskPlan refinedPlan)
+    {
+        // Check if the number of steps changed significantly
+        if (Math.Abs(originalPlan.Steps.Count - refinedPlan.Steps.Count) > 1)
+            return true;
+            
+        // Check if the strategy changed significantly
+        var originalWords = originalPlan.Strategy.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var refinedWords = refinedPlan.Strategy.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var strategySimilarity = originalWords.Intersect(refinedWords).Count() / (double)originalWords.Union(refinedWords).Count();
+        
+        if (strategySimilarity < 0.7) // Less than 70% similarity in strategy
+            return true;
+            
+        // Check if required tools changed significantly
+        var originalTools = originalPlan.RequiredTools.ToHashSet();
+        var refinedTools = refinedPlan.RequiredTools.ToHashSet();
+        var toolOverlap = originalTools.Intersect(refinedTools).Count();
+        var totalTools = originalTools.Union(refinedTools).Count();
+        
+        if (totalTools > 0 && toolOverlap / (double)totalTools < 0.8) // Less than 80% tool overlap
+            return true;
+            
+        return false;
+    }
+
+    public async Task<TaskPlan> CreatePlanAsync(string task)
+    {
+        _logger.LogInformation("Creating plan for task: {Task}", task);
+        
+        try
+        {
+            // Connect to MCP Server to get available tools
+            await ConnectToMcpServerAsync();
+            
+            // Discover all available tools
+            var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
+            var filteredTools = _toolManager.ApplyFilters(allTools, _config.ToolFilter);
+            
+            // Create the plan
+            var plan = await _planningService.CreatePlanAsync(task, filteredTools);
+            
+            _logger.LogInformation("Created plan with {StepCount} steps for task", plan.Steps.Count);
+            return plan;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create plan for task: {Task}", task);
             throw;
         }
     }
@@ -172,6 +365,152 @@ public class TaskExecutor : ITaskExecutor
         {
             _logger.LogError(ex, "Tool selection failed, falling back to all filtered tools");
             Console.WriteLine($"⚠️  Tool selection failed, using all {filteredTools.Count} filtered tools");
+            return filteredTools.Select(t => _toolManager.CreateOpenAiToolDefinition(t)).ToArray();
+        }
+    }
+
+    private async Task<TaskPlan> CreateTaskPlanAsync(string task)
+    {
+        Console.WriteLine("\n📋 Creating execution plan...");
+        
+        try
+        {
+            // Discover all available tools for planning
+            var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
+            var filteredTools = _toolManager.ApplyFilters(allTools, _config.ToolFilter);
+            
+            // Create the plan using the planning service
+            var plan = await _planningService.CreatePlanAsync(task, filteredTools);
+            
+            // Validate the plan
+            var validationResult = await _planningService.ValidatePlanAsync(plan, filteredTools);
+            
+            if (!validationResult.IsValid)
+            {
+                _logger.LogWarning("Created plan has validation issues: {Issues}", 
+                    string.Join(", ", validationResult.Issues));
+                
+                // Try to refine the plan if there are issues
+                if (validationResult.Issues.Count > 0)
+                {
+                    var feedback = $"Plan validation found issues: {string.Join("; ", validationResult.Issues)}";
+                    plan = await _planningService.RefinePlanAsync(plan, feedback, filteredTools);
+                    Console.WriteLine("⚠️  Plan refined due to validation issues");
+                }
+            }
+            
+            return plan;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create plan, using fallback approach");
+            Console.WriteLine("⚠️  Planning failed, using adaptive approach");
+            
+            // Return a simple fallback plan
+            return new TaskPlan
+            {
+                Task = task,
+                Strategy = "Adaptive execution using available tools",
+                Steps = new List<PlanStep>
+                {
+                    new PlanStep
+                    {
+                        StepNumber = 1,
+                        Description = "Execute task using appropriate tools",
+                        IsMandatory = true,
+                        ExpectedOutput = "Task completion"
+                    }
+                },
+                Complexity = TaskComplexity.Medium,
+                Confidence = 0.7
+            };
+        }
+    }
+
+    private void DisplayTaskPlan(TaskPlan plan)
+    {
+        Console.WriteLine($"\n📋 Execution Plan for: {plan.Task}");
+        Console.WriteLine($"Strategy: {plan.Strategy}");
+        Console.WriteLine($"Complexity: {plan.Complexity}");
+        Console.WriteLine($"Confidence: {plan.Confidence:P0}");
+        Console.WriteLine($"Required Tools: {string.Join(", ", plan.RequiredTools)}");
+        
+        Console.WriteLine("\nExecution Steps:");
+        foreach (var step in plan.Steps)
+        {
+            var mandatory = step.IsMandatory ? "✓" : "○";
+            Console.WriteLine($"  {mandatory} Step {step.StepNumber}: {step.Description}");
+            if (step.PotentialTools.Count > 0)
+            {
+                Console.WriteLine($"    Tools: {string.Join(", ", step.PotentialTools)}");
+            }
+        }
+        Console.WriteLine();
+    }
+
+    private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverAndSelectToolsForPlanAsync(TaskPlan plan, TaskExecutionRequest request, bool isResumingSession = false)
+    {
+        var filterConfig = request.ToolFilter ?? _config.ToolFilter;
+        
+        // Discover all tools from MCP server
+        var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
+        var filteredTools = _toolManager.ApplyFilters(allTools, filterConfig);
+        
+        Console.WriteLine($"🔧 Discovered {allTools.Count} tools total, {filteredTools.Count} after filtering");
+        
+        // Prioritize tools mentioned in the plan
+        var planTools = plan.RequiredTools.Concat(
+            plan.Steps.SelectMany(s => s.PotentialTools)
+        ).Distinct().ToList();
+        
+        var availableToolNames = filteredTools.Select(t => t.Name).ToHashSet();
+        var planToolsAvailable = planTools.Where(t => availableToolNames.Contains(t)).ToList();
+        var planToolsMissing = planTools.Where(t => !availableToolNames.Contains(t)).ToList();
+        
+        if (planToolsMissing.Count > 0)
+        {
+            Console.WriteLine($"⚠️  Plan requires unavailable tools: {string.Join(", ", planToolsMissing)}");
+        }
+        
+        try
+        {
+            // Select tools based on the plan, ensuring plan-required tools are included
+            var maxTools = _config.ToolSelection.MaxToolsPerRequest;
+            
+            // Start with plan-required tools that are available
+            var selectedToolNames = new HashSet<string>(planToolsAvailable);
+            
+            // If we need more tools, use intelligent selection
+            if (selectedToolNames.Count < maxTools)
+            {
+                var remainingSlots = maxTools - selectedToolNames.Count;
+                var additionalTools = await _toolSelector.SelectToolsForTaskAsync(
+                    request.Task, 
+                    filteredTools.Where(t => !selectedToolNames.Contains(t.Name)).ToList(),
+                    remainingSlots);
+                
+                foreach (var tool in additionalTools)
+                {
+                    selectedToolNames.Add(tool.Name);
+                }
+            }
+            
+            // Convert to tool definitions
+            var selectedTools = filteredTools
+                .Where(t => selectedToolNames.Contains(t.Name))
+                .Select(t => _toolManager.CreateOpenAiToolDefinition(t))
+                .ToArray();
+            
+            Console.WriteLine($"🎯 Selected {selectedTools.Length} tools based on plan: " +
+                            $"{string.Join(", ", selectedTools.Take(5).Select(t => t.Name))}" +
+                            $"{(selectedTools.Length > 5 ? "..." : "")}");
+            
+            return selectedTools;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Plan-based tool selection failed, falling back to all filtered tools");
+            Console.WriteLine($"⚠️  Plan-based tool selection failed, using all {filteredTools.Count} filtered tools");
             return filteredTools.Select(t => _toolManager.CreateOpenAiToolDefinition(t)).ToArray();
         }
     }
@@ -275,12 +614,30 @@ public class TaskExecutor : ITaskExecutor
         return isResumingSession;
     }
 
-    private async Task ExecuteConversationLoopAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools, AgentConfiguration config, CancellationToken cancellationToken = default)
+    private async Task ExecuteConversationLoopAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools, AgentConfiguration config, TaskPlan? taskPlan = null, CancellationToken cancellationToken = default)
     {
         // Keep track of currently available tools for dynamic expansion
         var currentTools = availableTools.ToList();
         var allAvailableTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
         var filteredAvailableTools = _toolManager.ApplyFilters(allAvailableTools, config.ToolFilter);
+        
+        // Track plan execution for potential updates
+        var planStepsCompleted = new HashSet<int>();
+        var iterationsSincePlanUpdate = 0;
+        const int maxIterationsBeforePlanReview = 5;
+        
+        // If we have a plan, provide it as context to the conversation
+        if (taskPlan != null)
+        {
+            var planContext = $"""
+                Following execution plan:
+                Strategy: {taskPlan.Strategy}
+                Steps: {string.Join(", ", taskPlan.Steps.Select(s => $"{s.StepNumber}. {s.Description}"))}
+                
+                Execute the plan step by step, using the identified tools appropriately.
+                """;
+            _conversationManager.AddAssistantMessage($"📋 Plan created: {planContext}");
+        }
         
         for (int i = 0; i < config.MaxIterations; i++)
         {
@@ -322,12 +679,14 @@ public class TaskExecutor : ITaskExecutor
             {
                 var toolSummaries = new List<string>();
                 var taskCompleted = false;       // NEW
+                var executionFeedback = new List<string>();
 
                 foreach (var toolCall in response.ToolCalls)
                 {
                     if (!config.ToolFilter.ShouldIncludeTool(toolCall.Name))
                     {
                         toolSummaries.Add($"Tool '{toolCall.Name}' call blocked by tool filter configuration.");
+                        executionFeedback.Add($"Tool '{toolCall.Name}' was blocked - plan may need adjustment");
                         continue;
                     }
 
@@ -342,6 +701,25 @@ public class TaskExecutor : ITaskExecutor
                         : "{}";
                     toolSummaries.Add(
                         $"Tool '{toolCall.Name}' called with args {argsJson}. Result: {result}");
+                    
+                    // Track execution progress for plan updates
+                    if (taskPlan != null)
+                    {
+                        var correspondingStep = taskPlan.Steps.FirstOrDefault(s => 
+                            s.PotentialTools.Contains(toolCall.Name, StringComparer.OrdinalIgnoreCase));
+                        if (correspondingStep != null && !planStepsCompleted.Contains(correspondingStep.StepNumber))
+                        {
+                            planStepsCompleted.Add(correspondingStep.StepNumber);
+                            _logger.LogDebug("Plan step {StepNumber} appears to be completed", correspondingStep.StepNumber);
+                        }
+                    }
+                    
+                    // Check for execution issues that might require plan updates
+                    if (result.ToString().ToLowerInvariant().Contains("error") || 
+                        result.ToString().ToLowerInvariant().Contains("failed"))
+                    {
+                        executionFeedback.Add($"Tool '{toolCall.Name}' encountered issues: {result}");
+                    }
                     // ------------------------------------------------------
 
                     if (toolCall.Name.Equals("complete_task", StringComparison.OrdinalIgnoreCase))
@@ -355,6 +733,17 @@ public class TaskExecutor : ITaskExecutor
                 var stats = _conversationManager.GetConversationStatistics();
                 _logger.LogDebug("Conversation stats: {TotalMessages} messages ({EstimatedTokens} estimated tokens)", 
                     stats.TotalMessages, stats.EstimatedTokens);
+
+                // Check if plan needs updating based on execution feedback
+                if (taskPlan != null && executionFeedback.Count > 0 && iterationsSincePlanUpdate >= maxIterationsBeforePlanReview)
+                {
+                    await ConsiderPlanUpdateAsync(taskPlan, executionFeedback, filteredAvailableTools);
+                    iterationsSincePlanUpdate = 0;
+                }
+                else
+                {
+                    iterationsSincePlanUpdate++;
+                }
 
                 if (taskCompleted)               // NEW
                 {
@@ -379,6 +768,8 @@ public class TaskExecutor : ITaskExecutor
             // Add assistant message to conversation for next iteration
             _conversationManager.AddAssistantMessage(response.AssistantText);
             _logger.LogDebug("Added assistant response to conversation for iteration {Iteration}", i + 1);
+            
+            iterationsSincePlanUpdate++;
         }
 
         Console.WriteLine($"⚠️  Reached maximum iterations ({config.MaxIterations}).");
