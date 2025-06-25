@@ -49,6 +49,7 @@ internal class Program
                 loggerFactory.CreateLogger<Services.SessionActivityLogger>());
             var toolManager = new Services.ToolManager(
                 loggerFactory.CreateLogger<Services.ToolManager>(),
+                agentConfig,
                 sessionActivityLogger);
             var openAiService = new OpenAIResponsesService(agentConfig.OpenAiApiKey);
             var planningService = new Services.PlanningService(

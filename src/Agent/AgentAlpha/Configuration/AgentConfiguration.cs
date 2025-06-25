@@ -5,6 +5,37 @@ using AgentAlpha.Models;
 namespace AgentAlpha.Configuration;
 
 /// <summary>
+/// Configuration for activity logging verbosity and behavior
+/// </summary>
+public class ActivityLoggingConfig
+{
+    /// <summary>
+    /// Enable verbose logging that includes full OpenAI request/response data
+    /// </summary>
+    public bool VerboseOpenAI { get; set; } = true;
+    
+    /// <summary>
+    /// Enable verbose logging that includes full tool input/output data
+    /// </summary>
+    public bool VerboseTools { get; set; } = true;
+    
+    /// <summary>
+    /// Maximum size of data to log before truncation (in characters)
+    /// </summary>
+    public int MaxDataSize { get; set; } = 50000;
+    
+    /// <summary>
+    /// Maximum size for individual string fields before truncation
+    /// </summary>
+    public int MaxStringSize { get; set; } = 5000;
+    
+    /// <summary>
+    /// Maximum number of messages to include in OpenAI request logging
+    /// </summary>
+    public int MaxMessagesInLog { get; set; } = 50;
+}
+
+/// <summary>
 /// Main configuration class for AgentAlpha
 /// </summary>
 public class AgentConfiguration
@@ -48,6 +79,11 @@ public class AgentConfiguration
     /// Maximum number of messages to keep in conversation history (0 = unlimited)
     /// </summary>
     public int MaxConversationMessages { get; set; } = 0;
+    
+    /// <summary>
+    /// Activity logging configuration
+    /// </summary>
+    public ActivityLoggingConfig ActivityLogging { get; set; } = new();
     
     /// <summary>
     /// Create configuration from environment variables

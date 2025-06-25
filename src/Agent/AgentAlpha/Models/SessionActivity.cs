@@ -109,6 +109,63 @@ public class SessionActivity
             return null;
         }
     }
+    
+    /// <summary>
+    /// Create an activity with detailed data, applying size limits and truncation as needed
+    /// </summary>
+    public static SessionActivity CreateWithDetailedData(string activityType, string description, object? data = null, int maxDataSize = 50000)
+    {
+        var activity = new SessionActivity
+        {
+            ActivityType = activityType,
+            Description = description
+        };
+        
+        if (data != null)
+        {
+            try
+            {
+                var serializedData = JsonSerializer.Serialize(data);
+                
+                // If data is too large, truncate and add metadata about truncation
+                if (serializedData.Length > maxDataSize)
+                {
+                    var truncatedData = new
+                    {
+                        truncated = true,
+                        originalSize = serializedData.Length,
+                        maxSize = maxDataSize,
+                        data = serializedData.Substring(0, Math.Min(maxDataSize - 200, serializedData.Length)) + "... [TRUNCATED]"
+                    };
+                    activity.Data = JsonSerializer.Serialize(truncatedData);
+                }
+                else
+                {
+                    activity.Data = serializedData;
+                }
+            }
+            catch
+            {
+                activity.Data = data.ToString() ?? string.Empty;
+            }
+        }
+        
+        return activity;
+    }
+    
+    /// <summary>
+    /// Safely truncate string data to prevent oversized activity logs
+    /// </summary>
+    public static string TruncateString(string? input, int maxLength = 5000)
+    {
+        if (string.IsNullOrEmpty(input))
+            return string.Empty;
+            
+        if (input.Length <= maxLength)
+            return input;
+            
+        return input.Substring(0, maxLength - 20) + "... [TRUNCATED]";
+    }
 }
 
 /// <summary>
