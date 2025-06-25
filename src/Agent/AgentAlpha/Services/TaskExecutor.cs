@@ -19,6 +19,7 @@ public class TaskExecutor : ITaskExecutor
     private readonly IConversationManager _conversationManager;
     private readonly ISessionManager _sessionManager;
     private readonly IPlanningService _planningService;
+    private readonly ISessionActivityLogger _activityLogger;
     private readonly AgentConfiguration _config;
     private readonly ILogger<TaskExecutor> _logger;
 
@@ -29,6 +30,7 @@ public class TaskExecutor : ITaskExecutor
         IConversationManager conversationManager,
         ISessionManager sessionManager,
         IPlanningService planningService,
+        ISessionActivityLogger activityLogger,
         AgentConfiguration config,
         ILogger<TaskExecutor> logger)
     {
@@ -38,6 +40,7 @@ public class TaskExecutor : ITaskExecutor
         _conversationManager = conversationManager;
         _sessionManager = sessionManager;
         _planningService = planningService;
+        _activityLogger = activityLogger;
         _config = config;
         _logger = logger;
     }
@@ -56,6 +59,9 @@ public class TaskExecutor : ITaskExecutor
         // Apply request-specific configuration overrides
         var effectiveConfig = ApplyRequestOverrides(request);
         
+        // Initialize session and activity logging
+        AgentSession? currentSession = null;
+        
         try
         {
             // Step 1: Connect to MCP Server
@@ -63,6 +69,31 @@ public class TaskExecutor : ITaskExecutor
 
             // Step 2: Initialize conversation and determine if we're resuming a session
             var isResumingSession = await InitializeConversationAsync(request);
+            
+            // Set up activity logging for the session
+            if (!string.IsNullOrEmpty(request.SessionId))
+            {
+                currentSession = await _sessionManager.GetSessionAsync(request.SessionId);
+                if (currentSession != null)
+                {
+                    _activityLogger.SetCurrentSession(currentSession);
+                    await _activityLogger.LogActivityAsync(
+                        ActivityTypes.SessionStart,
+                        $"Resumed session for task: {request.Task}",
+                        new { TaskRequest = request.Task, IsResumingSession = isResumingSession });
+                }
+            }
+            else if (!string.IsNullOrEmpty(request.SessionName))
+            {
+                // Create new session
+                currentSession = await _sessionManager.CreateSessionAsync(request.SessionName);
+                _activityLogger.SetCurrentSession(currentSession);
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.SessionStart,
+                    $"Created new session for task: {request.Task}",
+                    new { TaskRequest = request.Task, SessionName = request.SessionName });
+                request.SessionId = currentSession.SessionId; // Update request with new session ID
+            }
 
             // Step 3: Create execution plan for the task
             TaskPlan? taskPlan = null;
@@ -76,20 +107,42 @@ public class TaskExecutor : ITaskExecutor
                 if (existingPlan != null)
                 {
                     Console.WriteLine("📋 Found existing plan in session");
+                    await _activityLogger.LogActivityAsync(
+                        ActivityTypes.TaskPlanning,
+                        "Found existing plan in session",
+                        new { ExistingPlan = existingPlan.Task, NewTask = request.Task });
                     
                     // Check if the existing plan is still relevant for the new task
                     if (IsPlanRelevantForTask(existingPlan, request.Task))
                     {
                         Console.WriteLine("✅ Reusing existing plan for similar task");
+                        await _activityLogger.LogActivityAsync(
+                            ActivityTypes.TaskPlanning,
+                            "Reusing existing plan for similar task",
+                            new { PlanTask = existingPlan.Task, NewTask = request.Task });
                         taskPlan = existingPlan;
                     }
                     else
                     {
                         Console.WriteLine("🔄 Refining existing plan for new task");
-                        // Refine the existing plan for the new task
-                        var discoveredTools = await DiscoverAvailableToolsAsync();
-                        var feedback = $"New task requirement: {request.Task}. Please adapt the existing plan accordingly.";
-                        taskPlan = await _planningService.RefinePlanAsync(existingPlan, feedback, discoveredTools);
+                        var planningActivityId = _activityLogger.StartActivity(
+                            ActivityTypes.TaskPlanning,
+                            "Refining existing plan for new task",
+                            new { ExistingPlan = existingPlan.Task, NewTask = request.Task });
+                        
+                        try
+                        {
+                            // Refine the existing plan for the new task
+                            var discoveredTools = await DiscoverAvailableToolsAsync();
+                            var feedback = $"New task requirement: {request.Task}. Please adapt the existing plan accordingly.";
+                            taskPlan = await _planningService.RefinePlanAsync(existingPlan, feedback, discoveredTools);
+                            await _activityLogger.CompleteActivityAsync(planningActivityId, new { RefinedPlan = taskPlan?.Task });
+                        }
+                        catch (Exception ex)
+                        {
+                            await _activityLogger.FailActivityAsync(planningActivityId, ex.Message);
+                            throw;
+                        }
                     }
                 }
             }
@@ -97,37 +150,88 @@ public class TaskExecutor : ITaskExecutor
             // If we don't have a plan yet, create a new one
             if (taskPlan == null)
             {
-                taskPlan = await CreateTaskPlanAsync(request.Task);
+                var planningActivityId = _activityLogger.StartActivity(
+                    ActivityTypes.TaskPlanning,
+                    "Creating new task plan",
+                    new { Task = request.Task });
+                
+                try
+                {
+                    taskPlan = await CreateTaskPlanAsync(request.Task);
+                    await _activityLogger.CompleteActivityAsync(planningActivityId, new { CreatedPlan = taskPlan?.Task });
+                }
+                catch (Exception ex)
+                {
+                    await _activityLogger.FailActivityAsync(planningActivityId, ex.Message);
+                    throw;
+                }
             }
             
             // Save the plan to the session if we have one
-            if (!string.IsNullOrEmpty(request.SessionId))
+            if (!string.IsNullOrEmpty(request.SessionId) && taskPlan != null)
             {
                 await SavePlanToSessionAsync(request.SessionId, taskPlan);
             }
             
             // Display the plan to the user
-            DisplayTaskPlan(taskPlan);
+            if (taskPlan != null)
+            {
+                DisplayTaskPlan(taskPlan);
+            }
 
             // Step 4: Discover tools and select relevant ones based on the plan
-            var availableTools = await DiscoverAndSelectToolsForPlanAsync(taskPlan, request, isResumingSession);
+            var toolSelectionActivityId = _activityLogger.StartActivity(
+                ActivityTypes.ToolSelection,
+                "Discovering and selecting tools for plan",
+                new { PlanTask = taskPlan?.Task, TaskCreatedAt = taskPlan?.CreatedAt });
+            
+            try
+            {
+                var availableTools = await DiscoverAndSelectToolsForPlanAsync(taskPlan!, request, isResumingSession);
+                await _activityLogger.CompleteActivityAsync(toolSelectionActivityId, 
+                    new { SelectedToolCount = availableTools?.Length, ToolNames = availableTools?.Select(t => t.Name).ToArray() });
 
-            // Step 5: Execute conversation loop with timeout if specified
-            if (request.Timeout.HasValue)
-            {
-                using var cts = new CancellationTokenSource(request.Timeout.Value);
-                await ExecuteConversationLoopAsync(availableTools, effectiveConfig, taskPlan, cts.Token);
+                // Step 5: Execute conversation loop with timeout if specified
+                if (request.Timeout.HasValue)
+                {
+                    using var cts = new CancellationTokenSource(request.Timeout.Value);
+                    await ExecuteConversationLoopAsync(availableTools!, effectiveConfig, taskPlan, cts.Token);
+                }
+                else
+                {
+                    await ExecuteConversationLoopAsync(availableTools!, effectiveConfig, taskPlan);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                await ExecuteConversationLoopAsync(availableTools, effectiveConfig, taskPlan);
+                await _activityLogger.FailActivityAsync(toolSelectionActivityId, ex.Message);
+                throw;
             }
             
             // Step 6: Save session if applicable
             await SaveSessionIfApplicableAsync(request);
+            
+            // Log successful completion
+            if (currentSession != null)
+            {
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.SessionEnd,
+                    "Task execution completed successfully",
+                    new { TaskRequest = request.Task, SessionId = currentSession.SessionId });
+            }
         }
         catch (Exception ex)
         {
+            // Log error activity
+            if (currentSession != null)
+            {
+                await _activityLogger.LogFailedActivityAsync(
+                    ActivityTypes.Error,
+                    "Task execution failed",
+                    ex.Message,
+                    new { TaskRequest = request.Task, ErrorType = ex.GetType().Name });
+            }
+            
             _logger.LogError(ex, "Task execution failed");
             throw;
         }

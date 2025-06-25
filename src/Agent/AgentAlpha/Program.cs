@@ -43,8 +43,13 @@ internal class Program
         {
             // Create services using dependency injection pattern
             var connectionManager = new Services.ConnectionManager(loggerFactory);
-            var toolManager = new Services.ToolManager(loggerFactory.CreateLogger<Services.ToolManager>());
             var sessionManager = new Services.SessionManager(loggerFactory.CreateLogger<Services.SessionManager>());
+            var sessionActivityLogger = new Services.SessionActivityLogger(
+                sessionManager,
+                loggerFactory.CreateLogger<Services.SessionActivityLogger>());
+            var toolManager = new Services.ToolManager(
+                loggerFactory.CreateLogger<Services.ToolManager>(),
+                sessionActivityLogger);
             var openAiService = new OpenAIResponsesService(agentConfig.OpenAiApiKey);
             var planningService = new Services.PlanningService(
                 openAiService,
@@ -58,7 +63,8 @@ internal class Program
             var conversationManager = new Services.ConversationManager(
                 openAiService, 
                 loggerFactory.CreateLogger<Services.ConversationManager>(), 
-                agentConfig);
+                agentConfig,
+                sessionActivityLogger);
             var taskExecutor = new Services.TaskExecutor(
                 connectionManager,
                 toolManager,
@@ -66,6 +72,7 @@ internal class Program
                 conversationManager,
                 sessionManager,
                 planningService,
+                sessionActivityLogger,
                 agentConfig,
                 loggerFactory.CreateLogger<Services.TaskExecutor>());
 

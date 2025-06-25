@@ -16,13 +16,15 @@ public class ConversationManager : IConversationManager
     private readonly IOpenAIResponsesService _openAi;
     private readonly ILogger<ConversationManager> _logger;
     private readonly AgentConfiguration _config;
+    private readonly ISessionActivityLogger? _activityLogger;
     private readonly List<object> _messages;
 
-    public ConversationManager(IOpenAIResponsesService openAi, ILogger<ConversationManager> logger, AgentConfiguration config)
+    public ConversationManager(IOpenAIResponsesService openAi, ILogger<ConversationManager> logger, AgentConfiguration config, ISessionActivityLogger? activityLogger = null)
     {
         _openAi = openAi;
         _logger = logger;
         _config = config;
+        _activityLogger = activityLogger;
         _messages = new List<object>();
     }
 
@@ -68,9 +70,44 @@ public class ConversationManager : IConversationManager
             ToolChoice = "auto"
         };
 
+        string? requestActivityId = null;
+        if (_activityLogger != null)
+        {
+            requestActivityId = _activityLogger.StartActivity(
+                ActivityTypes.OpenAIRequest,
+                "Sending request to OpenAI API",
+                new 
+                { 
+                    Model = request.Model,
+                    MessageCount = _messages.Count,
+                    ToolCount = availableTools?.Length ?? 0,
+                    ToolNames = availableTools?.Select(t => t.Name).ToArray()
+                });
+        }
+
         try
         {
             var response = await _openAi.CreateResponseAsync(request);
+            
+            if (_activityLogger != null && requestActivityId != null)
+            {
+                await _activityLogger.CompleteActivityAsync(requestActivityId, new 
+                { 
+                    ResponseReceived = true,
+                    OutputItemCount = response.Output?.Count() ?? 0
+                });
+                
+                // Log the response as a separate activity
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.OpenAIResponse,
+                    "Received response from OpenAI API",
+                    new
+                    {
+                        Model = request.Model,
+                        OutputItemCount = response.Output?.Count() ?? 0,
+                        HasToolCalls = response.Output?.Any(o => o is FunctionToolCall || o is McpToolCall) ?? false
+                    });
+            }
             
             // Extract assistant text
             var assistantText = response.Output?
@@ -85,6 +122,11 @@ public class ConversationManager : IConversationManager
         }
         catch (Exception ex)
         {
+            if (_activityLogger != null && requestActivityId != null)
+            {
+                await _activityLogger.FailActivityAsync(requestActivityId, ex.Message);
+            }
+            
             _logger.LogError(ex, "Failed to process conversation iteration");
             throw;
         }

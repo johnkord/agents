@@ -3,6 +3,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
+using AgentAlpha.Models;
 using OpenAIIntegration.Model;
 using System.Text.Json;   // new
 
@@ -14,10 +15,12 @@ namespace AgentAlpha.Services;
 public class ToolManager : IToolManager
 {
     private readonly ILogger<ToolManager> _logger;
+    private readonly ISessionActivityLogger? _activityLogger;
 
-    public ToolManager(ILogger<ToolManager> logger)
+    public ToolManager(ILogger<ToolManager> logger, ISessionActivityLogger? activityLogger = null)
     {
         _logger = logger;
+        _activityLogger = activityLogger;
     }
 
     public async Task<IList<McpClientTool>> DiscoverToolsAsync(IConnectionManager connection)
@@ -66,16 +69,56 @@ public class ToolManager : IToolManager
 
     public async Task<string> ExecuteToolAsync(IConnectionManager connection, string toolName, Dictionary<string, object?> arguments)
     {
+        string? toolCallActivityId = null;
+        if (_activityLogger != null)
+        {
+            toolCallActivityId = _activityLogger.StartActivity(
+                ActivityTypes.ToolCall,
+                $"Executing MCP tool: {toolName}",
+                new { ToolName = toolName, Arguments = arguments });
+        }
+        
         try
         {
             var result = await connection.CallToolAsync(toolName, arguments);
             var text = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? "<no text>";
+            
+            if (_activityLogger != null && toolCallActivityId != null)
+            {
+                await _activityLogger.CompleteActivityAsync(toolCallActivityId, new { ResultLength = text.Length });
+                
+                // Log the result as a separate activity
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.ToolResult,
+                    $"MCP tool result: {toolName}",
+                    new 
+                    { 
+                        ToolName = toolName,
+                        Success = true,
+                        ResultLength = text.Length,
+                        HasContent = !string.IsNullOrEmpty(text) && text != "<no text>"
+                    });
+            }
             
             _logger.LogDebug("Tool {ToolName} executed successfully", toolName);
             return text;
         }
         catch (Exception ex)
         {
+            if (_activityLogger != null && toolCallActivityId != null)
+            {
+                await _activityLogger.FailActivityAsync(toolCallActivityId, ex.Message);
+            }
+            
+            if (_activityLogger != null)
+            {
+                await _activityLogger.LogFailedActivityAsync(
+                    ActivityTypes.ToolResult,
+                    $"MCP tool failed: {toolName}",
+                    ex.Message,
+                    new { ToolName = toolName, Arguments = arguments });
+            }
+            
             _logger.LogError(ex, "Failed to execute tool {ToolName}", toolName);
             return $"Error executing {toolName}: {ex.Message}";
         }
