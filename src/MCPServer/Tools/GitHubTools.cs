@@ -25,15 +25,13 @@ public class GitHubTools
     public static string GetPullRequest(
         string owner,
         string repo,
-        int pullNumber,
-        string? token = null)
+        int pullNumber)
     {
         var args = new Dictionary<string, object?>
         {
             ["owner"] = owner,
             ["repo"] = repo,
-            ["pullNumber"] = pullNumber,
-            ["token"] = token != null ? "***" : null
+            ["pullNumber"] = pullNumber
         };
 
         var approved = ToolApprovalManager.Instance.EnsureApproved("github_get_pull_request", args);
@@ -44,6 +42,7 @@ public class GitHubTools
 
         try
         {
+            var token = ApiCredentialsManager.Instance.GetGitHubToken();
             var url = $"https://api.github.com/repos/{owner}/{repo}/pulls/{pullNumber}";
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             
@@ -96,15 +95,13 @@ public class GitHubTools
     public static string GetPullRequestFiles(
         string owner,
         string repo,
-        int pullNumber,
-        string? token = null)
+        int pullNumber)
     {
         var args = new Dictionary<string, object?>
         {
             ["owner"] = owner,
             ["repo"] = repo,
-            ["pullNumber"] = pullNumber,
-            ["token"] = token != null ? "***" : null
+            ["pullNumber"] = pullNumber
         };
 
         var approved = ToolApprovalManager.Instance.EnsureApproved("github_get_pull_request_files", args);
@@ -115,6 +112,7 @@ public class GitHubTools
 
         try
         {
+            var token = ApiCredentialsManager.Instance.GetGitHubToken();
             var url = $"https://api.github.com/repos/{owner}/{repo}/pulls/{pullNumber}/files";
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             
@@ -173,15 +171,13 @@ public class GitHubTools
     public static string GetPullRequestDiff(
         string owner,
         string repo,
-        int pullNumber,
-        string? token = null)
+        int pullNumber)
     {
         var args = new Dictionary<string, object?>
         {
             ["owner"] = owner,
             ["repo"] = repo,
-            ["pullNumber"] = pullNumber,
-            ["token"] = token != null ? "***" : null
+            ["pullNumber"] = pullNumber
         };
 
         var approved = ToolApprovalManager.Instance.EnsureApproved("github_get_pull_request_diff", args);
@@ -192,6 +188,7 @@ public class GitHubTools
 
         try
         {
+            var token = ApiCredentialsManager.Instance.GetGitHubToken();
             var url = $"https://api.github.com/repos/{owner}/{repo}/pulls/{pullNumber}";
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Add("Accept", "application/vnd.github.diff");
@@ -222,15 +219,13 @@ public class GitHubTools
     public static string GetPullRequestComments(
         string owner,
         string repo,
-        int pullNumber,
-        string? token = null)
+        int pullNumber)
     {
         var args = new Dictionary<string, object?>
         {
             ["owner"] = owner,
             ["repo"] = repo,
-            ["pullNumber"] = pullNumber,
-            ["token"] = token != null ? "***" : null
+            ["pullNumber"] = pullNumber
         };
 
         var approved = ToolApprovalManager.Instance.EnsureApproved("github_get_pull_request_comments", args);
@@ -241,6 +236,7 @@ public class GitHubTools
 
         try
         {
+            var token = ApiCredentialsManager.Instance.GetGitHubToken();
             var url = $"https://api.github.com/repos/{owner}/{repo}/pulls/{pullNumber}/comments";
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             
@@ -299,8 +295,7 @@ public class GitHubTools
         string repo,
         string state = "open",
         int page = 1,
-        int perPage = 10,
-        string? token = null)
+        int perPage = 10)
     {
         var args = new Dictionary<string, object?>
         {
@@ -308,8 +303,7 @@ public class GitHubTools
             ["repo"] = repo,
             ["state"] = state,
             ["page"] = page,
-            ["perPage"] = perPage,
-            ["token"] = token != null ? "***" : null
+            ["perPage"] = perPage
         };
 
         var approved = ToolApprovalManager.Instance.EnsureApproved("github_list_pull_requests", args);
@@ -320,6 +314,7 @@ public class GitHubTools
 
         try
         {
+            var token = ApiCredentialsManager.Instance.GetGitHubToken();
             var url = $"https://api.github.com/repos/{owner}/{repo}/pulls?state={state}&page={page}&per_page={perPage}";
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             
@@ -377,7 +372,6 @@ public class GitHubTools
         string repo,
         int pullNumber,
         string body,
-        string token,
         string? path = null,
         int? line = null,
         string? side = "RIGHT")
@@ -388,7 +382,6 @@ public class GitHubTools
             ["repo"] = repo,
             ["pullNumber"] = pullNumber,
             ["body"] = body,
-            ["token"] = "***",
             ["path"] = path,
             ["line"] = line,
             ["side"] = side
@@ -402,6 +395,11 @@ public class GitHubTools
 
         try
         {
+            var token = ApiCredentialsManager.Instance.GetGitHubToken();
+            if (string.IsNullOrEmpty(token))
+            {
+                return "Error: GitHub access token not configured. Please set GITHUB_ACCESS_TOKEN environment variable.";
+            }
             var url = path != null && line != null 
                 ? $"https://api.github.com/repos/{owner}/{repo}/pulls/{pullNumber}/comments"
                 : $"https://api.github.com/repos/{owner}/{repo}/issues/{pullNumber}/comments";

@@ -23,14 +23,12 @@ public class OpenAIVectorStoreTools
     [RequiresApproval]
     public static string CreateVectorStore(
         string name,
-        string apiKey,
         int? expiresAfterDays = null,
         string? metadata = null)
     {
         var args = new Dictionary<string, object?>
         {
             ["name"] = name,
-            ["apiKey"] = "***",
             ["expiresAfterDays"] = expiresAfterDays,
             ["metadata"] = metadata
         };
@@ -43,6 +41,11 @@ public class OpenAIVectorStoreTools
 
         try
         {
+            var apiKey = ApiCredentialsManager.Instance.GetOpenAiApiKey();
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                return "Error: OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.";
+            }
             var url = "https://api.openai.com/v1/vector_stores";
             
             var requestData = new Dictionary<string, object>
