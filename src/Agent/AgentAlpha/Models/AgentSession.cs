@@ -53,6 +53,11 @@ public class AgentSession
     public string CurrentPlan { get; set; } = string.Empty;
     
     /// <summary>
+    /// Serialized activity log for session audit trail
+    /// </summary>
+    public string ActivityLog { get; set; } = string.Empty;
+    
+    /// <summary>
     /// Create a new session with a generated ID
     /// </summary>
     public static AgentSession CreateNew(string name = "")
@@ -133,6 +138,50 @@ public class AgentSession
         catch
         {
             CurrentPlan = string.Empty;
+        }
+    }
+    
+    /// <summary>
+    /// Get the activity log for this session
+    /// </summary>
+    public List<SessionActivity> GetActivityLog()
+    {
+        if (string.IsNullOrEmpty(ActivityLog))
+            return new List<SessionActivity>();
+            
+        try
+        {
+            return JsonSerializer.Deserialize<List<SessionActivity>>(ActivityLog) ?? new List<SessionActivity>();
+        }
+        catch
+        {
+            return new List<SessionActivity>();
+        }
+    }
+    
+    /// <summary>
+    /// Add an activity to the session log
+    /// </summary>
+    public void AddActivity(SessionActivity activity)
+    {
+        var activities = GetActivityLog();
+        activities.Add(activity);
+        SetActivityLog(activities);
+    }
+    
+    /// <summary>
+    /// Set the complete activity log for this session
+    /// </summary>
+    public void SetActivityLog(List<SessionActivity> activities)
+    {
+        try
+        {
+            ActivityLog = JsonSerializer.Serialize(activities);
+            LastUpdatedAt = DateTime.UtcNow;
+        }
+        catch
+        {
+            ActivityLog = string.Empty;
         }
     }
 }
