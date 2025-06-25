@@ -42,42 +42,19 @@ Task to plan: {task}{contextSection}
 Available Tools:
 {string.Join("\n", toolDescriptions)}
 
-Create a comprehensive execution plan with the following structure:
-
-1. **Strategy**: High-level approach to completing the task
-2. **Steps**: Detailed breakdown of execution steps
-3. **Required Tools**: Tools needed throughout the plan
-4. **Complexity**: Assess task complexity (Simple/Medium/Complex/VeryComplex)
-5. **Confidence**: Your confidence in this plan (0.0-1.0)
-
-For each step, specify:
+Create a comprehensive execution plan by calling the create_execution_plan tool. For each step, specify:
 - Step description
 - Potential tools needed
 - Whether the step is mandatory
 - Expected input/output
 
-Return your response as a JSON object matching this structure:
-{{
-    ""strategy"": ""High-level strategy description"",
-    ""steps"": [
-        {{
-            ""stepNumber"": 1,
-            ""description"": ""Step description"",
-            ""potentialTools"": [""tool1"", ""tool2""],
-            ""isMandatory"": true,
-            ""expectedInput"": ""Input description"",
-            ""expectedOutput"": ""Output description""
-        }}
-    ],
-    ""requiredTools"": [""tool1"", ""tool2"", ""tool3""],
-    ""complexity"": ""Medium"",
-    ""confidence"": 0.85
-}}
-
 Focus on creating a logical, executable plan that efficiently uses the available tools.";
 
         try
         {
+            // Define the tool for creating execution plans
+            var planCreationTool = CreatePlanCreationToolDefinition();
+
             var request = new ResponsesCreateRequest
             {
                 Model = "gpt-3.5-turbo", // Use faster model for planning
@@ -85,20 +62,14 @@ Focus on creating a logical, executable plan that efficiently uses the available
                 {
                     new { role = "user", content = prompt }
                 },
-                ToolChoice = "none"
+                Tools = new[] { planCreationTool },
+                ToolChoice = new { type = "function", function = new { name = "create_execution_plan" } }
             };
 
             var response = await _openAi.CreateResponseAsync(request);
-            var outputMessage = response.Output?
-                .OfType<OutputMessage>()
-                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase));
-                
-            var planJson = outputMessage?.Content?.ToString() ?? "{}";
-
-            _logger.LogDebug("Raw planning response: {Response}", planJson);
-
-            // Parse the JSON response into a TaskPlan
-            var plan = ParsePlanFromJsonAsync(planJson, task).Result;
+            
+            // Extract plan from tool call
+            var plan = ExtractPlanFromToolCall(response, task);
             
             _logger.LogInformation("Created plan with {StepCount} steps and complexity {Complexity}", 
                 plan.Steps.Count, plan.Complexity);
@@ -152,7 +123,7 @@ Focus on creating a logical, executable plan that efficiently uses the available
             {string.Join("\n", toolDescriptions)}
 
             Based on the feedback, refine the plan to address the issues or incorporate new requirements.
-            Return the refined plan in the same JSON format as the original.
+            Use the create_execution_plan tool to return the refined plan.
 
             Focus on:
             - Addressing specific feedback points
@@ -163,6 +134,9 @@ Focus on creating a logical, executable plan that efficiently uses the available
 
         try
         {
+            // Use the same tool definition for refinement
+            var planCreationTool = CreatePlanCreationToolDefinition();
+
             var request = new ResponsesCreateRequest
             {
                 Model = "gpt-3.5-turbo",
@@ -170,17 +144,13 @@ Focus on creating a logical, executable plan that efficiently uses the available
                 {
                     new { role = "user", content = prompt }
                 },
-                ToolChoice = "none"
+                Tools = new[] { planCreationTool },
+                ToolChoice = new { type = "function", function = new { name = "create_execution_plan" } }
             };
 
             var response = await _openAi.CreateResponseAsync(request);
-            var outputMessage = response.Output?
-                .OfType<OutputMessage>()
-                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase));
-                
-            var refinedPlanJson = outputMessage?.Content?.ToString() ?? existingPlanJson;
-
-            var refinedPlan = ParsePlanFromJsonAsync(refinedPlanJson, existingPlan.Task).Result;
+            
+            var refinedPlan = ExtractPlanFromToolCall(response, existingPlan.Task);
             refinedPlan.CreatedAt = DateTime.UtcNow; // Update creation time for refined plan
 
             _logger.LogInformation("Refined plan with {StepCount} steps", refinedPlan.Steps.Count);
@@ -262,73 +232,6 @@ Focus on creating a logical, executable plan that efficiently uses the available
         return Task.FromResult(result);
     }
 
-    private Task<TaskPlan> ParsePlanFromJsonAsync(string json, string originalTask)
-    {
-        try
-        {
-            // Clean up the JSON (remove markdown code blocks if present)
-            var cleanJson = json.Trim();
-            if (cleanJson.StartsWith("```json"))
-            {
-                cleanJson = cleanJson.Substring(7);
-            }
-            if (cleanJson.StartsWith("```"))
-            {
-                cleanJson = cleanJson.Substring(3);
-            }
-            if (cleanJson.EndsWith("```"))
-            {
-                cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
-            }
-            cleanJson = cleanJson.Trim();
-
-            var jsonElement = JsonSerializer.Deserialize<JsonElement>(cleanJson);
-
-            var plan = new TaskPlan
-            {
-                Task = originalTask,
-                Strategy = jsonElement.GetProperty("strategy").GetString() ?? "",
-                RequiredTools = JsonSerializer.Deserialize<List<string>>(jsonElement.GetProperty("requiredTools").GetRawText()) ?? new(),
-                Confidence = jsonElement.GetProperty("confidence").GetDouble()
-            };
-
-            // Parse complexity
-            if (jsonElement.TryGetProperty("complexity", out var complexityElement) &&
-                Enum.TryParse<TaskComplexity>(complexityElement.GetString(), true, out var complexity))
-            {
-                plan.Complexity = complexity;
-            }
-
-            // Parse steps
-            if (jsonElement.TryGetProperty("steps", out var stepsElement))
-            {
-                foreach (var stepElement in stepsElement.EnumerateArray())
-                {
-                    var step = new PlanStep
-                    {
-                        StepNumber = stepElement.GetProperty("stepNumber").GetInt32(),
-                        Description = stepElement.GetProperty("description").GetString() ?? "",
-                        PotentialTools = JsonSerializer.Deserialize<List<string>>(stepElement.GetProperty("potentialTools").GetRawText()) ?? new(),
-                        IsMandatory = stepElement.TryGetProperty("isMandatory", out var mandatoryElement) ? mandatoryElement.GetBoolean() : true,
-                        ExpectedInput = stepElement.TryGetProperty("expectedInput", out var inputElement) ? inputElement.GetString() : null,
-                        ExpectedOutput = stepElement.TryGetProperty("expectedOutput", out var outputElement) ? outputElement.GetString() : null
-                    };
-                    plan.Steps.Add(step);
-                }
-            }
-
-            // Sort steps by step number
-            plan.Steps.Sort((a, b) => a.StepNumber.CompareTo(b.StepNumber));
-
-            return Task.FromResult(plan);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to parse plan JSON, creating fallback plan");
-            return Task.FromResult(CreateFallbackPlan(originalTask, new List<McpClientTool>()));
-        }
-    }
-
     private TaskPlan CreateFallbackPlan(string task, IList<McpClientTool> availableTools)
     {
         _logger.LogInformation("Creating fallback plan for task: {Task}", task);
@@ -371,5 +274,155 @@ Focus on creating a logical, executable plan that efficiently uses the available
             Complexity = TaskComplexity.Medium,
             Confidence = 0.6
         };
+    }
+
+    private ToolDefinition CreatePlanCreationToolDefinition()
+    {
+        return new ToolDefinition
+        {
+            Type = "function",
+            Name = "create_execution_plan",
+            Description = "Create a detailed execution plan for a given task",
+            Parameters = new
+            {
+                type = "object",
+                properties = new
+                {
+                    strategy = new
+                    {
+                        type = "string",
+                        description = "High-level strategy for completing the task"
+                    },
+                    steps = new
+                    {
+                        type = "array",
+                        description = "Ordered list of execution steps",
+                        items = new
+                        {
+                            type = "object",
+                            properties = new
+                            {
+                                stepNumber = new
+                                {
+                                    type = "integer",
+                                    description = "Step number in the sequence"
+                                },
+                                description = new
+                                {
+                                    type = "string",
+                                    description = "Description of what this step accomplishes"
+                                },
+                                potentialTools = new
+                                {
+                                    type = "array",
+                                    description = "Tools that might be needed for this specific step",
+                                    items = new { type = "string" }
+                                },
+                                isMandatory = new
+                                {
+                                    type = "boolean",
+                                    description = "Whether this step is mandatory or optional"
+                                },
+                                expectedInput = new
+                                {
+                                    type = "string",
+                                    description = "Expected input for this step"
+                                },
+                                expectedOutput = new
+                                {
+                                    type = "string",
+                                    description = "Expected output from this step"
+                                }
+                            },
+                            required = new[] { "stepNumber", "description", "potentialTools", "isMandatory" }
+                        }
+                    },
+                    requiredTools = new
+                    {
+                        type = "array",
+                        description = "Tools identified as potentially needed for this plan",
+                        items = new { type = "string" }
+                    },
+                    complexity = new
+                    {
+                        type = "string",
+                        description = "Estimated complexity level of the task",
+                        @enum = new[] { "Simple", "Medium", "Complex", "VeryComplex" }
+                    },
+                    confidence = new
+                    {
+                        type = "number",
+                        description = "Confidence level in the plan (0.0 to 1.0)",
+                        minimum = 0.0,
+                        maximum = 1.0
+                    }
+                },
+                required = new[] { "strategy", "steps", "requiredTools", "complexity", "confidence" }
+            }
+        };
+    }
+
+    private TaskPlan ExtractPlanFromToolCall(ResponsesCreateResponse response, string originalTask)
+    {
+        try
+        {
+            // Find the function tool call for plan creation
+            var planToolCall = response.Output?
+                .OfType<FunctionToolCall>()
+                .FirstOrDefault(tc => tc.Name == "create_execution_plan");
+
+            if (planToolCall?.Arguments == null)
+            {
+                _logger.LogWarning("No plan creation tool call found in response");
+                return CreateFallbackPlan(originalTask, new List<McpClientTool>());
+            }
+
+            var args = planToolCall.Arguments.Value;
+            
+            var plan = new TaskPlan
+            {
+                Task = originalTask,
+                Strategy = args.TryGetProperty("strategy", out var strategyElement) ? strategyElement.GetString() ?? "" : "",
+                RequiredTools = JsonSerializer.Deserialize<List<string>>(args.TryGetProperty("requiredTools", out var toolsElement) ? toolsElement.GetRawText() : "[]") ?? new(),
+                Confidence = args.TryGetProperty("confidence", out var confidenceElement) ? confidenceElement.GetDouble() : 0.5
+            };
+
+            // Parse complexity
+            if (args.TryGetProperty("complexity", out var complexityElement) &&
+                Enum.TryParse<TaskComplexity>(complexityElement.GetString(), true, out var complexity))
+            {
+                plan.Complexity = complexity;
+            }
+
+            // Parse steps
+            if (args.TryGetProperty("steps", out var stepsElement))
+            {
+                foreach (var stepElement in stepsElement.EnumerateArray())
+                {
+                    var step = new PlanStep
+                    {
+                        StepNumber = stepElement.TryGetProperty("stepNumber", out var numElement) ? numElement.GetInt32() : 0,
+                        Description = stepElement.TryGetProperty("description", out var descElement) ? descElement.GetString() ?? "" : "",
+                        PotentialTools = JsonSerializer.Deserialize<List<string>>(stepElement.TryGetProperty("potentialTools", out var stepToolsElement) ? stepToolsElement.GetRawText() : "[]") ?? new(),
+                        IsMandatory = stepElement.TryGetProperty("isMandatory", out var mandatoryElement) ? mandatoryElement.GetBoolean() : true,
+                        ExpectedInput = stepElement.TryGetProperty("expectedInput", out var inputElement) ? inputElement.GetString() : null,
+                        ExpectedOutput = stepElement.TryGetProperty("expectedOutput", out var outputElement) ? outputElement.GetString() : null
+                    };
+                    plan.Steps.Add(step);
+                }
+            }
+
+            // Sort steps by step number
+            plan.Steps.Sort((a, b) => a.StepNumber.CompareTo(b.StepNumber));
+
+            _logger.LogDebug("Successfully extracted plan from tool call with {StepCount} steps", plan.Steps.Count);
+
+            return plan;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to extract plan from tool call, creating fallback plan");
+            return CreateFallbackPlan(originalTask, new List<McpClientTool>());
+        }
     }
 }
