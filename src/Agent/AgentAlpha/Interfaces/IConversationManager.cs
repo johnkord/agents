@@ -54,4 +54,9 @@ public interface IConversationManager
     /// Get conversation statistics for monitoring
     /// </summary>
     ConversationStatistics GetConversationStatistics();
+    
+    /// <summary>
+    /// Check if a response would be repetitive before adding it to conversation
+    /// </summary>
+    bool WouldBeRepetitive(string response);
 }

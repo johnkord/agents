@@ -18,6 +18,7 @@ public class ConversationManager : IConversationManager
     private readonly AgentConfiguration _config;
     private readonly ISessionActivityLogger? _activityLogger;
     private readonly List<object> _messages;
+    private readonly List<string> _recentAssistantResponses; // Track recent responses to detect repetition
 
     public ConversationManager(IOpenAIResponsesService openAi, ILogger<ConversationManager> logger, AgentConfiguration config, ISessionActivityLogger? activityLogger = null)
     {
@@ -26,6 +27,7 @@ public class ConversationManager : IConversationManager
         _config = config;
         _activityLogger = activityLogger;
         _messages = new List<object>();
+        _recentAssistantResponses = new List<string>();
     }
 
     public void InitializeConversation(string systemPrompt, string userTask)
@@ -173,6 +175,15 @@ public class ConversationManager : IConversationManager
     {
         _messages.Add(new { role = "assistant", content });
         _logger.LogDebug("Added assistant message to conversation");
+        
+        // Track assistant responses for repetition detection
+        _recentAssistantResponses.Add(content);
+        
+        // Keep only the last 5 responses to detect repetition
+        if (_recentAssistantResponses.Count > 5)
+        {
+            _recentAssistantResponses.RemoveAt(0);
+        }
         
         // Optimize conversation length after adding messages
         OptimizeConversationLength();
@@ -533,5 +544,49 @@ public class ConversationManager : IConversationManager
         };
         
         return expansionIndicators.Any(indicator => lowerText.Contains(indicator));
+    }
+
+    /// <summary>
+    /// Check if the assistant is providing repetitive responses that indicate being stuck
+    /// </summary>
+    private bool IsProvidingRepetitiveResponses(string currentResponse)
+    {
+        if (_recentAssistantResponses.Count < 3)
+            return false;
+
+        // Check if the current response is very similar to recent responses
+        var similarResponseCount = 0;
+        var currentWords = currentResponse.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        
+        foreach (var recentResponse in _recentAssistantResponses.TakeLast(3))
+        {
+            var recentWords = recentResponse.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var commonWords = currentWords.Intersect(recentWords).Count();
+            var totalWords = currentWords.Union(recentWords).Count();
+            
+            // If more than 80% of words are the same, consider it repetitive
+            if (totalWords > 0 && (double)commonWords / totalWords > 0.8)
+            {
+                similarResponseCount++;
+            }
+        }
+
+        // If 2 or more of the last 3 responses are very similar to current response
+        var isRepetitive = similarResponseCount >= 2;
+        
+        if (isRepetitive)
+        {
+            _logger.LogWarning("Detected repetitive assistant responses - agent may be stuck");
+        }
+        
+        return isRepetitive;
+    }
+
+    /// <summary>
+    /// Check if a response would be repetitive before adding it to conversation
+    /// </summary>
+    public bool WouldBeRepetitive(string response)
+    {
+        return IsProvidingRepetitiveResponses(response);
     }
 }

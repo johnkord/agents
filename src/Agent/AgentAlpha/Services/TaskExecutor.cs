@@ -94,6 +94,19 @@ public class TaskExecutor : ITaskExecutor
                     new { TaskRequest = request.Task, SessionName = request.SessionName });
                 request.SessionId = currentSession.SessionId; // Update request with new session ID
             }
+            else
+            {
+                // No session provided - create a default temporary session for activity logging
+                var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm");
+                var defaultSessionName = $"Session {timestamp}";
+                currentSession = await _sessionManager.CreateSessionAsync(defaultSessionName);
+                _activityLogger.SetCurrentSession(currentSession);
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.SessionStart,
+                    $"Created default session for task: {request.Task}",
+                    new { TaskRequest = request.Task, SessionName = defaultSessionName });
+                request.SessionId = currentSession.SessionId; // Update request with new session ID
+            }
 
             // Step 3: Create execution plan for the task
             TaskPlan? taskPlan = null;
@@ -869,9 +882,29 @@ public class TaskExecutor : ITaskExecutor
                 return;
             }
 
-            // Add assistant message to conversation for next iteration
-            _conversationManager.AddAssistantMessage(response.AssistantText);
-            _logger.LogDebug("Added assistant response to conversation for iteration {Iteration}", i + 1);
+            // Check for repetitive responses that indicate the agent is stuck
+            if (_conversationManager.WouldBeRepetitive(response.AssistantText))
+            {
+                Console.WriteLine("🔄 Detected repetitive responses - attempting to break out of loop");
+                _logger.LogWarning("Agent appears to be stuck in repetitive responses at iteration {Iteration}", i + 1);
+                
+                // Add a guidance message to help the agent move forward
+                var guidanceMessage = "I notice I'm providing similar responses repeatedly. Let me try a different approach or acknowledge if there are limitations preventing me from completing this task.";
+                _conversationManager.AddAssistantMessage(guidanceMessage);
+                
+                // Try one more iteration with guidance, then exit if still stuck
+                if (i >= 2) // Allow at least 3 iterations before breaking due to repetition
+                {
+                    Console.WriteLine("⚠️  Breaking conversation loop due to repetitive responses.");
+                    break;
+                }
+            }
+            else
+            {
+                // Add assistant message to conversation for next iteration
+                _conversationManager.AddAssistantMessage(response.AssistantText);
+                _logger.LogDebug("Added assistant response to conversation for iteration {Iteration}", i + 1);
+            }
             
             iterationsSincePlanUpdate++;
         }
