@@ -16,4 +16,9 @@ public interface ITaskExecutor
     /// Execute a task with full request parameters
     /// </summary>
     Task ExecuteAsync(TaskExecutionRequest request);
+    
+    /// <summary>
+    /// Create a plan for a task without executing it
+    /// </summary>
+    Task<TaskPlan> CreatePlanAsync(string task);
 }
