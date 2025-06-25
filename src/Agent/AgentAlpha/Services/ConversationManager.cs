@@ -75,16 +75,45 @@ public class ConversationManager : IConversationManager
         string? requestActivityId = null;
         if (_activityLogger != null)
         {
-            requestActivityId = _activityLogger.StartActivity(
-                ActivityTypes.OpenAIRequest,
-                "Sending request to OpenAI API",
-                new 
+            if (_config.ActivityLogging.VerboseOpenAI)
+            {
+                // Create detailed request data for comprehensive logging
+                var requestData = new 
                 { 
                     Model = request.Model,
                     MessageCount = _messages.Count,
                     ToolCount = availableTools?.Length ?? 0,
-                    ToolNames = availableTools?.Select(t => t.Name).ToArray()
-                });
+                    ToolNames = availableTools?.Select(t => t.Name).ToArray(),
+                    ToolChoice = request.ToolChoice,
+                    // Include full request details for comprehensive audit trail
+                    FullRequest = new
+                    {
+                        Model = request.Model,
+                        Messages = _messages.Take(_config.ActivityLogging.MaxMessagesInLog).ToArray(),
+                        Tools = availableTools?.Select(t => new { t.Name, t.Description, ParameterCount = t.Parameters?.ToString()?.Length ?? 0 }).ToArray(),
+                        ToolChoice = request.ToolChoice
+                    }
+                };
+                
+                requestActivityId = _activityLogger.StartActivity(
+                    ActivityTypes.OpenAIRequest,
+                    "Sending request to OpenAI API",
+                    requestData);
+            }
+            else
+            {
+                // Basic logging without full request details
+                requestActivityId = _activityLogger.StartActivity(
+                    ActivityTypes.OpenAIRequest,
+                    "Sending request to OpenAI API",
+                    new 
+                    { 
+                        Model = request.Model,
+                        MessageCount = _messages.Count,
+                        ToolCount = availableTools?.Length ?? 0,
+                        ToolNames = availableTools?.Select(t => t.Name).ToArray()
+                    });
+            }
         }
 
         try
@@ -99,16 +128,55 @@ public class ConversationManager : IConversationManager
                     OutputItemCount = response.Output?.Count() ?? 0
                 });
                 
-                // Log the response as a separate activity
-                await _activityLogger.LogActivityAsync(
-                    ActivityTypes.OpenAIResponse,
-                    "Received response from OpenAI API",
-                    new
+                if (_config.ActivityLogging.VerboseOpenAI)
+                {
+                    // Log the response as a separate activity with comprehensive data
+                    var responseData = new
                     {
                         Model = request.Model,
                         OutputItemCount = response.Output?.Count() ?? 0,
-                        HasToolCalls = response.Output?.Any(o => o is FunctionToolCall || o is McpToolCall) ?? false
-                    });
+                        HasToolCalls = response.Output?.Any(o => o is FunctionToolCall || o is McpToolCall) ?? false,
+                        // Include detailed response data for comprehensive audit trail
+                        FullResponse = new
+                        {
+                            Output = response.Output?.Select(output => new
+                            {
+                                Type = output.GetType().Name,
+                                Content = output switch
+                                {
+                                    OutputMessage msg => (object)new { msg.Role, Content = SessionActivity.TruncateString(msg.Content?.ToString(), _config.ActivityLogging.MaxStringSize) },
+                                    FunctionToolCall ftc => (object)new { ftc.Name, Arguments = SessionActivity.TruncateString(JsonSerializer.Serialize(ftc.Arguments), _config.ActivityLogging.MaxStringSize) },
+                                    McpToolCall mtc => (object)new { mtc.Name, Arguments = SessionActivity.TruncateString(JsonSerializer.Serialize(mtc.Arguments), _config.ActivityLogging.MaxStringSize) },
+                                    _ => (object)new { Raw = SessionActivity.TruncateString(output.ToString(), _config.ActivityLogging.MaxStringSize) }
+                                }
+                            }).ToArray(),
+                            Usage = response.Usage != null ? new
+                            {
+                                response.Usage.InputTokens,
+                                response.Usage.OutputTokens,
+                                response.Usage.TotalTokens
+                            } : null
+                        }
+                    };
+                    
+                    await _activityLogger.LogActivityAsync(
+                        ActivityTypes.OpenAIResponse,
+                        "Received response from OpenAI API",
+                        responseData);
+                }
+                else
+                {
+                    // Basic response logging
+                    await _activityLogger.LogActivityAsync(
+                        ActivityTypes.OpenAIResponse,
+                        "Received response from OpenAI API",
+                        new
+                        {
+                            Model = request.Model,
+                            OutputItemCount = response.Output?.Count() ?? 0,
+                            HasToolCalls = response.Output?.Any(o => o is FunctionToolCall || o is McpToolCall) ?? false
+                        });
+                }
             }
             
             // Extract assistant text

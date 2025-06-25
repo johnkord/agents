@@ -16,10 +16,12 @@ public class ToolManager : IToolManager
 {
     private readonly ILogger<ToolManager> _logger;
     private readonly ISessionActivityLogger? _activityLogger;
+    private readonly AgentConfiguration _config;
 
-    public ToolManager(ILogger<ToolManager> logger, ISessionActivityLogger? activityLogger = null)
+    public ToolManager(ILogger<ToolManager> logger, AgentConfiguration config, ISessionActivityLogger? activityLogger = null)
     {
         _logger = logger;
+        _config = config;
         _activityLogger = activityLogger;
     }
 
@@ -72,32 +74,96 @@ public class ToolManager : IToolManager
         string? toolCallActivityId = null;
         if (_activityLogger != null)
         {
-            toolCallActivityId = _activityLogger.StartActivity(
-                ActivityTypes.ToolCall,
-                $"Executing MCP tool: {toolName}",
-                new { ToolName = toolName, Arguments = arguments });
+            if (_config.ActivityLogging.VerboseTools)
+            {
+                // Create detailed tool call data for comprehensive logging
+                var toolCallData = new 
+                { 
+                    ToolName = toolName, 
+                    Arguments = arguments,
+                    // Include full input details for comprehensive audit trail
+                    FullInput = new
+                    {
+                        ToolName = toolName,
+                        ArgumentCount = arguments?.Count ?? 0,
+                        ArgumentKeys = arguments?.Keys.ToArray(),
+                        ArgumentValues = arguments?.ToDictionary(
+                            kvp => kvp.Key, 
+                            kvp => kvp.Value?.ToString() ?? "null"
+                        )
+                    }
+                };
+                
+                toolCallActivityId = _activityLogger.StartActivity(
+                    ActivityTypes.ToolCall,
+                    $"Executing MCP tool: {toolName}",
+                    toolCallData);
+            }
+            else
+            {
+                // Basic tool call logging
+                toolCallActivityId = _activityLogger.StartActivity(
+                    ActivityTypes.ToolCall,
+                    $"Executing MCP tool: {toolName}",
+                    new { ToolName = toolName, ArgumentCount = arguments?.Count ?? 0 });
+            }
         }
         
         try
         {
-            var result = await connection.CallToolAsync(toolName, arguments);
+            var result = await connection.CallToolAsync(toolName, arguments ?? new Dictionary<string, object?>());
             var text = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? "<no text>";
             
             if (_activityLogger != null && toolCallActivityId != null)
             {
                 await _activityLogger.CompleteActivityAsync(toolCallActivityId, new { ResultLength = text.Length });
                 
-                // Log the result as a separate activity
-                await _activityLogger.LogActivityAsync(
-                    ActivityTypes.ToolResult,
-                    $"MCP tool result: {toolName}",
-                    new 
+                if (_config.ActivityLogging.VerboseTools)
+                {
+                    // Log the result as a separate activity with comprehensive data
+                    var resultData = new 
                     { 
                         ToolName = toolName,
                         Success = true,
                         ResultLength = text.Length,
-                        HasContent = !string.IsNullOrEmpty(text) && text != "<no text>"
-                    });
+                        HasContent = !string.IsNullOrEmpty(text) && text != "<no text>",
+                        // Include full output details for comprehensive audit trail
+                        FullOutput = new
+                        {
+                            ResultText = SessionActivity.TruncateString(text, _config.ActivityLogging.MaxStringSize * 2), // Allow more space for tool results
+                            ContentBlocks = result.Content.Select(block => new
+                            {
+                                Type = block.GetType().Name,
+                                Content = block switch
+                                {
+                                    TextContentBlock textBlock => SessionActivity.TruncateString(textBlock.Text, _config.ActivityLogging.MaxStringSize),
+                                    _ => SessionActivity.TruncateString(block.ToString(), 1000)
+                                }
+                            }).ToArray(),
+                            IsError = result.IsError,
+                            Metadata = result.Meta != null ? SessionActivity.TruncateString(JsonSerializer.Serialize(result.Meta), 2000) : null
+                        }
+                    };
+                    
+                    await _activityLogger.LogActivityAsync(
+                        ActivityTypes.ToolResult,
+                        $"MCP tool result: {toolName}",
+                        resultData);
+                }
+                else
+                {
+                    // Basic tool result logging
+                    await _activityLogger.LogActivityAsync(
+                        ActivityTypes.ToolResult,
+                        $"MCP tool result: {toolName}",
+                        new 
+                        { 
+                            ToolName = toolName,
+                            Success = true,
+                            ResultLength = text.Length,
+                            HasContent = !string.IsNullOrEmpty(text) && text != "<no text>"
+                        });
+                }
             }
             
             _logger.LogDebug("Tool {ToolName} executed successfully", toolName);
@@ -112,11 +178,29 @@ public class ToolManager : IToolManager
             
             if (_activityLogger != null)
             {
+                // Enhanced error logging with detailed failure information
+                var errorData = new 
+                { 
+                    ToolName = toolName, 
+                    Arguments = arguments,
+                    ErrorType = ex.GetType().Name,
+                    ErrorMessage = ex.Message,
+                    StackTrace = SessionActivity.TruncateString(ex.StackTrace, 2000),
+                    // Include context for debugging
+                    FailureContext = new
+                    {
+                        ToolName = toolName,
+                        ArgumentCount = arguments?.Count ?? 0,
+                        ArgumentKeys = arguments?.Keys.ToArray(),
+                        Timestamp = DateTime.UtcNow
+                    }
+                };
+                
                 await _activityLogger.LogFailedActivityAsync(
                     ActivityTypes.ToolResult,
                     $"MCP tool failed: {toolName}",
                     ex.Message,
-                    new { ToolName = toolName, Arguments = arguments });
+                    errorData);
             }
             
             _logger.LogError(ex, "Failed to execute tool {ToolName}", toolName);
