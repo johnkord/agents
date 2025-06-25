@@ -50,13 +50,37 @@ public class SessionManager : ISessionManager
                 ConversationState TEXT NOT NULL DEFAULT '',
                 ConfigurationSnapshot TEXT NOT NULL DEFAULT '',
                 Metadata         TEXT NOT NULL DEFAULT '',
-                Status           INTEGER NOT NULL DEFAULT 0
+                Status           INTEGER NOT NULL DEFAULT 0,
+                CurrentPlan      TEXT NOT NULL DEFAULT ''
             );
             
             CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON AgentSessions(CreatedAt);
             CREATE INDEX IF NOT EXISTS idx_sessions_status ON AgentSessions(Status);
+            
+            -- Add CurrentPlan column to existing tables if it doesn't exist
+            PRAGMA table_info(AgentSessions);
             """;
         cmd.ExecuteNonQuery();
+        
+        // Check if CurrentPlan column exists and add it if it doesn't
+        cmd.CommandText = "PRAGMA table_info(AgentSessions)";
+        using var reader = cmd.ExecuteReader();
+        bool hasCurrentPlanColumn = false;
+        while (reader.Read())
+        {
+            if (reader.GetString(1) == "CurrentPlan")
+            {
+                hasCurrentPlanColumn = true;
+                break;
+            }
+        }
+        reader.Close();
+        
+        if (!hasCurrentPlanColumn)
+        {
+            cmd.CommandText = "ALTER TABLE AgentSessions ADD COLUMN CurrentPlan TEXT NOT NULL DEFAULT ''";
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public async Task<AgentSession> CreateSessionAsync(string name = "")
@@ -76,7 +100,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan
             FROM AgentSessions 
             WHERE SessionId = $sessionId
             """;
@@ -94,7 +118,8 @@ public class SessionManager : ISessionManager
                 ConversationState = reader.GetString(4),
                 ConfigurationSnapshot = reader.GetString(5),
                 Metadata = reader.GetString(6),
-                Status = (SessionStatus)reader.GetInt32(7)
+                Status = (SessionStatus)reader.GetInt32(7),
+                CurrentPlan = reader.IsDBNull(8) ? string.Empty : reader.GetString(8)
             };
         }
 
@@ -109,7 +134,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan
             FROM AgentSessions 
             WHERE Name = $name
             ORDER BY LastUpdatedAt DESC
@@ -129,7 +154,8 @@ public class SessionManager : ISessionManager
                 ConversationState = reader.GetString(4),
                 ConfigurationSnapshot = reader.GetString(5),
                 Metadata = reader.GetString(6),
-                Status = (SessionStatus)reader.GetInt32(7)
+                Status = (SessionStatus)reader.GetInt32(7),
+                CurrentPlan = reader.IsDBNull(8) ? string.Empty : reader.GetString(8)
             };
         }
 
@@ -144,8 +170,8 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             INSERT OR REPLACE INTO AgentSessions 
-            (SessionId, Name, CreatedAt, LastUpdatedAt, ConversationState, ConfigurationSnapshot, Metadata, Status)
-            VALUES ($sessionId, $name, $createdAt, $lastUpdatedAt, $conversationState, $configSnapshot, $metadata, $status)
+            (SessionId, Name, CreatedAt, LastUpdatedAt, ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan)
+            VALUES ($sessionId, $name, $createdAt, $lastUpdatedAt, $conversationState, $configSnapshot, $metadata, $status, $currentPlan)
             """;
             
         cmd.Parameters.AddWithValue("$sessionId", session.SessionId);
@@ -156,6 +182,7 @@ public class SessionManager : ISessionManager
         cmd.Parameters.AddWithValue("$configSnapshot", session.ConfigurationSnapshot);
         cmd.Parameters.AddWithValue("$metadata", session.Metadata);
         cmd.Parameters.AddWithValue("$status", (int)session.Status);
+        cmd.Parameters.AddWithValue("$currentPlan", session.CurrentPlan);
 
         await cmd.ExecuteNonQueryAsync();
         
@@ -172,7 +199,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan
             FROM AgentSessions 
             ORDER BY LastUpdatedAt DESC
             """;
@@ -189,7 +216,8 @@ public class SessionManager : ISessionManager
                 ConversationState = reader.GetString(4),
                 ConfigurationSnapshot = reader.GetString(5),
                 Metadata = reader.GetString(6),
-                Status = (SessionStatus)reader.GetInt32(7)
+                Status = (SessionStatus)reader.GetInt32(7),
+                CurrentPlan = reader.IsDBNull(8) ? string.Empty : reader.GetString(8)
             });
         }
 

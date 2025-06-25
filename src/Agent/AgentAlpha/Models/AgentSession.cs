@@ -48,6 +48,11 @@ public class AgentSession
     public SessionStatus Status { get; set; } = SessionStatus.Active;
     
     /// <summary>
+    /// Serialized current task plan for the session
+    /// </summary>
+    public string CurrentPlan { get; set; } = string.Empty;
+    
+    /// <summary>
     /// Create a new session with a generated ID
     /// </summary>
     public static AgentSession CreateNew(string name = "")
@@ -94,6 +99,40 @@ public class AgentSession
         catch
         {
             ConversationState = string.Empty;
+        }
+    }
+    
+    /// <summary>
+    /// Get the current task plan for this session
+    /// </summary>
+    public TaskPlan? GetCurrentPlan()
+    {
+        if (string.IsNullOrEmpty(CurrentPlan))
+            return null;
+            
+        try
+        {
+            return JsonSerializer.Deserialize<TaskPlan>(CurrentPlan);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+    
+    /// <summary>
+    /// Set the current task plan for this session
+    /// </summary>
+    public void SetCurrentPlan(TaskPlan? plan)
+    {
+        try
+        {
+            CurrentPlan = plan != null ? JsonSerializer.Serialize(plan) : string.Empty;
+            LastUpdatedAt = DateTime.UtcNow;
+        }
+        catch
+        {
+            CurrentPlan = string.Empty;
         }
     }
 }
