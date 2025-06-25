@@ -120,7 +120,6 @@ Provide specific, actionable feedback focusing on:
                 var aiAnalysis = OpenAIVectorStoreTools.QueryVectorStore(
                     vectorStoreId, 
                     aiQuery, 
-                    openaiApiKey, 
                     5, 
                     "You are an expert code reviewer. Provide detailed, constructive feedback on code changes in pull requests."
                 );

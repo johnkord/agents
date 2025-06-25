@@ -113,14 +113,12 @@ public class OpenAIVectorStoreTools
     public static string UploadFileToVectorStore(
         string vectorStoreId,
         string filePath,
-        string apiKey,
         string? purpose = "assistants")
     {
         var args = new Dictionary<string, object?>
         {
             ["vectorStoreId"] = vectorStoreId,
             ["filePath"] = filePath,
-            ["apiKey"] = "***",
             ["purpose"] = purpose
         };
 
@@ -132,6 +130,11 @@ public class OpenAIVectorStoreTools
 
         try
         {
+            var apiKey = ApiCredentialsManager.Instance.GetOpenAiApiKey();
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                return "Error: OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.";
+            }
             if (!File.Exists(filePath))
             {
                 return $"Error: File not found: {filePath}";
@@ -204,7 +207,6 @@ public class OpenAIVectorStoreTools
     public static string QueryVectorStore(
         string vectorStoreId,
         string query,
-        string apiKey,
         int maxResults = 5,
         string? assistantInstructions = null)
     {
@@ -212,7 +214,6 @@ public class OpenAIVectorStoreTools
         {
             ["vectorStoreId"] = vectorStoreId,
             ["query"] = query,
-            ["apiKey"] = "***",
             ["maxResults"] = maxResults,
             ["assistantInstructions"] = assistantInstructions
         };
@@ -225,6 +226,12 @@ public class OpenAIVectorStoreTools
 
         try
         {
+            var apiKey = ApiCredentialsManager.Instance.GetOpenAiApiKey();
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                return "Error: OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.";
+            }
+            
             // Create a temporary assistant with the vector store attached
             var assistantUrl = "https://api.openai.com/v1/assistants";
             var assistantData = new Dictionary<string, object>
@@ -419,11 +426,10 @@ public class OpenAIVectorStoreTools
 
     [McpServerTool(Name = "openai_list_vector_stores"), Description("List all vector stores in the OpenAI account.")]
     [RequiresApproval]
-    public static string ListVectorStores(string apiKey, int limit = 20)
+    public static string ListVectorStores(int limit = 20)
     {
         var args = new Dictionary<string, object?>
         {
-            ["apiKey"] = "***",
             ["limit"] = limit
         };
 
@@ -435,6 +441,11 @@ public class OpenAIVectorStoreTools
 
         try
         {
+            var apiKey = ApiCredentialsManager.Instance.GetOpenAiApiKey();
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                return "Error: OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.";
+            }
             var url = $"https://api.openai.com/v1/vector_stores?limit={limit}";
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             
@@ -483,12 +494,11 @@ public class OpenAIVectorStoreTools
 
     [McpServerTool(Name = "openai_delete_vector_store"), Description("Delete a vector store.")]
     [RequiresApproval]
-    public static string DeleteVectorStore(string vectorStoreId, string apiKey)
+    public static string DeleteVectorStore(string vectorStoreId)
     {
         var args = new Dictionary<string, object?>
         {
-            ["vectorStoreId"] = vectorStoreId,
-            ["apiKey"] = "***"
+            ["vectorStoreId"] = vectorStoreId
         };
 
         var approved = ToolApprovalManager.Instance.EnsureApproved("openai_delete_vector_store", args);
@@ -499,6 +509,12 @@ public class OpenAIVectorStoreTools
 
         try
         {
+            var apiKey = ApiCredentialsManager.Instance.GetOpenAiApiKey();
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                return "Error: OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.";
+            }
+            
             var url = $"https://api.openai.com/v1/vector_stores/{vectorStoreId}";
             using var request = new HttpRequestMessage(HttpMethod.Delete, url);
             
