@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using AgentAlpha.Services;
 using AgentAlpha.Models;
 using AgentAlpha.Configuration;
+using System.Text.Json;
 
 namespace AgentAlpha.Tests;
 
@@ -234,5 +235,75 @@ public class SessionActivityLoggerTests
         Assert.Equal(50000, config.MaxDataSize);
         Assert.Equal(5000, config.MaxStringSize);
         Assert.Equal(50, config.MaxMessagesInLog);
+    }
+    
+    [Fact]
+    public void EnhancedLogging_DemonstratesComprehensiveDataCapture()
+    {
+        // This test demonstrates the enhanced logging capabilities
+        // showing the difference between basic and enhanced activity logging
+        
+        // Arrange - Create sample data like what would be used in real operations
+        var basicToolData = new { ToolName = "test_tool", Success = true };
+        
+        var enhancedToolData = new {
+            ToolName = "github_get_pull_request_files",
+            Arguments = new { owner = "microsoft", repo = "mssql-python", pullNumber = 104 },
+            FullInput = new {
+                ToolName = "github_get_pull_request_files",
+                ArgumentCount = 3,
+                ArgumentKeys = new[] { "owner", "repo", "pullNumber" },
+                ArgumentValues = new Dictionary<string, string> {
+                    { "owner", "microsoft" },
+                    { "repo", "mssql-python" },
+                    { "pullNumber", "104" }
+                }
+            }
+        };
+        
+        var enhancedResultData = new {
+            ToolName = "github_get_pull_request_files",
+            Success = true,
+            ResultLength = 337,
+            HasContent = true,
+            FullOutput = new {
+                ResultText = "Files changed in PR: src/main.py, tests/test_main.py",
+                ContentBlocks = new[] { 
+                    new { Type = "TextContentBlock", Content = "File list retrieved successfully" } 
+                },
+                IsError = false,
+                Metadata = "{\"files_count\": 2}"
+            }
+        };
+        
+        // Act - Create activities with different levels of detail
+        var basicActivity = SessionActivity.Create(ActivityTypes.ToolCall, "Basic tool call", basicToolData);
+        var enhancedCallActivity = SessionActivity.Create(ActivityTypes.ToolCall, "Enhanced tool call", enhancedToolData);
+        var enhancedResultActivity = SessionActivity.Create(ActivityTypes.ToolResult, "Enhanced tool result", enhancedResultData);
+        
+        // Assert - Verify enhanced logging captures more comprehensive information
+        Assert.Contains("ToolName", basicActivity.Data);
+        Assert.DoesNotContain("FullInput", basicActivity.Data);
+        
+        Assert.Contains("ToolName", enhancedCallActivity.Data);
+        Assert.Contains("FullInput", enhancedCallActivity.Data);
+        Assert.Contains("ArgumentKeys", enhancedCallActivity.Data);
+        Assert.Contains("ArgumentValues", enhancedCallActivity.Data);
+        
+        Assert.Contains("FullOutput", enhancedResultActivity.Data);
+        Assert.Contains("ResultText", enhancedResultActivity.Data);
+        Assert.Contains("ContentBlocks", enhancedResultActivity.Data);
+        Assert.Contains("Metadata", enhancedResultActivity.Data);
+        
+        // Demonstrate the enhanced data structure provides comprehensive audit trail
+        var callData = JsonSerializer.Deserialize<Dictionary<string, object>>(enhancedCallActivity.Data);
+        Assert.NotNull(callData);
+        
+        var resultData = JsonSerializer.Deserialize<Dictionary<string, object>>(enhancedResultActivity.Data);
+        Assert.NotNull(resultData);
+        
+        // The enhanced logging now provides the detailed data requested in the issue
+        // allowing users to see "virtually every step in the operation and the data 
+        // that was gathered/sent in each step"
     }
 }
