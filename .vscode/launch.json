@@ -145,6 +145,234 @@
                 "MCP_SERVER_URL": "http://localhost:3000"
             },
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (GitHub PR Review - Basic)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [
+                "--model", "gpt-4o",
+                "--temperature", "0.3",
+                "--system-prompt", "You are a senior software engineer conducting a thorough but constructive pull request review. Focus on code quality, maintainability, and best practices.",
+                "--verbose",
+                "Please review GitHub PR #123 in microsoft/vscode repository. Analyze the code changes, provide constructive feedback, and highlight any potential issues or improvements."
+            ],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (GitHub PR Review - Security Focus)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [
+                "--model", "gpt-4o",
+                "--temperature", "0.2",
+                "--system-prompt", "You are a security-focused code reviewer. Analyze pull requests for potential security vulnerabilities, authentication issues, data validation problems, and security best practices compliance.",
+                "--priority", "High",
+                "--verbose",
+                "Perform a security-focused review of GitHub PR #456 in microsoft/playwright repository. Look for potential security vulnerabilities, input validation issues, and authentication concerns."
+            ],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (GitHub PR Review - Performance Analysis)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [
+                "--model", "gpt-4o",
+                "--temperature", "0.3",
+                "--system-prompt", "You are a performance-focused engineer reviewing code changes. Analyze pull requests for performance implications, memory usage, algorithmic efficiency, and scalability concerns.",
+                "--max-iterations", "8",
+                "--verbose",
+                "Review GitHub PR #789 in facebook/react repository with a focus on performance implications. Identify any potential performance bottlenecks, memory leaks, or inefficient algorithms in the changes."
+            ],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (GitHub PR Q&A - Discussion Summary)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [
+                "--model", "gpt-4o",
+                "--temperature", "0.4",
+                "--system-prompt", "You are a technical communication specialist who helps teams understand complex discussions. Summarize pull request discussions, highlighting key decisions, concerns raised, and action items.",
+                "--verbose",
+                "Analyze the discussion in GitHub PR #321 in nodejs/node repository. Summarize the key points discussed, any concerns raised by reviewers, decisions made, and outstanding action items."
+            ],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (GitHub PR Q&A - Change Impact)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [
+                "--model", "gpt-4o",
+                "--temperature", "0.3",
+                "--system-prompt", "You are an experienced software architect who analyzes the impact of code changes. Help teams understand how proposed changes might affect the broader system, users, and future development.",
+                "--max-iterations", "6",
+                "--verbose",
+                "What are the potential impacts of the changes in GitHub PR #654 in google/chrome repository? Consider effects on performance, compatibility, user experience, and future maintainability."
+            ],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (GitHub PR - Architecture Review)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [
+                "--model", "gpt-4o",
+                "--temperature", "0.3",
+                "--system-prompt", "You are a software architect reviewing code changes for architectural soundness. Focus on design patterns, separation of concerns, modularity, and long-term maintainability.",
+                "--priority", "High",
+                "--max-iterations", "10",
+                "--verbose",
+                "Conduct an architectural review of GitHub PR #987 in kubernetes/kubernetes repository. Analyze the design decisions, evaluate adherence to architectural principles, and suggest improvements."
+            ],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (GitHub PR - Breaking Change Analysis)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [
+                "--model", "gpt-4o",
+                "--temperature", "0.2",
+                "--system-prompt", "You are a compatibility specialist who identifies breaking changes in code. Analyze pull requests to identify potential breaking changes, API modifications, and migration requirements.",
+                "--timeout", "15",
+                "--verbose",
+                "Analyze GitHub PR #246 in dotnet/aspnetcore repository for potential breaking changes. Identify any API changes, behavior modifications, or compatibility issues that might affect existing users."
+            ],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (GitHub PR - Release Preparation)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [
+                "--model", "gpt-4o",
+                "--temperature", "0.4",
+                "--system-prompt", "You are a release manager preparing for a software release. Help teams analyze recent pull requests to understand what's included in the release, identify risks, and create release notes.",
+                "--max-iterations", "12",
+                "--verbose",
+                "Review recent merged PRs in tensorflow/tensorflow repository for the upcoming v2.14 release. Generate a summary of key features, bug fixes, and any potential risks or breaking changes."
+            ],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (GitHub PR - Documentation Review)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [
+                "--model", "gpt-3.5-turbo",
+                "--temperature", "0.5",
+                "--system-prompt", "You are a technical writer reviewing documentation changes. Focus on clarity, completeness, accuracy, and user experience. Suggest improvements for better comprehension.",
+                "--verbose",
+                "Review the documentation changes in GitHub PR #135 in pytorch/pytorch repository. Evaluate clarity, completeness, and suggest improvements for better user understanding."
+            ],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (GitHub PR - Compare Multiple PRs)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": [
+                "--model", "gpt-4o",
+                "--temperature", "0.4",
+                "--system-prompt", "You are a technical analyst comparing different approaches to solving the same problem. Help teams understand the trade-offs between different pull request implementations.",
+                "--max-iterations", "8",
+                "--verbose",
+                "Compare GitHub PRs #401, #402, and #403 in apache/kafka repository. They all address the same issue but with different approaches. Analyze the trade-offs and recommend the best solution."
+            ],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }
