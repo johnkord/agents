@@ -2,8 +2,7 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using MCPServer.ToolApproval; // +import
-using System.Collections.Generic; // +import for Dictionary
+using MCPServer.ToolApproval;
 
 namespace MCPServer.Tools;
 
@@ -16,19 +15,6 @@ public class ShellTools
         string script,
         int timeoutSeconds = 30)
     {
-        // Check for approval before executing the dangerous operation
-        var args = new Dictionary<string, object?>
-        {
-            ["script"] = script,
-            ["timeoutSeconds"] = timeoutSeconds
-        };
-
-        var approved = ToolApprovalManager.Instance.EnsureApproved("run_command", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
-
         try
         {
             // Always execute through shell to support full bash functionality including pipes, redirections, etc.
