@@ -45,6 +45,15 @@ public class TaskExecutor : ITaskExecutor
         _logger = logger;
     }
 
+    /// <summary>
+    /// Executes a simple task string using default configuration
+    /// </summary>
+    /// <param name="task">The task description to execute</param>
+    /// <returns>Task representing the async operation</returns>
+    /// <remarks>
+    /// This method provides backward compatibility by converting the task string
+    /// to a TaskExecutionRequest with default settings
+    /// </remarks>
     public async Task ExecuteAsync(string task)
     {
         // Maintain backwards compatibility by creating a simple request
@@ -52,6 +61,20 @@ public class TaskExecutor : ITaskExecutor
         await ExecuteAsync(request);
     }
 
+    /// <summary>
+    /// Executes a complete task using the specified request parameters
+    /// </summary>
+    /// <param name="request">Complete task execution request with all parameters</param>
+    /// <returns>Task representing the async operation</returns>
+    /// <remarks>
+    /// This is the main execution method that:
+    /// 1. Applies configuration overrides from the request
+    /// 2. Connects to the MCP server
+    /// 3. Initializes or resumes a conversation session
+    /// 4. Discovers and filters available tools
+    /// 5. Executes the conversation loop with the AI
+    /// 6. Logs all activities and handles errors gracefully
+    /// </remarks>
     public async Task ExecuteAsync(TaskExecutionRequest request)
     {
         _logger.LogInformation("Starting task execution: {Task}", request.Task);

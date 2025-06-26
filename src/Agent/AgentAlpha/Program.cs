@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -9,6 +11,9 @@ using MCPClient;
 using System.Linq;               // NEW
 using AgentAlpha.Configuration;   // NEW
 using AgentAlpha.Models;         // NEW
+using AgentAlpha.Extensions;     // NEW
+using AgentAlpha.Services;       // NEW
+using AgentAlpha.Interfaces;     // NEW
 
 namespace AgentAlpha;
 
@@ -18,65 +23,33 @@ internal class Program
     {
         Console.WriteLine("AI Agent Starting...");
 
-        /* --- acquire task -------------------------------------------------- */
-        var request = ParseTaskExecutionRequest(args);
+        // Create host with dependency injection
+        var host = CreateHost();
+        
+        // Parse command-line arguments
+        var commandLineParser = new CommandLineParser();
+        var request = commandLineParser.ParseArguments(args);
+        
         if (string.IsNullOrWhiteSpace(request.Task)) return;
 
-        /* --- configuration / logging --------------------------------------- */
-        var loggerFactory = LoggerFactory.Create(b => b.AddConsole().SetMinimumLevel(LogLevel.Debug));
-        var logger = loggerFactory.CreateLogger<Program>();
-
-        var agentConfig = AgentConfiguration.FromEnvironment();
+        var agentConfig = host.Services.GetRequiredService<AgentConfiguration>();
+        var logger = host.Services.GetRequiredService<ILogger<Program>>();
         
         if (string.IsNullOrEmpty(agentConfig.OpenAiApiKey))
         {
             if (request.Task.Equals("test", StringComparison.OrdinalIgnoreCase))
             {
-                await TestMcpConnection(loggerFactory);
+                await TestMcpConnection(host.Services.GetRequiredService<ILoggerFactory>());
                 return;
             }
-            Console.WriteLine("OPENAI_API_KEY not set."); return;
+            Console.WriteLine("OPENAI_API_KEY not set."); 
+            return;
         }
 
-        /* --- run the agent -------------------------------------------------- */
+        // Execute the task using dependency injection
         try
         {
-            // Create services using dependency injection pattern
-            var connectionManager = new Services.ConnectionManager(loggerFactory);
-            var sessionManager = new Services.SessionManager(loggerFactory.CreateLogger<Services.SessionManager>());
-            var sessionActivityLogger = new Services.SessionActivityLogger(
-                sessionManager,
-                loggerFactory.CreateLogger<Services.SessionActivityLogger>());
-            var toolManager = new Services.ToolManager(
-                loggerFactory.CreateLogger<Services.ToolManager>(),
-                agentConfig,
-                sessionActivityLogger);
-            var openAiService = new OpenAIResponsesService(agentConfig.OpenAiApiKey);
-            var planningService = new Services.PlanningService(
-                openAiService,
-                loggerFactory.CreateLogger<Services.PlanningService>(),
-                agentConfig);
-            var toolSelector = new Services.ToolSelector(
-                openAiService,
-                toolManager,
-                loggerFactory.CreateLogger<Services.ToolSelector>(),
-                agentConfig.ToolSelection);
-            var conversationManager = new Services.ConversationManager(
-                openAiService, 
-                loggerFactory.CreateLogger<Services.ConversationManager>(), 
-                agentConfig,
-                sessionActivityLogger);
-            var taskExecutor = new Services.TaskExecutor(
-                connectionManager,
-                toolManager,
-                toolSelector,
-                conversationManager,
-                sessionManager,
-                planningService,
-                sessionActivityLogger,
-                agentConfig,
-                loggerFactory.CreateLogger<Services.TaskExecutor>());
-
+            var taskExecutor = host.Services.GetRequiredService<ITaskExecutor>();
             await taskExecutor.ExecuteAsync(request);
         }
         catch (HttpRequestException httpEx) when (httpEx.Message.Contains("api.openai.com"))
@@ -99,6 +72,28 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Creates and configures the host with dependency injection
+    /// </summary>
+    /// <returns>Configured host</returns>
+    private static IHost CreateHost()
+    {
+        var agentConfig = AgentConfiguration.FromEnvironment();
+        
+        return Host.CreateDefaultBuilder()
+            .ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddConsole();
+                logging.SetMinimumLevel(LogLevel.Debug);
+            })
+            .ConfigureServices(services =>
+            {
+                services.AddAgentAlphaServices(agentConfig);
+            })
+            .Build();
+    }
+
     /* --------------------------------------------------------------------- */
     private static string PromptForTask()
     {
@@ -109,97 +104,9 @@ internal class Program
     /* --------------------------------------------------------------------- */
     private static TaskExecutionRequest ParseTaskExecutionRequest(string[] args)
     {
-        if (args.Length == 0)
-        {
-            // Interactive mode
-            var task = PromptForTask();
-            return TaskExecutionRequest.FromTask(task);
-        }
-
-        var request = new TaskExecutionRequest();
-        var taskParts = new List<string>();
-
-        for (int i = 0; i < args.Length; i++)
-        {
-            var arg = args[i];
-            
-            switch (arg.ToLowerInvariant())
-            {
-                case "--model" or "-m":
-                    if (i + 1 < args.Length)
-                    {
-                        request.Model = args[++i];
-                    }
-                    break;
-                    
-                case "--temperature" or "-t":
-                    if (i + 1 < args.Length && double.TryParse(args[++i], out var temp))
-                    {
-                        request.Temperature = Math.Clamp(temp, 0.0, 1.0);
-                    }
-                    break;
-                    
-                case "--max-iterations" or "--iterations":
-                    if (i + 1 < args.Length && int.TryParse(args[++i], out var iterations))
-                    {
-                        request.MaxIterations = Math.Max(1, iterations);
-                    }
-                    break;
-                    
-                case "--priority":
-                    if (i + 1 < args.Length && Enum.TryParse<TaskPriority>(args[++i], true, out var priority))
-                    {
-                        request.Priority = priority;
-                    }
-                    break;
-                    
-                case "--timeout":
-                    if (i + 1 < args.Length && int.TryParse(args[++i], out var timeoutMinutes))
-                    {
-                        request.Timeout = TimeSpan.FromMinutes(timeoutMinutes);
-                    }
-                    break;
-                    
-                case "--verbose" or "-v":
-                    request.VerboseLogging = true;
-                    break;
-                    
-                case "--system-prompt":
-                    if (i + 1 < args.Length)
-                    {
-                        request.SystemPrompt = args[++i];
-                    }
-                    break;
-                    
-                case "--session" or "--session-id":
-                    if (i + 1 < args.Length)
-                    {
-                        request.SessionId = args[++i];
-                    }
-                    break;
-                    
-                case "--session-name":
-                    if (i + 1 < args.Length)
-                    {
-                        request.SessionName = args[++i];
-                    }
-                    break;
-                    
-                default:
-                    // Part of the task description
-                    taskParts.Add(arg);
-                    break;
-            }
-        }
-
-        request.Task = string.Join(" ", taskParts);
-        
-        if (request.VerboseLogging && !string.IsNullOrEmpty(request.Task))
-        {
-            Console.WriteLine($"🔍 Parsed request - Task: '{request.Task}', Model: {request.Model ?? "default"}, Temperature: {request.Temperature?.ToString() ?? "default"}");
-        }
-
-        return request;
+        // This method is kept for backward compatibility but now delegates to CommandLineParser
+        var parser = new CommandLineParser();
+        return parser.ParseArguments(args);
     }
 
     /* ---------------- MCP test helper ------------------------------------ */

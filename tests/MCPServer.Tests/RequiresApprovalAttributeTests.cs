@@ -6,7 +6,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Xunit;
 
-namespace YourNamespaceHere
+namespace MCPServer.Tests
 {
     public static class RequiresApprovalAttributeTests
     {
