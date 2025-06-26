@@ -88,6 +88,8 @@ public class AgentConfiguration
     /// <summary>
     /// Create configuration from environment variables
     /// </summary>
+    /// <returns>Validated configuration instance</returns>
+    /// <exception cref="InvalidOperationException">Thrown when configuration is invalid</exception>
     public static AgentConfiguration FromEnvironment()
     {
         var config = new AgentConfiguration
@@ -96,19 +98,111 @@ public class AgentConfiguration
             ServerUrl = Environment.GetEnvironmentVariable("MCP_SERVER_URL")
         };
 
+        // Parse and validate transport type
         var transport = (Environment.GetEnvironmentVariable("MCP_TRANSPORT") ?? "stdio").ToLowerInvariant();
         config.Transport = transport switch
         {
             "http" or "sse" => McpTransportType.Http,
-            _ => McpTransportType.Stdio
+            "stdio" => McpTransportType.Stdio,
+            _ => throw new InvalidOperationException($"Invalid MCP_TRANSPORT value: '{transport}'. Supported values: 'stdio', 'http', 'sse'")
         };
+
+        // Parse and validate model name
+        var model = Environment.GetEnvironmentVariable("AGENT_MODEL");
+        if (!string.IsNullOrEmpty(model))
+        {
+            config.Model = ValidateModel(model);
+        }
+
+        // Parse and validate max iterations
+        var maxIterationsStr = Environment.GetEnvironmentVariable("MAX_ITERATIONS");
+        if (!string.IsNullOrEmpty(maxIterationsStr))
+        {
+            if (int.TryParse(maxIterationsStr, out var maxIterations) && maxIterations > 0)
+            {
+                config.MaxIterations = maxIterations;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Invalid MAX_ITERATIONS value: '{maxIterationsStr}'. Must be a positive integer.");
+            }
+        }
 
         config.ToolFilter = ToolFilterConfig.FromEnvironment();
         
-        // Parse tool selection configuration from environment
+        // Parse tool selection configuration from environment with validation
+        ParseToolSelectionConfig(config);
+        
+        // Parse MaxConversationMessages from environment with validation
+        ParseMaxConversationMessages(config);
+        
+        // Validate the complete configuration
+        ValidateConfiguration(config);
+        
+        return config;
+    }
+
+    /// <summary>
+    /// Validates the complete configuration for consistency and required values
+    /// </summary>
+    /// <param name="config">Configuration to validate</param>
+    /// <exception cref="InvalidOperationException">Thrown when configuration is invalid</exception>
+    private static void ValidateConfiguration(AgentConfiguration config)
+    {
+        // Validate HTTP transport has server URL
+        if (config.Transport == McpTransportType.Http && string.IsNullOrEmpty(config.ServerUrl))
+        {
+            throw new InvalidOperationException("MCP_SERVER_URL is required when using HTTP transport");
+        }
+
+        // Validate tool selection settings
+        if (config.ToolSelection.MaxToolsPerRequest <= 0)
+        {
+            throw new InvalidOperationException($"MaxToolsPerRequest must be positive, got: {config.ToolSelection.MaxToolsPerRequest}");
+        }
+
+        // Validate conversation message limits
+        if (config.MaxConversationMessages < 0)
+        {
+            throw new InvalidOperationException($"MaxConversationMessages cannot be negative, got: {config.MaxConversationMessages}");
+        }
+    }
+
+    /// <summary>
+    /// Validates and normalizes the AI model name
+    /// </summary>
+    /// <param name="model">Model name to validate</param>
+    /// <returns>Validated model name</returns>
+    /// <exception cref="InvalidOperationException">Thrown when model name is invalid</exception>
+    private static string ValidateModel(string model)
+    {
+        var validModels = new[] { "gpt-4o", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-4o-mini" };
+        
+        if (validModels.Contains(model, StringComparer.OrdinalIgnoreCase))
+        {
+            return model;
+        }
+        
+        throw new InvalidOperationException($"Invalid AGENT_MODEL value: '{model}'. Supported models: {string.Join(", ", validModels)}");
+    }
+
+    /// <summary>
+    /// Parses tool selection configuration with validation
+    /// </summary>
+    /// <param name="config">Configuration to update</param>
+    /// <exception cref="InvalidOperationException">Thrown when values are invalid</exception>
+    private static void ParseToolSelectionConfig(AgentConfiguration config)
+    {
         if (int.TryParse(Environment.GetEnvironmentVariable("MAX_TOOLS_PER_REQUEST"), out var maxTools))
         {
-            config.ToolSelection.MaxToolsPerRequest = maxTools;
+            if (maxTools > 0)
+            {
+                config.ToolSelection.MaxToolsPerRequest = maxTools;
+            }
+            else
+            {
+                throw new InvalidOperationException($"MAX_TOOLS_PER_REQUEST must be positive, got: {maxTools}");
+            }
         }
         
         if (bool.TryParse(Environment.GetEnvironmentVariable("USE_LLM_TOOL_SELECTION"), out var useLLM))
@@ -119,15 +213,28 @@ public class AgentConfiguration
         var selectionModel = Environment.GetEnvironmentVariable("TOOL_SELECTION_MODEL");
         if (!string.IsNullOrEmpty(selectionModel))
         {
-            config.ToolSelection.SelectionModel = selectionModel;
+            config.ToolSelection.SelectionModel = ValidateModel(selectionModel);
         }
-        
-        // Parse MaxConversationMessages from environment
-        if (int.TryParse(Environment.GetEnvironmentVariable("MAX_CONVERSATION_MESSAGES"), out var maxMessages))
+    }
+
+    /// <summary>
+    /// Parses maximum conversation messages with validation
+    /// </summary>
+    /// <param name="config">Configuration to update</param>
+    /// <exception cref="InvalidOperationException">Thrown when value is invalid</exception>
+    private static void ParseMaxConversationMessages(AgentConfiguration config)
+    {
+        var maxMessagesStr = Environment.GetEnvironmentVariable("MAX_CONVERSATION_MESSAGES");
+        if (!string.IsNullOrEmpty(maxMessagesStr))
         {
-            config.MaxConversationMessages = maxMessages;
+            if (int.TryParse(maxMessagesStr, out var maxMessages) && maxMessages >= 0)
+            {
+                config.MaxConversationMessages = maxMessages;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Invalid MAX_CONVERSATION_MESSAGES value: '{maxMessagesStr}'. Must be a non-negative integer.");
+            }
         }
-        
-        return config;
     }
 }
