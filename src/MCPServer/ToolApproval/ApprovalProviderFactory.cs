@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using MCPServer.ToolApproval.LlmApproval;
 
 namespace MCPServer.ToolApproval;
 
@@ -27,6 +28,8 @@ public static class ApprovalProviderFactory
             
             ApprovalProviderType.Rest => CreateRestProvider(config.RestProvider, httpClient),
             
+            ApprovalProviderType.Llm => CreateLlmProvider(config.LlmProvider),
+            
             _ => throw new ArgumentException($"Unknown approval provider type: {config.ProviderType}")
         };
     }
@@ -52,5 +55,37 @@ public static class ApprovalProviderFactory
             httpClient,
             config.PollInterval,
             config.Timeout);
+    }
+
+    private static LlmApprovalProvider CreateLlmProvider(LlmProviderConfig? llmConfig)
+    {
+        var config = llmConfig ?? new LlmProviderConfig();
+        
+        // Create the appropriate LLM service
+        ILlmService llmService = config.ServiceType switch
+        {
+            LlmServiceType.Mock => new MockLlmService(),
+            LlmServiceType.OpenAI => throw new NotImplementedException("OpenAI service not yet implemented"),
+            LlmServiceType.AzureOpenAI => throw new NotImplementedException("Azure OpenAI service not yet implemented"),
+            LlmServiceType.Anthropic => throw new NotImplementedException("Anthropic service not yet implemented"),
+            LlmServiceType.Custom => throw new NotImplementedException("Custom service not yet implemented"),
+            _ => throw new ArgumentException($"Unknown LLM service type: {config.ServiceType}")
+        };
+
+        // Create the approval policy
+        var policy = new LlmApprovalPolicy
+        {
+            AutoApprovalMinConfidence = config.AutoApprovalMinConfidence,
+            HumanRequiredMaxConfidence = config.HumanFallbackMaxConfidence,
+            CacheEnabled = config.CacheEnabled,
+            CacheTtl = config.CacheTtl,
+            LlmTimeout = config.Timeout,
+            FallbackToHuman = config.FallbackToHuman
+        };
+
+        // Create the fallback provider
+        var fallbackProvider = new ConsoleApprovalProvider();
+
+        return new LlmApprovalProvider(llmService, policy, fallbackProvider: fallbackProvider);
     }
 }
