@@ -160,7 +160,7 @@ public class LlmApprovalProviderTests
                 ["write_file"] = new ToolPolicy
                 {
                     AllowAutoApproval = true,
-                    MinConfidenceOverride = 0.95 // Very high threshold for this tool
+                    MinConfidenceOverride = 0.96 // Very high threshold for this tool
                 }
             }
         };

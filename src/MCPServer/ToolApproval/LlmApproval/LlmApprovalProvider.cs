@@ -212,13 +212,14 @@ public class LlmApprovalProvider : IApprovalProvider
             };
         }
 
-        if (llmDecision.Result == ApprovalResult.RequireHuman && llmDecision.Confidence <= _policy.HumanRequiredMaxConfidence)
+        // Convert very low confidence decisions to require human approval
+        // Only apply this to decisions that haven't already been categorized as RequireHuman
+        if (llmDecision.Result == ApprovalResult.Approve && llmDecision.Confidence <= _policy.HumanRequiredMaxConfidence)
         {
-            // Very low confidence might warrant denial
             return llmDecision with 
             { 
-                Result = ApprovalResult.Deny,
-                Reasoning = $"Very low confidence {llmDecision.Confidence:F2} suggests denial. {llmDecision.Reasoning}"
+                Result = ApprovalResult.RequireHuman,
+                Reasoning = $"Low confidence {llmDecision.Confidence:F2} requires human review. {llmDecision.Reasoning}"
             };
         }
 
