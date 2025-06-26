@@ -90,8 +90,11 @@ public class AgentAlphaIntegrationTests
         
         // Check for new component-based architecture
         Assert.Contains("TaskExecutor", agentSource);
-        Assert.Contains("ConnectionManager", agentSource);
-        Assert.Contains("ToolManager", agentSource);
-        Assert.Contains("ConversationManager", agentSource);
+        Assert.Contains("ITaskExecutor", agentSource);
+        
+        // Check for dependency injection pattern
+        Assert.Contains("AddAgentAlphaServices", agentSource);
+        Assert.Contains("Host.CreateDefaultBuilder", agentSource);
+        Assert.Contains("CommandLineParser", agentSource);
     }
 }
