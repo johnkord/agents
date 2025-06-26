@@ -301,7 +301,7 @@ var assemblies = [
       { "name": "MCPServer.Tools.ShellTools", "rp": "MCPServer_ShellTools.html", "cl": 0, "ucl": 47, "cal": 47, "tl": 85, "cb": 0, "tb": 6, "cm": 0, "fcm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "mfch": [], "hc": [], "metrics": { } },
       { "name": "MCPServer.Tools.SystemTools", "rp": "MCPServer_SystemTools.html", "cl": 71, "ucl": 18, "cal": 89, "tl": 152, "cb": 17, "tb": 20, "cm": 0, "fcm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "mfch": [], "hc": [], "metrics": { } },
       { "name": "MCPServer.Tools.TextTools", "rp": "MCPServer_TextTools.html", "cl": 125, "ucl": 16, "cal": 141, "tl": 217, "cb": 79, "tb": 84, "cm": 0, "fcm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "mfch": [], "hc": [], "metrics": { } },
-      { "name": "TaskCompletionTool", "rp": "MCPServer_TaskCompletionTool.html", "cl": 0, "ucl": 3, "cal": 3, "tl": 13, "cb": 0, "tb": 2, "cm": 0, "fcm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "mfch": [], "hc": [], "metrics": { } },
+      { "name": "TaskCompletionTool", "rp": "MCPServer_TaskCompletionTool.html", "cl": 3, "ucl": 0, "cal": 3, "tl": 13, "cb": 2, "tb": 2, "cm": 0, "fcm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "mfch": [], "hc": [], "metrics": { } },
     ]},
 ];
 

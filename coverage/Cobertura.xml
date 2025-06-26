@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage line-rate="0.21748043235184494" branch-rate="0.23219628964691802" lines-covered="1167" lines-valid="5366" branches-covered="388" branches-valid="1671" complexity="1968" version="0" timestamp="1750899513">
+<coverage line-rate="0.21803950801341782" branch-rate="0.2333931777378815" lines-covered="1170" lines-valid="5366" branches-covered="390" branches-valid="1671" complexity="1968" version="0" timestamp="1750899757">
   <sources>
     <source>/home/runner/work/agents/agents/src/MCPServer/</source>
     <source>/home/runner/work/agents/agents/src/</source>
@@ -8090,7 +8090,7 @@
         </class>
       </classes>
     </package>
-    <package name="MCPServer" line-rate="0.16219900045433894" branch-rate="0.22054380664652568" complexity="721">
+    <package name="MCPServer" line-rate="0.1635620172648796" branch-rate="0.22356495468277945" complexity="721">
       <classes>
         <class name="MCPServer.Configuration.ApiCredentialsConfiguration" filename="/home/runner/work/agents/agents/src/MCPServer/Configuration/ApiCredentialsConfiguration.cs" line-rate="0" branch-rate="1" complexity="4">
           <methods>
@@ -13126,20 +13126,20 @@
             <line number="216" hits="2" branch="false" />
           </lines>
         </class>
-        <class name="TaskCompletionTool" filename="/home/runner/work/agents/agents/src/MCPServer/Tools/TaskCompletionTool.cs" line-rate="0" branch-rate="0" complexity="2">
+        <class name="TaskCompletionTool" filename="/home/runner/work/agents/agents/src/MCPServer/Tools/TaskCompletionTool.cs" line-rate="1" branch-rate="1" complexity="2">
           <methods>
-            <method name="CompleteTask" signature="(System.String)" line-rate="0" branch-rate="0" complexity="2">
+            <method name="CompleteTask" signature="(System.String)" line-rate="1" branch-rate="1" complexity="2">
               <lines>
-                <line number="10" hits="0" branch="true" condition-coverage="0% (0/2)" />
-                <line number="11" hits="0" branch="false" />
-                <line number="12" hits="0" branch="false" />
+                <line number="10" hits="11" branch="true" condition-coverage="100% (2/2)" />
+                <line number="11" hits="11" branch="false" />
+                <line number="12" hits="11" branch="false" />
               </lines>
             </method>
           </methods>
           <lines>
-            <line number="10" hits="0" branch="true" condition-coverage="0% (0/2)" />
-            <line number="11" hits="0" branch="false" />
-            <line number="12" hits="0" branch="false" />
+            <line number="10" hits="11" branch="true" condition-coverage="100% (2/2)" />
+            <line number="11" hits="11" branch="false" />
+            <line number="12" hits="11" branch="false" />
           </lines>
         </class>
       </classes>
