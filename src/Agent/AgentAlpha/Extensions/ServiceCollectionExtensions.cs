@@ -34,7 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITaskExecutor, TaskExecutor>();
         
         // Register OpenAI service
-        services.AddSingleton(provider => new OpenAIResponsesService(configuration.OpenAiApiKey));
+        services.AddSingleton<IOpenAIResponsesService>(provider => new OpenAIResponsesService(configuration.OpenAiApiKey));
         
         return services;
     }
