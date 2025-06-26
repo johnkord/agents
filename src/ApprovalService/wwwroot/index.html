@@ -111,6 +111,21 @@
             cursor: pointer;
             margin-bottom: 20px;
         }
+        .navigation {
+            margin-bottom: 20px;
+        }
+        .nav-link {
+            display: inline-block;
+            padding: 8px 16px;
+            margin-right: 10px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .nav-link:hover {
+            background-color: #0056b3;
+        }
         .loading {
             text-align: center;
             color: #666;
@@ -122,6 +137,11 @@
         <div class="header">
             <h1>🔐 Tool Approval Dashboard</h1>
             <p>Review and approve tool execution requests</p>
+        </div>
+        
+        <div class="navigation">
+            <a href="/" class="nav-link" style="background-color: #6c757d;">Tool Approvals</a>
+            <a href="/sessions.html" class="nav-link">Sessions</a>
         </div>
         
         <button class="refresh-btn" onclick="loadApprovals()">🔄 Refresh</button>

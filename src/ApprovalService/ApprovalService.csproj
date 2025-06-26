@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../MCPServer/MCPServer.csproj" />
+    <ProjectReference Include="../Agent/AgentAlpha/AgentAlpha.csproj" />
   </ItemGroup>
 
 </Project>

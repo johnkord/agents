@@ -11,6 +11,9 @@ builder.Services.AddSwaggerGen();
 // Add approval store
 builder.Services.AddSingleton<IApprovalStore, SqliteApprovalStore>();
 
+// Add session management
+builder.Services.AddSingleton<AgentAlpha.Interfaces.ISessionManager, AgentAlpha.Services.SessionManager>();
+
 // Add CORS for development
 builder.Services.AddCors(options =>
 {
