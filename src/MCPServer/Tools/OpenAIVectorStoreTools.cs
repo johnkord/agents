@@ -2,7 +2,6 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
-using MCPServer.ToolApproval;
 
 namespace MCPServer.Tools;
 
@@ -25,18 +24,7 @@ public class OpenAIVectorStoreTools
         int? expiresAfterDays = null,
         string? metadata = null)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["name"] = name,
-            ["expiresAfterDays"] = expiresAfterDays,
-            ["metadata"] = metadata
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("openai_create_vector_store", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {
@@ -113,18 +101,7 @@ public class OpenAIVectorStoreTools
         string filePath,
         string? purpose = "assistants")
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["vectorStoreId"] = vectorStoreId,
-            ["filePath"] = filePath,
-            ["purpose"] = purpose
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("openai_upload_file_to_vector_store", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {
@@ -207,19 +184,7 @@ public class OpenAIVectorStoreTools
         int maxResults = 5,
         string? assistantInstructions = null)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["vectorStoreId"] = vectorStoreId,
-            ["query"] = query,
-            ["maxResults"] = maxResults,
-            ["assistantInstructions"] = assistantInstructions
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("openai_query_vector_store", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {
@@ -424,16 +389,7 @@ public class OpenAIVectorStoreTools
     [McpServerTool(Name = "openai_list_vector_stores"), Description("List all vector stores in the OpenAI account.")]
     public static string ListVectorStores(int limit = 20)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["limit"] = limit
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("openai_list_vector_stores", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {
@@ -491,16 +447,7 @@ public class OpenAIVectorStoreTools
     [McpServerTool(Name = "openai_delete_vector_store"), Description("Delete a vector store.")]
     public static string DeleteVectorStore(string vectorStoreId)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["vectorStoreId"] = vectorStoreId
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("openai_delete_vector_store", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {

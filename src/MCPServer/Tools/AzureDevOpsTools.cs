@@ -2,7 +2,6 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
-using MCPServer.ToolApproval;
 
 namespace MCPServer.Tools;
 
@@ -26,19 +25,7 @@ public class AzureDevOpsTools
         string repository,
         int pullRequestId)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["organization"] = organization,
-            ["project"] = project,
-            ["repository"] = repository,
-            ["pullRequestId"] = pullRequestId
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("azdo_get_pull_request", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {
@@ -99,20 +86,7 @@ public class AzureDevOpsTools
         int pullRequestId,
         string token)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["organization"] = organization,
-            ["project"] = project,
-            ["repository"] = repository,
-            ["pullRequestId"] = pullRequestId,
-            ["token"] = "***"
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("azdo_get_pull_request_commits", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {
@@ -166,20 +140,7 @@ public class AzureDevOpsTools
         int pullRequestId,
         string token)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["organization"] = organization,
-            ["project"] = project,
-            ["repository"] = repository,
-            ["pullRequestId"] = pullRequestId,
-            ["token"] = "***"
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("azdo_get_pull_request_changes", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {
@@ -249,20 +210,7 @@ public class AzureDevOpsTools
         int pullRequestId,
         string token)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["organization"] = organization,
-            ["project"] = project,
-            ["repository"] = repository,
-            ["pullRequestId"] = pullRequestId,
-            ["token"] = "***"
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("azdo_get_pull_request_threads", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {
@@ -341,21 +289,7 @@ public class AzureDevOpsTools
         int top = 10,
         string token = "")
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["organization"] = organization,
-            ["project"] = project,
-            ["repository"] = repository,
-            ["status"] = status,
-            ["top"] = top,
-            ["token"] = "***"
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("azdo_list_pull_requests", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {
@@ -415,23 +349,7 @@ public class AzureDevOpsTools
         string? filePath = null,
         int? line = null)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["organization"] = organization,
-            ["project"] = project,
-            ["repository"] = repository,
-            ["pullRequestId"] = pullRequestId,
-            ["content"] = content,
-            ["token"] = "***",
-            ["filePath"] = filePath,
-            ["line"] = line
-        };
 
-        var approved = ToolApprovalManager.Instance.EnsureApproved("azdo_post_pull_request_comment", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
 
         try
         {

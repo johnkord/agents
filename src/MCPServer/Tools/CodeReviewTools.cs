@@ -18,22 +18,6 @@ public class CodeReviewTools
         int pullRequestId,
         string? vectorStoreId = null)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["platform"] = platform,
-            ["organization"] = organization,
-            ["project"] = project,
-            ["repository"] = repository,
-            ["pullRequestId"] = pullRequestId,
-            ["vectorStoreId"] = vectorStoreId
-        };
-
-        var approved = ToolApprovalManager.Instance.EnsureApproved("analyze_pull_request_for_review", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
-
         try
         {
             var result = new StringBuilder();
@@ -149,21 +133,6 @@ Provide specific, actionable feedback focusing on:
         string description,
         string? suggestion = null)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["filePath"] = filePath,
-            ["codeSnippet"] = codeSnippet,
-            ["issueType"] = issueType,
-            ["description"] = description,
-            ["suggestion"] = suggestion
-        };
-
-        var approved = ToolApprovalManager.Instance.EnsureApproved("generate_review_comment", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
-
         try
         {
             var result = new StringBuilder();
@@ -216,17 +185,6 @@ Provide specific, actionable feedback focusing on:
     [McpServerTool(Name = "extract_code_patterns"), Description("Extract and analyze code patterns from pull request changes for review insights.")]
     public static string ExtractCodePatterns(string prFilesContent)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["prFilesContent"] = prFilesContent?.Substring(0, Math.Min(200, prFilesContent?.Length ?? 0)) + "..."
-        };
-
-        var approved = ToolApprovalManager.Instance.EnsureApproved("extract_code_patterns", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
-
         try
         {
             var result = new StringBuilder();
