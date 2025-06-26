@@ -26,19 +26,6 @@ public class GitHubTools
         string repo,
         int pullNumber)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["owner"] = owner,
-            ["repo"] = repo,
-            ["pullNumber"] = pullNumber
-        };
-
-        var approved = ToolApprovalManager.Instance.EnsureApproved("github_get_pull_request", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
-
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -95,19 +82,6 @@ public class GitHubTools
         string repo,
         int pullNumber)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["owner"] = owner,
-            ["repo"] = repo,
-            ["pullNumber"] = pullNumber
-        };
-
-        var approved = ToolApprovalManager.Instance.EnsureApproved("github_get_pull_request_files", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
-
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -170,19 +144,6 @@ public class GitHubTools
         string repo,
         int pullNumber)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["owner"] = owner,
-            ["repo"] = repo,
-            ["pullNumber"] = pullNumber
-        };
-
-        var approved = ToolApprovalManager.Instance.EnsureApproved("github_get_pull_request_diff", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
-
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -217,19 +178,6 @@ public class GitHubTools
         string repo,
         int pullNumber)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["owner"] = owner,
-            ["repo"] = repo,
-            ["pullNumber"] = pullNumber
-        };
-
-        var approved = ToolApprovalManager.Instance.EnsureApproved("github_get_pull_request_comments", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
-
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -292,21 +240,6 @@ public class GitHubTools
         int page = 1,
         int perPage = 10)
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["owner"] = owner,
-            ["repo"] = repo,
-            ["state"] = state,
-            ["page"] = page,
-            ["perPage"] = perPage
-        };
-
-        var approved = ToolApprovalManager.Instance.EnsureApproved("github_list_pull_requests", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
-
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -371,23 +304,6 @@ public class GitHubTools
         int? line = null,
         string? side = "RIGHT")
     {
-        var args = new Dictionary<string, object?>
-        {
-            ["owner"] = owner,
-            ["repo"] = repo,
-            ["pullNumber"] = pullNumber,
-            ["body"] = body,
-            ["path"] = path,
-            ["line"] = line,
-            ["side"] = side
-        };
-
-        var approved = ToolApprovalManager.Instance.EnsureApproved("github_post_pull_request_comment", args);
-        if (!approved)
-        {
-            return "Error: Tool execution was denied by approval system.";
-        }
-
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
