@@ -204,7 +204,7 @@
             container.innerHTML = '';
             
             try {
-                const response = await fetch('/api/sessions');
+                const response = await fetch('http://localhost:5001/api/sessions');
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -274,7 +274,7 @@
             // Load session details if not already loaded
             if (!loadedSessions[sessionId]) {
                 try {
-                    const response = await fetch(`/api/sessions/${sessionId}`);
+                    const response = await fetch(`http://localhost:5001/api/sessions/${sessionId}`);
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
