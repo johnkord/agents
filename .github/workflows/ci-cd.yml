@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   build-and-test:
@@ -31,22 +31,25 @@ jobs:
       run: dotnet test --no-build --configuration Release --verbosity normal
     
     - name: Run integration tests with OpenAI
-      if: ${{ secrets.OPENAI_AGENTS_1 != '' }}
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_AGENTS_1 }}
       run: |
-        echo "Starting MCP Server..."
-        cd src/MCPServer
-        timeout 30s dotnet run --configuration Release &
-        SERVER_PID=$!
-        sleep 5
-        
-        echo "Running OpenAI integration test..."
-        cd ../../../
-        dotnet run --project tests/MCPMathTools.AI.Tests --configuration Release
-        
-        echo "Stopping MCP Server..."
-        kill $SERVER_PID || true
+        if [ -n "$OPENAI_API_KEY" ]; then
+          echo "Starting MCP Server..."
+          cd src/MCPServer
+          timeout 30s dotnet run --configuration Release &
+          SERVER_PID=$!
+          sleep 5
+          
+          echo "Running OpenAI integration test..."
+          cd ../../../
+          dotnet run --project tests/MCPMathTools.AI.Tests --configuration Release
+          
+          echo "Stopping MCP Server..."
+          kill $SERVER_PID || true
+        else
+          echo "Skipping OpenAI integration tests - OPENAI_API_KEY not available"
+        fi
     
     - name: Publish test results
       uses: dorny/test-reporter@v1
@@ -59,7 +62,6 @@ jobs:
   ai-validation:
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: ${{ secrets.OPENAI_AGENTS_1 != '' }}
     
     steps:
     - name: Checkout code
@@ -82,6 +84,10 @@ jobs:
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_AGENTS_1 }}
       run: |
-        echo "Running AI validation against MCP math tools..."
-        cd tests/MCPMathTools.AI.Tests
-        dotnet run --configuration Release
+        if [ -n "$OPENAI_API_KEY" ]; then
+          echo "Running AI validation against MCP math tools..."
+          cd tests/MCPMathTools.AI.Tests
+          dotnet run --configuration Release
+        else
+          echo "Skipping AI validation tests - OPENAI_API_KEY not available"
+        fi
