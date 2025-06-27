@@ -1,4 +1,4 @@
-name: MCP Math Tools CI/CD
+name: Agents CI/CD
 
 on:
   push:
@@ -43,7 +43,7 @@ jobs:
         
         echo "Running OpenAI integration test..."
         cd ../../../
-        dotnet run --project tests/MCPMathTools.OpenAI.Tests --configuration Release
+        dotnet run --project tests/MCPMathTools.AI.Tests --configuration Release
         
         echo "Stopping MCP Server..."
         kill $SERVER_PID || true
