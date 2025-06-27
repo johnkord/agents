@@ -364,3 +364,7 @@ k8s-temp/
 helm-temp/
 
 env.sh
+
+# Test scripts
+test-shared-database.sh
+verify-solution.sh

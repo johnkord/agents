@@ -72,8 +72,22 @@ dotnet run "What time is it?"
 
 ### Data Storage
 - **Database**: SQLite (`agent_sessions.db`)
-- **Location**: Same directory as the AgentAlpha executable
+- **Location**: Shared data directory accessible by both AgentAlpha and ApprovalService
+- **Configuration**: Controlled by `AGENT_SESSION_DB_PATH` environment variable
+- **Default Path**: `./data/agent_sessions.db` (shared location)
 - **Schema**: Sessions table with JSON conversation state
+
+### Database Sharing
+The session database is shared between AgentAlpha and ApprovalService to ensure both services can read and write session data consistently. This is critical for deployments where the services run independently:
+
+- **AgentAlpha**: Writes session data during conversation execution
+- **ApprovalService**: Reads session data to provide session management APIs
+- **Shared Storage**: Both services must have access to the same database file
+
+#### Environment Configuration
+- `AGENT_SESSION_DB_PATH`: Path to the shared session database file
+- Default: `./data/agent_sessions.db` (shared location, not service-specific)
+- Example: `/shared/data/agent_sessions.db` for container deployments
 
 ### Session Model
 ```csharp
@@ -153,6 +167,55 @@ Sessions are ideal for:
 - No encryption of session data
 - Database file should be protected with file system permissions
 
+## Deployment Considerations
+
+### Container Deployments
+When deploying AgentAlpha and ApprovalService as separate containers, ensure:
+
+1. **Shared Volume**: Mount a shared volume to both containers at `/app/data`
+2. **Environment Variables**: Set `AGENT_SESSION_DB_PATH=/app/data/agent_sessions.db` for both services
+3. **File Permissions**: Ensure both containers can read/write to the shared directory
+
+#### Docker Compose Example
+```yaml
+version: '3.8'
+services:
+  agent-alpha:
+    image: agent-alpha:latest
+    environment:
+      - AGENT_SESSION_DB_PATH=/app/data/agent_sessions.db
+    volumes:
+      - shared_data:/app/data
+  
+  approval-service:
+    image: approval-service:latest
+    environment:
+      - AGENT_SESSION_DB_PATH=/app/data/agent_sessions.db
+    volumes:
+      - shared_data:/app/data
+
+volumes:
+  shared_data:
+```
+
+### Kubernetes Deployments
+Use a ReadWriteMany persistent volume claim to share the database:
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+```
+
+Mount this PVC to both AgentAlpha and ApprovalService pods at `/app/data`.
+
 ## Future Enhancements
 
 ### Planned Features
@@ -179,9 +242,16 @@ Sessions are ideal for:
 - Ensure proper file permissions
 
 **Database Permission Errors**
-- Check write permissions in the application directory
+- Check write permissions in the shared data directory
 - Ensure the database file is not locked by another process
 - Verify SQLite is properly installed
+- Confirm both AgentAlpha and ApprovalService have access to the shared directory
+
+**Session Database Sharing Issues**
+- Verify `AGENT_SESSION_DB_PATH` environment variable is set consistently for both services
+- Check that both services are pointing to the same database file path
+- Ensure shared storage is properly mounted in container deployments
+- Confirm persistent volume claims are configured for ReadWriteMany access
 
 **Session State Corruption**
 - Session will gracefully fall back to new conversation

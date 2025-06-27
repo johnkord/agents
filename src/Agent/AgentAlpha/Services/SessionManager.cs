@@ -20,10 +20,10 @@ public class SessionManager : ISessionManager
     {
         _logger = logger;
         
-        // Use env var, explicit parameter, or fallback to relative path
+        // Use env var, explicit parameter, or fallback to shared data directory
         var dbPath = Environment.GetEnvironmentVariable("AGENT_SESSION_DB_PATH") 
                     ?? databasePath 
-                    ?? "./app/data/agent_sessions.db";   // was "/app/data/agent_sessions.db"
+                    ?? "./data/agent_sessions.db";   // Shared location, not app-specific
                     
         // Ensure directory exists
         var directory = Path.GetDirectoryName(dbPath);

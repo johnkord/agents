@@ -25,8 +25,10 @@ FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
 
-# Create a non-root user
-RUN adduser --disabled-password --gecos '' appuser && chown -R appuser /app
+# Create a non-root user and shared data directory
+RUN adduser --disabled-password --gecos '' appuser && \
+    mkdir -p /app/data && \
+    chown -R appuser /app
 USER appuser
 
 ENTRYPOINT ["dotnet", "ApprovalService.dll"]

@@ -45,6 +45,8 @@ spec:
               value: "http://+:5000"
             - name: REST_BASE_URL
               value: "http://{{ include "agents.fullname" . }}-approval-service:5000"
+            - name: AGENT_SESSION_DB_PATH
+              value: "/app/data/agent_sessions.db"
           envFrom:
             - configMapRef:
                 name: {{ include "agents.fullname" . }}-config
@@ -64,16 +66,16 @@ spec:
             periodSeconds: 5
           resources:
             {{- toYaml .Values.approvalService.resources | nindent 12 }}
-          {{- if .Values.approvalService.persistence.enabled }}
+          {{- if or .Values.approvalService.persistence.enabled .Values.agentAlpha.persistence.enabled }}
           volumeMounts:
-            - name: approval-data
+            - name: shared-data
               mountPath: /app/data
           {{- end }}
-      {{- if .Values.approvalService.persistence.enabled }}
+      {{- if or .Values.approvalService.persistence.enabled .Values.agentAlpha.persistence.enabled }}
       volumes:
-        - name: approval-data
+        - name: shared-data
           persistentVolumeClaim:
-            claimName: {{ include "agents.fullname" . }}-approval-data
+            claimName: {{ include "agents.fullname" . }}-shared-data
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
@@ -106,24 +108,4 @@ spec:
   selector:
     {{- include "agents.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: approval-service
-{{- if .Values.approvalService.persistence.enabled }}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ include "agents.fullname" . }}-approval-data
-  namespace: {{ .Values.global.namespace }}
-  labels:
-    {{- include "agents.labels" . | nindent 4 }}
-    app.kubernetes.io/component: approval-service
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ .Values.approvalService.persistence.size }}
-  {{- if .Values.approvalService.persistence.storageClass }}
-  storageClassName: {{ .Values.approvalService.persistence.storageClass }}
-  {{- end }}
-{{- end }}
 {{- end }}
