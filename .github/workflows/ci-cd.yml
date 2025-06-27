@@ -35,18 +35,8 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_AGENTS_1 }}
       run: |
         if [ -n "$OPENAI_API_KEY" ]; then
-          echo "Starting MCP Server..."
-          cd src/MCPServer
-          timeout 30s dotnet run --configuration Release &
-          SERVER_PID=$!
-          sleep 5
-          
           echo "Running OpenAI integration test..."
-          cd ../../
           dotnet run --project tests/MCPMathTools.AI.Tests --configuration Release
-          
-          echo "Stopping MCP Server..."
-          kill $SERVER_PID || true
         else
           echo "Skipping OpenAI integration tests - OPENAI_API_KEY not available"
         fi
@@ -86,8 +76,7 @@ jobs:
       run: |
         if [ -n "$OPENAI_API_KEY" ]; then
           echo "Running AI validation against MCP math tools..."
-          cd tests/MCPMathTools.AI.Tests
-          dotnet run --configuration Release
+          dotnet run --project tests/MCPMathTools.AI.Tests --configuration Release
         else
           echo "Skipping AI validation tests - OPENAI_API_KEY not available"
         fi

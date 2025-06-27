@@ -33,11 +33,37 @@ public class Program
         try
         {
             // Connect to MCP Server
+            // Try to find the MCP Server project file using common locations
+            var possiblePaths = new[]
+            {
+                "../../src/MCPServer/MCPServer.csproj", // From tests/MCPMathTools.AI.Tests
+                "../../../src/MCPServer/MCPServer.csproj", // From bin/Release/net8.0 when running built exe
+                "src/MCPServer/MCPServer.csproj" // From repository root
+            };
+            
+            string mcpServerPath = "";
+            foreach (var path in possiblePaths)
+            {
+                var fullPath = Path.GetFullPath(path);
+                if (File.Exists(fullPath))
+                {
+                    mcpServerPath = fullPath;
+                    break;
+                }
+            }
+            
+            if (string.IsNullOrEmpty(mcpServerPath))
+            {
+                throw new FileNotFoundException("Could not find MCPServer.csproj in any of the expected locations");
+            }
+            
+            Console.WriteLine($"Using MCP Server path: {mcpServerPath}");
+            
             var clientTransport = new StdioClientTransport(new()
             {
                 Name = "AI Test Math MCP Server",
                 Command = "dotnet",
-                Arguments = ["run", "--project", "../../src/MCPServer/MCPServer.csproj"]
+                Arguments = ["run", "--project", mcpServerPath]
             });
 
             await using var mcpClient = await McpClientFactory.CreateAsync(clientTransport, loggerFactory: loggerFactory);
