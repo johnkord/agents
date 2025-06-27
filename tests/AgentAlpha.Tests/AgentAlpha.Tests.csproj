@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\MCPClient\MCPClient.csproj" />
     <ProjectReference Include="..\..\src\Common\Common.csproj" />
     <ProjectReference Include="..\..\src\Agent\AgentAlpha\AgentAlpha.csproj" />
+    <ProjectReference Include="..\..\src\SessionService\SessionService.csproj" />
   </ItemGroup>
 
 </Project>

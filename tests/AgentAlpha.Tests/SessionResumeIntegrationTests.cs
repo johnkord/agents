@@ -1,7 +1,7 @@
 using Xunit;
 using Microsoft.Extensions.Logging;
-using AgentAlpha.Services;
-using AgentAlpha.Models;
+using SessionService.Services;
+using Common.Models.Session;
 using System.IO;
 
 namespace AgentAlpha.Tests;

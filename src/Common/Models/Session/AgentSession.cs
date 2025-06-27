@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace AgentAlpha.Models;
+namespace Common.Models.Session;
 
 /// <summary>
 /// Represents a persistent agent session that can be saved and restored

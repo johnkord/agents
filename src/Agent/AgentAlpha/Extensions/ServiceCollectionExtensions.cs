@@ -4,6 +4,8 @@ using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Services;
 using OpenAIIntegration;
+using Common.Interfaces.Session;
+using Common.Services.Session;
 
 namespace AgentAlpha.Extensions;
 
@@ -25,7 +27,23 @@ public static class ServiceCollectionExtensions
         
         // Register core services
         services.AddSingleton<IConnectionManager, ConnectionManager>();
-        services.AddSingleton<ISessionManager, SessionManager>();
+        
+        // Register HTTP client for Session Service
+        services.AddHttpClient();
+        services.AddSingleton<ISessionManager>(provider =>
+        {
+            var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
+            var logger = provider.GetRequiredService<ILogger<SessionServiceClient>>();
+            var httpClient = httpClientFactory.CreateClient();
+            var sessionClient = new SessionServiceClient(httpClient, logger);
+            
+            // Configure Session Service URL from environment or default
+            var sessionServiceUrl = Environment.GetEnvironmentVariable("SESSION_SERVICE_URL") ?? "http://localhost:5001";
+            sessionClient.SetBaseUrl(sessionServiceUrl);
+            
+            return sessionClient;
+        });
+        
         services.AddSingleton<ISessionActivityLogger, SessionActivityLogger>();
         services.AddSingleton<IToolManager, ToolManager>();
         services.AddSingleton<IPlanningService, PlanningService>();

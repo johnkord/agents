@@ -1,6 +1,4 @@
-using ModelContextProtocol.Client;
-
-namespace AgentAlpha.Models;
+namespace Common.Models.Session;
 
 /// <summary>
 /// Represents a complete execution plan for a task

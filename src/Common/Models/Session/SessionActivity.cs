@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace AgentAlpha.Models;
+namespace Common.Models.Session;
 
 /// <summary>
 /// Represents a single activity/event in an agent session for audit trail purposes

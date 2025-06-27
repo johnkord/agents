@@ -1,6 +1,6 @@
 using Xunit;
-using AgentAlpha.Models;
-using AgentAlpha.Services;
+using Common.Models.Session;
+using SessionService.Services;
 using Microsoft.Extensions.Logging;
 using System.IO;
 

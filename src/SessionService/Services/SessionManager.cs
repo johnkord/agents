@@ -1,12 +1,9 @@
-using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
-using System.Text.Json;
-using AgentAlpha.Interfaces;
-using AgentAlpha.Models;
-using System;
-using System.IO;
+using Microsoft.Extensions.Logging;
+using Common.Interfaces.Session;
+using Common.Models.Session;
 
-namespace AgentAlpha.Services;
+namespace SessionService.Services;
 
 /// <summary>
 /// SQLite-based implementation of session management
@@ -21,9 +18,9 @@ public class SessionManager : ISessionManager
         _logger = logger;
         
         // Use env var, explicit parameter, or fallback to shared data directory
-        var dbPath = Environment.GetEnvironmentVariable("AGENT_SESSION_DB_PATH") 
+        var dbPath = Environment.GetEnvironmentVariable("SESSION_SERVICE_DB_PATH") 
                     ?? databasePath 
-                    ?? "./data/agent_sessions.db";   // Shared location, not app-specific
+                    ?? "./data/sessions.db";   // Session service database
                     
         // Ensure directory exists
         var directory = Path.GetDirectoryName(dbPath);
@@ -57,9 +54,6 @@ public class SessionManager : ISessionManager
             
             CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON AgentSessions(CreatedAt);
             CREATE INDEX IF NOT EXISTS idx_sessions_status ON AgentSessions(Status);
-            
-            -- Add CurrentPlan column to existing tables if it doesn't exist
-            PRAGMA table_info(AgentSessions);
             """;
         cmd.ExecuteNonQuery();
         
