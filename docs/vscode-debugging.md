@@ -18,6 +18,8 @@ This guide explains how to use the VS Code debugging configurations and transpor
 | **Launch AgentAlpha** | Starts AgentAlpha in test mode | Quick connection testing |
 | **Launch AgentAlpha (Interactive)** | Starts AgentAlpha in interactive mode | Full agent testing with OpenAI |
 | **Launch AgentAlpha with SSE** | Starts AgentAlpha using SSE transport | Testing SSE client connectivity |
+| **ApprovalService** | Starts the Approval Service on port 5000 | Tool approval workflow debugging |
+| **SessionService** | Starts the Session Service on port 5001 | Session management debugging |
 
 ### Build Tasks
 
@@ -26,6 +28,8 @@ Use Ctrl+Shift+P → "Tasks: Run Task" to access:
 - **build-mcp-server**: Build MCP Server only
 - **build-agent-alpha**: Build AgentAlpha only
 - **build-mcp-client**: Build MCP Client only
+- **build-approval-service**: Build Approval Service only
+- **build-session-service**: Build Session Service only
 - **clean**: Clean all build artifacts
 - **restore**: Restore NuGet packages
 - **test**: Run all tests
