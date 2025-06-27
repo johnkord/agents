@@ -35,7 +35,12 @@ app.UseCors();
 app.UseAuthorization();
 app.MapControllers();
 
+// Add a simple web UI for session management
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 Console.WriteLine("Session Service starting on http://localhost:5001");
 Console.WriteLine("Swagger UI available at http://localhost:5001/swagger");
+Console.WriteLine("Session Management UI available at http://localhost:5001");
 
 app.Run("http://localhost:5001");

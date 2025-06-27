@@ -390,5 +390,17 @@
             },
             "envFile": "${workspaceFolder}/.env"
         }
+    ],
+    "compounds": [
+        {
+            "name": "Launch All Services",
+            "configurations": [
+                "SessionService",
+                "ApprovalService", 
+                "MCP Server (SSE Mode)"
+            ],
+            "stopAll": true,
+            "preLaunchTask": "build:all"
+        }
     ]
 }
