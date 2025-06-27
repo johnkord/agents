@@ -42,7 +42,7 @@ jobs:
           sleep 5
           
           echo "Running OpenAI integration test..."
-          cd ../../../
+          cd ../../
           dotnet run --project tests/MCPMathTools.AI.Tests --configuration Release
           
           echo "Stopping MCP Server..."
