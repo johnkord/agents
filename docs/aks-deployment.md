@@ -11,7 +11,7 @@ This guide provides step-by-step instructions for deploying the Agents MCP syste
 - Azure subscription with appropriate permissions
 - Azure Kubernetes Service (AKS) cluster
 - Azure Container Registry (ACR)
-- Domain name for external access (optional)
+- Domain name for external access (**optional** - can deploy for internal access only)
 
 ### 2. Local Tools
 
@@ -93,8 +93,29 @@ export REGISTRY="$ACR_NAME.azurecr.io"
 
 #### Option A: Deploy with Helm (Recommended)
 
+**For Internal Access Only (No Domain Required):**
 ```bash
-# Deploy with Helm
+# Deploy for internal access with port-forwarding
+./scripts/helm-deploy.sh $REGISTRY internal your-openai-api-key
+
+# Check deployment status
+kubectl get pods -n agents
+kubectl get services -n agents
+
+# Access applications via port forwarding
+kubectl port-forward -n agents svc/agents-approval-service 8080:5000 &
+kubectl port-forward -n agents svc/agents-session-service 8081:5001 &
+kubectl port-forward -n agents svc/agents-mcpserver 8082:3000 &
+
+echo "Applications available at:"
+echo "  ApprovalService Dashboard: http://localhost:8080/"
+echo "  Session Service API: http://localhost:8081/api/sessions"
+echo "  MCP Server: http://localhost:8082/"
+```
+
+**For External Access with Domain:**
+```bash
+# Deploy with external domain access
 ./scripts/helm-deploy.sh $REGISTRY agents.yourdomain.com your-openai-api-key
 
 # Check deployment status
@@ -119,7 +140,9 @@ kubectl create secret generic agents-secrets \
 ./scripts/kustomize-deploy.sh $REGISTRY agents.yourdomain.com
 ```
 
-### Step 5: Configure DNS and SSL
+### Step 5: Configure DNS and SSL (Optional - External Access Only)
+
+> **Note:** This step is only required if you deployed with external domain access. Skip this section if using internal access with port-forwarding.
 
 #### DNS Configuration
 
@@ -185,8 +208,14 @@ kubectl logs -f deployment/agents-mcpserver -n agents
 # ApprovalService logs
 kubectl logs -f deployment/agents-approval-service -n agents
 
+# SessionService logs
+kubectl logs -f deployment/agents-session-service -n agents
+
 # Agent job logs
 kubectl logs job/agents-agent-alpha-job -n agents
+
+# All service logs
+kubectl logs -f -l app.kubernetes.io/name=agents -n agents --all-containers=true
 ```
 
 ## Configuration Options
@@ -215,20 +244,41 @@ approvalService:
     enabled: true
     size: 2Gi
 
+sessionService:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
 agentAlpha:
   type: cronjob
   cronjob:
     schedule: "0 */12 * * *"  # Every 12 hours
 
+# For internal access only (no domain required)
 ingress:
   enabled: true
-  hosts:
-    - host: agents.mydomain.com
-      paths:
-        - path: /
-          service:
-            name: approval-service
-            port: 5000
+  internalOnly: true
+
+# OR for external access with domain
+# ingress:
+#   enabled: true
+#   internalOnly: false
+#   hosts:
+#     - host: agents.mydomain.com
+#       paths:
+#         - path: /
+#           service:
+#             name: approval-service
+#             port: 5000
+#         - path: /api/sessions
+#           service:
+#             name: session-service
+#             port: 5001
 ```
 
 Deploy with custom values:
@@ -272,6 +322,9 @@ kubectl scale deployment agents-mcpserver --replicas=3 -n agents
 
 # Scale ApprovalService
 kubectl scale deployment agents-approval-service --replicas=2 -n agents
+
+# Scale SessionService
+kubectl scale deployment agents-session-service --replicas=2 -n agents
 ```
 
 ### Updates

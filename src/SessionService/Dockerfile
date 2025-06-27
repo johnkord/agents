@@ -28,23 +28,17 @@ RUN dotnet publish "SessionService.csproj" -c Release -o /app/publish /p:UseAppH
 FROM base AS final
 WORKDIR /app
 
-# Create data directory with proper permissions
-RUN mkdir -p /app/data && chown -R app:app /app/data
-
-# Create app user
-RUN groupadd -r app && useradd -r -g app app
-
 # Copy published app
 COPY --from=publish /app/publish .
 
 # Copy static files
 COPY --from=build /src/src/SessionService/wwwroot ./wwwroot/
 
-# Set ownership
-RUN chown -R app:app /app
-
-# Switch to non-root user
-USER app
+# Create a non-root user and shared data directory
+RUN adduser --disabled-password --gecos '' appuser && \
+    mkdir -p /app/data && \
+    chown -R appuser /app
+USER appuser
 
 # Set environment variables
 ENV ASPNETCORE_URLS=http://+:5001
