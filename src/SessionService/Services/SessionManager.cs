@@ -18,9 +18,9 @@ public class SessionManager : ISessionManager
         _logger = logger;
         
         // Use env var, explicit parameter, or fallback to shared data directory
-        var dbPath = Environment.GetEnvironmentVariable("SESSION_SERVICE_DB_PATH") 
+        var dbPath = Environment.GetEnvironmentVariable("AGENT_SESSION_DB_PATH") 
                     ?? databasePath 
-                    ?? "./data/sessions.db";   // Session service database
+                    ?? "./data/agent_sessions.db";   // Shared agent sessions database
                     
         // Ensure directory exists
         var directory = Path.GetDirectoryName(dbPath);
@@ -115,8 +115,8 @@ public class SessionManager : ISessionManager
             {
                 SessionId = reader.GetString(0),
                 Name = reader.GetString(1),
-                CreatedAt = DateTime.Parse(reader.GetString(2)),
-                LastUpdatedAt = DateTime.Parse(reader.GetString(3)),
+                CreatedAt = DateTime.Parse(reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
+                LastUpdatedAt = DateTime.Parse(reader.GetString(3), null, System.Globalization.DateTimeStyles.RoundtripKind),
                 ConversationState = reader.GetString(4),
                 ConfigurationSnapshot = reader.GetString(5),
                 Metadata = reader.GetString(6),
@@ -152,8 +152,8 @@ public class SessionManager : ISessionManager
             {
                 SessionId = reader.GetString(0),
                 Name = reader.GetString(1),
-                CreatedAt = DateTime.Parse(reader.GetString(2)),
-                LastUpdatedAt = DateTime.Parse(reader.GetString(3)),
+                CreatedAt = DateTime.Parse(reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
+                LastUpdatedAt = DateTime.Parse(reader.GetString(3), null, System.Globalization.DateTimeStyles.RoundtripKind),
                 ConversationState = reader.GetString(4),
                 ConfigurationSnapshot = reader.GetString(5),
                 Metadata = reader.GetString(6),
@@ -216,8 +216,8 @@ public class SessionManager : ISessionManager
             {
                 SessionId = reader.GetString(0),
                 Name = reader.GetString(1),
-                CreatedAt = DateTime.Parse(reader.GetString(2)),
-                LastUpdatedAt = DateTime.Parse(reader.GetString(3)),
+                CreatedAt = DateTime.Parse(reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
+                LastUpdatedAt = DateTime.Parse(reader.GetString(3), null, System.Globalization.DateTimeStyles.RoundtripKind),
                 ConversationState = reader.GetString(4),
                 ConfigurationSnapshot = reader.GetString(5),
                 Metadata = reader.GetString(6),
