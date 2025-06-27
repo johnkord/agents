@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Management Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .refresh-btn, .new-session-btn {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .refresh-btn:hover, .new-session-btn:hover {
+            background-color: #0056b3;
+        }
+        .new-session-btn {
+            background-color: #28a745;
+        }
+        .new-session-btn:hover {
+            background-color: #1e7e34;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .session {
+            border: 1px solid #ddd;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .session:hover {
+            background-color: #f0f0f0;
+        }
+        .session.active {
+            border-left: 4px solid #28a745;
+        }
+        .session.completed {
+            border-left: 4px solid #007bff;
+        }
+        .session.archived {
+            border-left: 4px solid #6c757d;
+        }
+        .session.error {
+            border-left: 4px solid #dc3545;
+        }
+        .session-name {
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .session-id {
+            font-family: monospace;
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 8px;
+        }
+        .session-metadata {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+        .metadata-item {
+            font-size: 0.9em;
+            color: #555;
+        }
+        .metadata-label {
+            font-weight: bold;
+        }
+        .activity-count {
+            background-color: #007bff;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+        }
+        .session-details {
+            display: none;
+            margin-top: 15px;
+            border-top: 1px solid #ddd;
+            padding-top: 15px;
+        }
+        .activity {
+            margin: 8px 0;
+            padding: 10px;
+            background-color: white;
+            border-radius: 4px;
+            border-left: 3px solid #ddd;
+        }
+        .activity.success {
+            border-left-color: #28a745;
+        }
+        .activity.error {
+            border-left-color: #dc3545;
+        }
+        .activity-header {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .activity-timestamp {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .activity-description {
+            margin-bottom: 5px;
+        }
+        .activity-error {
+            color: #dc3545;
+            font-size: 0.9em;
+        }
+        .no-sessions {
+            text-align: center;
+            color: #666;
+            padding: 40px;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            text-align: center;
+            padding: 20px;
+        }
+        .session-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .btn-archive {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-delete {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn:hover {
+            opacity: 0.8;
+        }
+        .new-session-form {
+            display: none;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .form-actions {
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Session Management Dashboard</h1>
+        </div>
+        
+        <div class="controls">
+            <button class="refresh-btn" onclick="loadSessions()">🔄 Refresh Sessions</button>
+            <button class="new-session-btn" onclick="toggleNewSessionForm()">+ New Session</button>
+        </div>
+
+        <div class="new-session-form" id="new-session-form">
+            <div class="form-group">
+                <label for="session-name">Session Name:</label>
+                <input type="text" id="session-name" placeholder="Enter session name (optional)">
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="createSession()">Create Session</button>
+                <button class="btn btn-secondary" onclick="toggleNewSessionForm()">Cancel</button>
+            </div>
+        </div>
+        
+        <div id="loading" class="loading">Loading sessions...</div>
+        <div id="sessions-container"></div>
+    </div>
+
+    <script>
+        let loadedSessions = {};
+
+        async function loadSessions() {
+            const container = document.getElementById('sessions-container');
+            const loading = document.getElementById('loading');
+            
+            loading.style.display = 'block';
+            container.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/sessions');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const sessions = await response.json();
+                loading.style.display = 'none';
+                
+                if (!sessions || sessions.length === 0) {
+                    container.innerHTML = '<div class="no-sessions">No sessions found</div>';
+                    return;
+                }
+                
+                sessions.forEach(session => {
+                    const sessionElement = createSessionElement(session);
+                    container.appendChild(sessionElement);
+                });
+                
+            } catch (error) {
+                loading.style.display = 'none';
+                container.innerHTML = `<div class="error">Failed to load sessions: ${error.message}</div>`;
+            }
+        }
+        
+        function createSessionElement(session) {
+            const div = document.createElement('div');
+            div.className = `session ${session.status.toLowerCase()}`;
+            div.onclick = () => toggleSessionDetails(session.sessionId, div);
+            
+            const createdAt = new Date(session.createdAt).toLocaleString();
+            const lastUpdatedAt = new Date(session.lastUpdatedAt).toLocaleString();
+            
+            div.innerHTML = `
+                <div class="session-name">${session.name || 'Unnamed Session'}</div>
+                <div class="session-id">ID: ${session.sessionId}</div>
+                <div class="session-metadata">
+                    <div class="metadata-item">
+                        <span class="metadata-label">Status:</span> ${session.status}
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Created:</span> ${createdAt}
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Last Updated:</span> ${lastUpdatedAt}
+                    </div>
+                    <div class="metadata-item">
+                        <span class="activity-count">${session.activityCount} activities</span>
+                    </div>
+                </div>
+                <div class="session-actions" onclick="event.stopPropagation()">
+                    <button class="btn btn-archive" onclick="archiveSession('${session.sessionId}')">Archive</button>
+                    <button class="btn btn-delete" onclick="deleteSession('${session.sessionId}')">Delete</button>
+                </div>
+                <div class="session-details" id="details-${session.sessionId}">
+                    <div class="loading">Loading session details...</div>
+                </div>
+            `;
+            
+            return div;
+        }
+        
+        async function toggleSessionDetails(sessionId, sessionElement) {
+            const detailsDiv = document.getElementById(`details-${sessionId}`);
+            
+            if (detailsDiv.style.display === 'block') {
+                detailsDiv.style.display = 'none';
+                return;
+            }
+            
+            detailsDiv.style.display = 'block';
+            
+            // Load session details if not already loaded
+            if (!loadedSessions[sessionId]) {
+                try {
+                    const response = await fetch(`/api/sessions/${sessionId}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const sessionDetails = await response.json();
+                    loadedSessions[sessionId] = sessionDetails;
+                    
+                    displaySessionDetails(sessionId, sessionDetails);
+                    
+                } catch (error) {
+                    detailsDiv.innerHTML = `<div class="error">Failed to load session details: ${error.message}</div>`;
+                }
+            } else {
+                displaySessionDetails(sessionId, loadedSessions[sessionId]);
+            }
+        }
+        
+        function displaySessionDetails(sessionId, sessionDetails) {
+            const detailsDiv = document.getElementById(`details-${sessionId}`);
+            
+            if (!sessionDetails.activities || sessionDetails.activities.length === 0) {
+                detailsDiv.innerHTML = '<div class="no-sessions">No activities found for this session</div>';
+                return;
+            }
+            
+            let activitiesHtml = '<h3>Activity Log:</h3>';
+            
+            sessionDetails.activities.forEach(activity => {
+                const timestamp = new Date(activity.timestamp).toLocaleString();
+                const statusClass = activity.success ? 'success' : 'error';
+                
+                activitiesHtml += `
+                    <div class="activity ${statusClass}">
+                        <div class="activity-header">${activity.activityType}</div>
+                        <div class="activity-timestamp">${timestamp}</div>
+                        <div class="activity-description">${activity.description}</div>
+                        ${activity.durationMs ? `<div class="activity-duration">Duration: ${activity.durationMs}ms</div>` : ''}
+                        ${activity.errorMessage ? `<div class="activity-error">Error: ${activity.errorMessage}</div>` : ''}
+                    </div>
+                `;
+            });
+            
+            detailsDiv.innerHTML = activitiesHtml;
+        }
+
+        function toggleNewSessionForm() {
+            const form = document.getElementById('new-session-form');
+            form.style.display = form.style.display === 'block' ? 'none' : 'block';
+            if (form.style.display === 'block') {
+                document.getElementById('session-name').focus();
+            }
+        }
+
+        async function createSession() {
+            const name = document.getElementById('session-name').value.trim();
+            
+            try {
+                const response = await fetch('/api/sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: name || null })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                // Clear form and hide it
+                document.getElementById('session-name').value = '';
+                toggleNewSessionForm();
+                
+                // Reload sessions
+                await loadSessions();
+                
+            } catch (error) {
+                alert(`Failed to create session: ${error.message}`);
+            }
+        }
+
+        async function archiveSession(sessionId) {
+            if (!confirm('Are you sure you want to archive this session?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}/archive`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                // Reload sessions
+                await loadSessions();
+                
+            } catch (error) {
+                alert(`Failed to archive session: ${error.message}`);
+            }
+        }
+
+        async function deleteSession(sessionId) {
+            if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                // Reload sessions
+                await loadSessions();
+                
+            } catch (error) {
+                alert(`Failed to delete session: ${error.message}`);
+            }
+        }
+        
+        // Load sessions on page load
+        loadSessions();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadSessions, 30000);
+    </script>
+</body>
+</html>
