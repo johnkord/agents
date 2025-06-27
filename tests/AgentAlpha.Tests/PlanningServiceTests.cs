@@ -5,6 +5,7 @@ using AgentAlpha.Models;
 using AgentAlpha.Configuration;
 using ModelContextProtocol.Client;
 using OpenAIIntegration;
+using Common.Models.Session;
 using System.Text.Json;
 
 namespace AgentAlpha.Tests;

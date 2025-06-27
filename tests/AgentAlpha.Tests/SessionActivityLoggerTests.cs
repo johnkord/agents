@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using AgentAlpha.Services;
 using AgentAlpha.Models;
 using AgentAlpha.Configuration;
+using SessionService.Services;
+using Common.Models.Session;
 using System.Text.Json;
 
 namespace AgentAlpha.Tests;
