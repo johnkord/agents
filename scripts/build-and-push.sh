@@ -38,6 +38,12 @@ docker build -f "$ROOT_DIR/src/Agent/AgentAlpha/Dockerfile" -t "$REGISTRY/agent-
 echo "Pushing AgentAlpha..."
 docker push "$REGISTRY/agent-alpha:latest"
 
+# Build and push SessionService
+echo "Building SessionService..."
+docker build -f "$ROOT_DIR/src/SessionService/Dockerfile" -t "$REGISTRY/session-service:latest" "$ROOT_DIR"
+echo "Pushing SessionService..."
+docker push "$REGISTRY/session-service:latest"
+
 # Build and push MCPClient (optional)
 echo "Building MCPClient..."
 docker build -f "$ROOT_DIR/src/MCPClient/Dockerfile" -t "$REGISTRY/mcpclient:latest" "$ROOT_DIR"
@@ -50,4 +56,5 @@ echo "Images available:"
 echo "  $REGISTRY/mcpserver:latest"
 echo "  $REGISTRY/approval-service:latest"
 echo "  $REGISTRY/agent-alpha:latest"
+echo "  $REGISTRY/session-service:latest"
 echo "  $REGISTRY/mcpclient:latest"
