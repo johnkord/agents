@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
+using Common.Interfaces.Session;
+using Common.Models.Session;
 
 namespace AgentAlpha.Services;
 

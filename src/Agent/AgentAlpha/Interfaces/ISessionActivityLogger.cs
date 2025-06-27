@@ -1,4 +1,4 @@
-using AgentAlpha.Models;
+using Common.Models.Session;
 
 namespace AgentAlpha.Interfaces;
 

@@ -4,6 +4,8 @@ using ModelContextProtocol.Client;
 using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
+using Common.Interfaces.Session;
+using Common.Models.Session;
 using System.Text.Json;                 // +NEW
 
 namespace AgentAlpha.Services;

@@ -11,15 +11,6 @@ builder.Services.AddSwaggerGen();
 // Add approval store
 builder.Services.AddSingleton<IApprovalStore, SqliteApprovalStore>();
 
-// Add session management with shared database path
-builder.Services.AddSingleton<AgentAlpha.Interfaces.ISessionManager>(serviceProvider =>
-{
-    var logger = serviceProvider.GetRequiredService<ILogger<AgentAlpha.Services.SessionManager>>();
-    // Use the same environment variable and default path as other components
-    var sharedDbPath = Environment.GetEnvironmentVariable("AGENT_SESSION_DB_PATH") ?? "./data/agent_sessions.db";
-    return new AgentAlpha.Services.SessionManager(logger, sharedDbPath);
-});
-
 // Add CORS for development
 builder.Services.AddCors(options =>
 {
