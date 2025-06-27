@@ -28,6 +28,7 @@ spec:
   {{- end }}
   rules:
     {{- range .Values.ingress.hosts }}
+    {{- if .host }}
     - host: {{ .host | quote }}
       http:
         paths:
@@ -42,5 +43,21 @@ spec:
                 port:
                   number: {{ .service.port }}
           {{- end }}
+    {{- else }}
+    # Internal-only access without host requirement
+    - http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            {{- if .pathType }}
+            pathType: {{ .pathType }}
+            {{- end }}
+            backend:
+              service:
+                name: {{ $fullName }}-{{ .service.name }}
+                port:
+                  number: {{ .service.port }}
+          {{- end }}
+    {{- end }}
     {{- end }}
 {{- end }}

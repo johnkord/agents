@@ -7,9 +7,10 @@ This directory contains Kubernetes manifests and Helm charts for deploying the A
 The deployment consists of:
 
 - **MCPServer**: The core MCP server providing mathematical tools and system utilities
-- **ApprovalService**: Web-based tool approval service with dashboard
+- **ApprovalService**: Web-based tool approval service with dashboard  
+- **SessionService**: HTTP API service for managing agent sessions and conversation state
 - **AgentAlpha**: AI agent that can run as a Job or CronJob
-- **Supporting Infrastructure**: ConfigMaps, Secrets, Services, Ingress
+- **Supporting Infrastructure**: ConfigMaps, Secrets, Services, Ingress, Shared Persistent Storage
 
 ## Prerequisites
 
@@ -23,7 +24,7 @@ The deployment consists of:
 - Images built and pushed to registry
 
 ### Domain & SSL
-- Domain name for external access
+- Domain name for external access (**optional** - can deploy for internal access only)
 - SSL certificate (optional, can use Let's Encrypt with cert-manager)
 
 ## Quick Start
@@ -109,12 +110,29 @@ Sensitive configuration is stored in Kubernetes secrets:
 - **Purpose**: Web dashboard for tool approvals
 - **UI**: Available at `http://your-domain/` 
 
+### SessionService
+- **Port**: 5001
+- **Protocol**: HTTP
+- **Purpose**: HTTP API for managing agent sessions and conversation state
+- **API**: Available at `http://your-domain/api/sessions` 
+
 ## Ingress Configuration
 
-The ingress is configured for Azure Application Gateway with:
+The ingress can be configured for either:
 
+### Internal Access (No Domain Required)
+- **Default Configuration**: For internal access via port-forwarding
 - **Root Path (/)**: Routes to ApprovalService dashboard
+- **Sessions Path (/api/sessions)**: Routes to SessionService API
 - **MCP Path (/mcp)**: Routes to MCPServer
+- **Access Method**: Use `kubectl port-forward` to access services
+
+### External Access (Domain Required)
+- **Custom Configuration**: For external access with domain
+- **Root Path (/)**: Routes to ApprovalService dashboard  
+- **Sessions Path (/api/sessions)**: Routes to SessionService API
+- **MCP Path (/mcp)**: Routes to MCPServer
+- **Access Method**: Direct HTTP/HTTPS access via domain
 
 ### SSL/TLS
 

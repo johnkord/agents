@@ -15,6 +15,10 @@ images:
     repository: approval-service
     tag: latest
     pullPolicy: IfNotPresent
+  sessionService:
+    repository: session-service
+    tag: latest
+    pullPolicy: IfNotPresent
   agentAlpha:
     repository: agent-alpha
     tag: latest
@@ -79,6 +83,20 @@ approvalService:
     storageClass: managed-csi
     size: 1Gi
 
+sessionService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 5001
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
 agentAlpha:
   enabled: true
   type: job  # can be 'job' or 'cronjob'
@@ -123,28 +141,32 @@ sharedData:
 ingress:
   enabled: true
   className: "azure/application-gateway"
+  # For internal-only access without domain requirement
+  internalOnly: true
   annotations:
-    appgw.ingress.kubernetes.io/ssl-redirect: "true"
-    appgw.ingress.kubernetes.io/use-private-ip: "false"
+    appgw.ingress.kubernetes.io/ssl-redirect: "false"
+    appgw.ingress.kubernetes.io/use-private-ip: "true"
     appgw.ingress.kubernetes.io/backend-protocol: "http"
     appgw.ingress.kubernetes.io/request-timeout: "60"
   hosts:
-    - host: agents.yourdomain.com
+    - host: ""  # Empty host for internal access
       paths:
         - path: /
           pathType: Prefix
           service:
             name: approval-service
             port: 5000
+        - path: /api/sessions
+          pathType: Prefix
+          service:
+            name: session-service
+            port: 5001
         - path: /mcp
           pathType: Prefix
           service:
             name: mcpserver
             port: 3000
-  tls:
-    - secretName: agents-tls-secret
-      hosts:
-        - agents.yourdomain.com
+  tls: []  # No TLS for internal access
 
 serviceAccount:
   # Specifies whether a service account should be created
