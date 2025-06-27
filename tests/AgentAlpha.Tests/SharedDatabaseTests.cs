@@ -2,6 +2,7 @@ using Xunit;
 using Microsoft.Extensions.Logging;
 using AgentAlpha.Services;
 using AgentAlpha.Models;
+using SessionService.Services;
 using System;
 using System.IO;
 using System.Linq;
