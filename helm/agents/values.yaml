@@ -114,6 +114,12 @@ agentAlpha:
     storageClass: managed-csi
     size: 1Gi
 
+# Shared data configuration for session databases
+sharedData:
+  persistence:
+    size: 2Gi  # Shared storage for both session and approval databases
+    storageClass: ""  # Will inherit from approvalService or agentAlpha if not specified
+
 ingress:
   enabled: true
   className: "azure/application-gateway"

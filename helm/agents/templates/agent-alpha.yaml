@@ -81,16 +81,16 @@ spec:
                 name: {{ include "agents.fullname" . }}-secrets
           resources:
             {{- toYaml .Values.agentAlpha.resources | nindent 12 }}
-          {{- if .Values.agentAlpha.persistence.enabled }}
+          {{- if or .Values.approvalService.persistence.enabled .Values.agentAlpha.persistence.enabled }}
           volumeMounts:
-            - name: agent-data
+            - name: shared-data
               mountPath: /app/data
           {{- end }}
-      {{- if .Values.agentAlpha.persistence.enabled }}
+      {{- if or .Values.approvalService.persistence.enabled .Values.agentAlpha.persistence.enabled }}
       volumes:
-        - name: agent-data
+        - name: shared-data
           persistentVolumeClaim:
-            claimName: {{ include "agents.fullname" . }}-agent-data
+            claimName: {{ include "agents.fullname" . }}-shared-data
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
@@ -190,16 +190,16 @@ spec:
                     name: {{ include "agents.fullname" . }}-secrets
               resources:
                 {{- toYaml .Values.agentAlpha.resources | nindent 16 }}
-              {{- if .Values.agentAlpha.persistence.enabled }}
+              {{- if or .Values.approvalService.persistence.enabled .Values.agentAlpha.persistence.enabled }}
               volumeMounts:
-                - name: agent-data
+                - name: shared-data
                   mountPath: /app/data
               {{- end }}
-          {{- if .Values.agentAlpha.persistence.enabled }}
+          {{- if or .Values.approvalService.persistence.enabled .Values.agentAlpha.persistence.enabled }}
           volumes:
-            - name: agent-data
+            - name: shared-data
               persistentVolumeClaim:
-                claimName: {{ include "agents.fullname" . }}-agent-data
+                claimName: {{ include "agents.fullname" . }}-shared-data
           {{- end }}
           {{- with .Values.nodeSelector }}
           nodeSelector:
@@ -213,25 +213,5 @@ spec:
           tolerations:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-{{- end }}
-{{- if .Values.agentAlpha.persistence.enabled }}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ include "agents.fullname" . }}-agent-data
-  namespace: {{ .Values.global.namespace }}
-  labels:
-    {{- include "agents.labels" . | nindent 4 }}
-    app.kubernetes.io/component: agent-alpha
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ .Values.agentAlpha.persistence.size }}
-  {{- if .Values.agentAlpha.persistence.storageClass }}
-  storageClassName: {{ .Values.agentAlpha.persistence.storageClass }}
-  {{- end }}
 {{- end }}
 {{- end }}

@@ -1,0 +1,21 @@
+{{- if or .Values.approvalService.persistence.enabled .Values.agentAlpha.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "agents.fullname" . }}-shared-data
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+    app.kubernetes.io/component: shared-data
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple pods need to access the same session database
+  resources:
+    requests:
+      storage: {{ .Values.sharedData.persistence.size | default "2Gi" }}
+  {{- if .Values.sharedData.persistence.storageClass }}
+  storageClassName: {{ .Values.sharedData.persistence.storageClass }}
+  {{- else if .Values.approvalService.persistence.storageClass }}
+  storageClassName: {{ .Values.approvalService.persistence.storageClass }}
+  {{- end }}
+{{- end }}
