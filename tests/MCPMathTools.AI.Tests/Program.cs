@@ -37,7 +37,7 @@ public class Program
             var possiblePaths = new[]
             {
                 "../../src/MCPServer/MCPServer.csproj", // From tests/MCPMathTools.AI.Tests
-                "../../../src/MCPServer/MCPServer.csproj", // From bin/Release/net8.0 when running built exe
+                "../../../src/MCPServer/MCPServer.csproj", // From bin/Release/net9.0 when running built exe
                 "src/MCPServer/MCPServer.csproj" // From repository root
             };
             
