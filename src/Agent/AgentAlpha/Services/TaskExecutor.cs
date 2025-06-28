@@ -505,8 +505,7 @@ public class TaskExecutor : ITaskExecutor
             
             var selectionContext = isResumingSession ? "for new task in session" : "for task";
             Console.WriteLine($"🎯 Selected {selectedTools.Length} relevant tools {selectionContext}: " +
-                            $"{string.Join(", ", selectedTools.Take(5).Select(t => t.Name))}" +
-                            $"{(selectedTools.Length > 5 ? "..." : "")}");
+                            $"{string.Join(", ", selectedTools.Select(t => t.Name))}");
             
             if (selectedTools.Length < filteredTools.Count)
             {
@@ -659,8 +658,7 @@ public class TaskExecutor : ITaskExecutor
                 .ToArray();
             
             Console.WriteLine($"🎯 Selected {selectedTools.Length} tools based on plan: " +
-                            $"{string.Join(", ", selectedTools.Take(5).Select(t => t.Name))}" +
-                            $"{(selectedTools.Length > 5 ? "..." : "")}");
+                            $"{string.Join(", ", selectedTools.Select(t => t.Name))}");
             
             return selectedTools;
         }
