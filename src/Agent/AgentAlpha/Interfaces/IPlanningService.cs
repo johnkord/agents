@@ -17,7 +17,7 @@ public interface IPlanningService
     /// <param name="availableTools">Tools available to the agent</param>
     /// <param name="context">Optional context from previous conversations or sessions</param>
     /// <returns>A detailed execution plan</returns>
-    Task<TaskPlan> CreatePlanAsync(string task, IList<McpClientTool> availableTools, string? context = null);
+    Task<TaskPlan> CreatePlanAsync(string task, IList<IUnifiedTool> availableTools, string? context = null);
     
     /// <summary>
     /// Create a detailed execution plan for the given task with current state analysis
@@ -27,7 +27,7 @@ public interface IPlanningService
     /// <param name="currentState">Current state of the environment and context</param>
     /// <param name="context">Optional additional context</param>
     /// <returns>A detailed execution plan based on current state analysis</returns>
-    Task<TaskPlan> CreatePlanWithStateAnalysisAsync(string task, IList<McpClientTool> availableTools, CurrentState currentState, string? context = null);
+    Task<TaskPlan> CreatePlanWithStateAnalysisAsync(string task, IList<IUnifiedTool> availableTools, CurrentState currentState, string? context = null);
     
     /// <summary>
     /// Refine an existing plan based on new information or execution results
@@ -36,7 +36,7 @@ public interface IPlanningService
     /// <param name="feedback">Feedback from execution or new requirements</param>
     /// <param name="availableTools">Currently available tools</param>
     /// <returns>A refined execution plan</returns>
-    Task<TaskPlan> RefinePlanAsync(TaskPlan existingPlan, string feedback, IList<McpClientTool> availableTools);
+    Task<TaskPlan> RefinePlanAsync(TaskPlan existingPlan, string feedback, IList<IUnifiedTool> availableTools);
     
     /// <summary>
     /// Refine an existing plan with current state analysis
@@ -46,7 +46,7 @@ public interface IPlanningService
     /// <param name="availableTools">Currently available tools</param>
     /// <param name="currentState">Current state of the environment and context</param>
     /// <returns>A refined execution plan based on current state analysis</returns>
-    Task<TaskPlan> RefinePlanWithStateAsync(TaskPlan existingPlan, string feedback, IList<McpClientTool> availableTools, CurrentState currentState);
+    Task<TaskPlan> RefinePlanWithStateAsync(TaskPlan existingPlan, string feedback, IList<IUnifiedTool> availableTools, CurrentState currentState);
     
     /// <summary>
     /// Validate that a plan is feasible with the available tools
@@ -54,7 +54,7 @@ public interface IPlanningService
     /// <param name="plan">The plan to validate</param>
     /// <param name="availableTools">Tools available to the agent</param>
     /// <returns>Validation result with any issues identified</returns>
-    Task<PlanValidationResult> ValidatePlanAsync(TaskPlan plan, IList<McpClientTool> availableTools);
+    Task<PlanValidationResult> ValidatePlanAsync(TaskPlan plan, IList<IUnifiedTool> availableTools);
     
     /// <summary>
     /// Set the session activity logger for automatic OpenAI request logging

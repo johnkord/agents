@@ -314,10 +314,10 @@ public class TaskExecutor : ITaskExecutor
         return similarity > 0.3;
     }
 
-    private async Task<IList<McpClientTool>> DiscoverAvailableToolsAsync()
+    private async Task<IList<IUnifiedTool>> DiscoverAvailableToolsAsync()
     {
-        var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
-        return _toolManager.ApplyFilters(allTools, _config.ToolFilter);
+        var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
+        return _toolManager.ApplyFiltersToAllTools(allTools, _config.ToolFilter);
     }
 
     private async Task SavePlanToSessionAsync(string sessionId, TaskPlan plan)
@@ -338,7 +338,7 @@ public class TaskExecutor : ITaskExecutor
         }
     }
 
-    private async Task ConsiderPlanUpdateAsync(TaskPlan taskPlan, List<string> executionFeedback, IList<McpClientTool> availableTools)
+    private async Task ConsiderPlanUpdateAsync(TaskPlan taskPlan, List<string> executionFeedback, IList<IUnifiedTool> availableTools)
     {
         try
         {
@@ -420,8 +420,8 @@ public class TaskExecutor : ITaskExecutor
             await ConnectToMcpServerAsync();
             
             // Discover all available tools
-            var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
-            var filteredTools = _toolManager.ApplyFilters(allTools, _config.ToolFilter);
+            var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
+            var filteredTools = _toolManager.ApplyFiltersToAllTools(allTools, _config.ToolFilter);
             
             // Create the plan
             var plan = await _planningService.CreatePlanAsync(task, filteredTools);
@@ -482,10 +482,10 @@ public class TaskExecutor : ITaskExecutor
         var filterConfig = request.ToolFilter ?? _config.ToolFilter;
         
         // Step 1: Discover all tools from MCP server
-        var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
+        var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
         
         // Step 2: Apply filtering configuration
-        var filteredTools = _toolManager.ApplyFilters(allTools, filterConfig);
+        var filteredTools = _toolManager.ApplyFiltersToAllTools(allTools, filterConfig);
         
         Console.WriteLine($"🔧 Discovered {allTools.Count} tools total, {filteredTools.Count} after filtering");
         
@@ -521,7 +521,7 @@ public class TaskExecutor : ITaskExecutor
         {
             _logger.LogError(ex, "Tool selection failed, falling back to all filtered tools");
             Console.WriteLine($"⚠️  Tool selection failed, using all {filteredTools.Count} filtered tools");
-            return filteredTools.Select(t => _toolManager.CreateOpenAiToolDefinition(t)).ToArray();
+            return filteredTools.Select(t => t.ToToolDefinition()).ToArray();
         }
     }
 
@@ -532,8 +532,8 @@ public class TaskExecutor : ITaskExecutor
         try
         {
             // Discover all available tools for planning
-            var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
-            var filteredTools = _toolManager.ApplyFilters(allTools, _config.ToolFilter);
+            var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
+            var filteredTools = _toolManager.ApplyFiltersToAllTools(allTools, _config.ToolFilter);
             
             // Create the plan using the planning service
             var plan = await _planningService.CreatePlanAsync(task, filteredTools);
@@ -609,8 +609,8 @@ public class TaskExecutor : ITaskExecutor
         var filterConfig = request.ToolFilter ?? _config.ToolFilter;
         
         // Discover all tools from MCP server
-        var allTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
-        var filteredTools = _toolManager.ApplyFilters(allTools, filterConfig);
+        var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
+        var filteredTools = _toolManager.ApplyFiltersToAllTools(allTools, filterConfig);
         
         Console.WriteLine($"🔧 Discovered {allTools.Count} tools total, {filteredTools.Count} after filtering");
         
@@ -654,7 +654,7 @@ public class TaskExecutor : ITaskExecutor
             // Convert to tool definitions
             var selectedTools = filteredTools
                 .Where(t => selectedToolNames.Contains(t.Name))
-                .Select(t => _toolManager.CreateOpenAiToolDefinition(t))
+                .Select(t => t.ToToolDefinition())
                 .ToArray();
             
             Console.WriteLine($"🎯 Selected {selectedTools.Length} tools based on plan: " +
@@ -666,7 +666,7 @@ public class TaskExecutor : ITaskExecutor
         {
             _logger.LogError(ex, "Plan-based tool selection failed, falling back to all filtered tools");
             Console.WriteLine($"⚠️  Plan-based tool selection failed, using all {filteredTools.Count} filtered tools");
-            return filteredTools.Select(t => _toolManager.CreateOpenAiToolDefinition(t)).ToArray();
+            return filteredTools.Select(t => t.ToToolDefinition()).ToArray();
         }
     }
 
@@ -772,8 +772,8 @@ public class TaskExecutor : ITaskExecutor
     {
         // Keep track of currently available tools for dynamic expansion
         var currentTools = availableTools.ToList();
-        var allAvailableTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
-        var filteredAvailableTools = _toolManager.ApplyFilters(allAvailableTools, config.ToolFilter);
+        var allAvailableTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
+        var filteredAvailableTools = _toolManager.ApplyFiltersToAllTools(allAvailableTools, config.ToolFilter);
         
         // Track plan execution for potential updates
         var planStepsCompleted = new HashSet<int>();
@@ -819,7 +819,7 @@ public class TaskExecutor : ITaskExecutor
                         var tool = filteredAvailableTools.FirstOrDefault(t => t.Name == toolName);
                         if (tool != null)
                         {
-                            var toolDef = _toolManager.CreateOpenAiToolDefinition(tool);
+                            var toolDef = tool.ToToolDefinition();
                             currentTools.Add(toolDef);
                         }
                     }
@@ -950,7 +950,7 @@ public class TaskExecutor : ITaskExecutor
     }
 
     private async Task<OpenAIIntegration.Model.ToolDefinition[]> GetAdditionalToolsAsync(
-        IList<McpClientTool> allAvailableTools, 
+        IList<IUnifiedTool> allAvailableTools, 
         OpenAIIntegration.Model.ToolDefinition[] currentTools)
     {
         try

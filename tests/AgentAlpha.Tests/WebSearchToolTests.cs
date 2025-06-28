@@ -119,7 +119,7 @@ public class WebSearchToolTests
             agentConfig,
             toolSelectionConfig);
 
-        var availableTools = new List<McpClientTool>();
+        var availableTools = TestHelpers.WrapTools(new List<McpClientTool>());
 
         // Act
         var result = await toolSelector.SelectToolsForTaskAsync("What's the latest news today?", availableTools);
@@ -151,7 +151,7 @@ public class WebSearchToolTests
             agentConfig,
             toolSelectionConfig);
 
-        var availableTools = new List<McpClientTool>();
+        var availableTools = TestHelpers.WrapTools(new List<McpClientTool>());
 
         // Act
         var result = await toolSelector.SelectToolsForTaskAsync("Calculate 2 + 2", availableTools);
@@ -183,7 +183,7 @@ public class WebSearchToolTests
             agentConfig,
             toolSelectionConfig);
 
-        var availableTools = new List<McpClientTool>();
+        var availableTools = TestHelpers.WrapTools(new List<McpClientTool>());
 
         // Act - Use the exact task from the issue
         var result = await toolSelector.SelectToolsForTaskAsync("which models are available through openai?", availableTools);
@@ -215,7 +215,7 @@ public class WebSearchToolTests
             agentConfig,
             toolSelectionConfig);
 
-        var availableTools = new List<McpClientTool>();
+        var availableTools = TestHelpers.WrapTools(new List<McpClientTool>());
 
         // Act - Use the exact task from the issue
         var result = await toolSelector.SelectToolsForTaskAsync("which models are available through openai?", availableTools);
@@ -241,7 +241,7 @@ public class WebSearchToolTests
             agentConfig,
             toolSelectionConfig);
 
-        var availableTools = new List<McpClientTool>();
+        var availableTools = TestHelpers.WrapTools(new List<McpClientTool>());
 
         // Act - Use the exact task from the issue
         var result = await toolSelector.SelectToolsForTaskAsync("which models are available through openai?", availableTools);

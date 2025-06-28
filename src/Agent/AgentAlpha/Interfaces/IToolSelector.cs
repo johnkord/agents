@@ -14,22 +14,22 @@ public interface IToolSelector
     /// Select relevant tools for the initial task (includes both MCP tools and built-in OpenAI tools)
     /// </summary>
     /// <param name="task">The user's task description</param>
-    /// <param name="availableTools">All available tools from MCP server</param>
+    /// <param name="availableTools">All available tools from unified tool discovery</param>
     /// <param name="maxTools">Maximum number of tools to select (optional)</param>
     /// <returns>Selected tools that are likely relevant to the task</returns>
-    Task<ToolDefinition[]> SelectToolsForTaskAsync(string task, IList<McpClientTool> availableTools, int? maxTools = null);
+    Task<ToolDefinition[]> SelectToolsForTaskAsync(string task, IList<IUnifiedTool> availableTools, int? maxTools = null);
     
     /// <summary>
     /// Select additional tools for a conversation iteration based on current context
     /// </summary>
     /// <param name="conversationContext">Current conversation messages</param>
-    /// <param name="availableTools">All available tools from MCP server</param>
+    /// <param name="availableTools">All available tools from unified tool discovery</param>
     /// <param name="currentlySelectedTools">Tools already included in this conversation</param>
     /// <param name="maxAdditionalTools">Maximum additional tools to add</param>
     /// <returns>Additional tools to include for this iteration</returns>
     Task<ToolDefinition[]> SelectAdditionalToolsAsync(
         IEnumerable<object> conversationContext, 
-        IList<McpClientTool> availableTools, 
+        IList<IUnifiedTool> availableTools, 
         ToolDefinition[] currentlySelectedTools,
         int maxAdditionalTools = 3);
     
@@ -38,7 +38,7 @@ public interface IToolSelector
     /// </summary>
     /// <param name="availableTools">All available tools</param>
     /// <returns>Essential tools that should always be available</returns>
-    Task<ToolDefinition[]> GetEssentialToolsAsync(IList<McpClientTool> availableTools);
+    Task<ToolDefinition[]> GetEssentialToolsAsync(IList<IUnifiedTool> availableTools);
     
     /// <summary>
     /// Determine if web search should be included based on task analysis

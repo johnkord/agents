@@ -3,8 +3,10 @@ using Xunit;
 using AgentAlpha.Services;
 using AgentAlpha.Models;
 using AgentAlpha.Configuration;
+using AgentAlpha.Interfaces;
 using ModelContextProtocol.Client;
 using OpenAIIntegration;
+using OpenAIIntegration.Model;
 using Common.Models.Session;
 using Common.Interfaces.Session;
 using System.Text.Json;
@@ -76,7 +78,7 @@ public class PlanningServiceTests
             Steps = new List<PlanStep>() // No steps
         };
 
-        var availableTools = new List<McpClientTool>(); // no concrete instances needed
+        var availableTools = WrapTools(new List<McpClientTool>()); // no concrete instances needed
 
         // Act
         var result = await planningService.ValidatePlanAsync(plan, availableTools);
@@ -201,7 +203,7 @@ public class PlanningServiceTests
             }
         };
 
-        var availableTools = new List<McpClientTool>(); // no concrete instances needed
+        var availableTools = WrapTools(new List<McpClientTool>()); // no concrete instances needed
 
         // Act
         var plan = await planningService.CreatePlanWithStateAnalysisAsync(
@@ -228,7 +230,7 @@ public class PlanningServiceTests
         var mockOpenAI = new MockOpenAIService();
         var planningService = new PlanningService(mockOpenAI, _logger, _config);
         
-        var availableTools = new List<McpClientTool>(); // no concrete instances needed
+        var availableTools = WrapTools(new List<McpClientTool>()); // no concrete instances needed
 
         // Act
         var plan = await planningService.CreatePlanAsync("Test task", availableTools, "Test context");
@@ -285,7 +287,7 @@ public class PlanningServiceTests
             }
         };
 
-        var availableTools = new List<McpClientTool>(); // no concrete instances needed
+        var availableTools = WrapTools(new List<McpClientTool>()); // no concrete instances needed
 
         // Act
         var refinedPlan = await planningService.RefinePlanWithStateAsync(
@@ -412,7 +414,7 @@ public class PlanningServiceTests
         var mockOpenAI = new MockOpenAIServiceWithStringArguments();
         var planningService = new PlanningService(mockOpenAI, _logger, _config);
         
-        var availableTools = new List<McpClientTool>();
+        var availableTools = WrapTools(new List<McpClientTool>());
 
         // Act
         var plan = await planningService.CreatePlanAsync("Test task with string arguments", availableTools);
@@ -463,5 +465,11 @@ public class PlanningServiceTests
         
         // Assert
         Assert.True(success, "Should successfully parse string JSON arguments");
+    }
+
+    // Helper method to convert McpClientTool to IUnifiedTool for tests
+    private static IList<IUnifiedTool> WrapTools(IList<McpClientTool> mcpTools)
+    {
+        return TestHelpers.WrapTools(mcpTools);
     }
 }

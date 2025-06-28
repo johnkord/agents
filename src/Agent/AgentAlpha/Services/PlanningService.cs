@@ -42,7 +42,7 @@ public class PlanningService : IPlanningService
             activityLogger != null ? "set" : "cleared");
     }
 
-    public async Task<TaskPlan> CreatePlanAsync(string task, IList<McpClientTool> availableTools, string? context = null)
+    public async Task<TaskPlan> CreatePlanAsync(string task, IList<IUnifiedTool> availableTools, string? context = null)
     {
         _logger.LogInformation("Creating execution plan for task: {Task}", task);
 
@@ -61,7 +61,7 @@ public class PlanningService : IPlanningService
         return await CreatePlanWithStateAnalysisAsync(task, availableTools, basicState, context);
     }
 
-    public async Task<TaskPlan> CreatePlanWithStateAnalysisAsync(string task, IList<McpClientTool> availableTools, CurrentState currentState, string? context = null)
+    public async Task<TaskPlan> CreatePlanWithStateAnalysisAsync(string task, IList<IUnifiedTool> availableTools, CurrentState currentState, string? context = null)
     {
         _logger.LogInformation("Creating execution plan with state analysis for task: {Task}", task);
 
@@ -140,7 +140,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
         }
     }
 
-    public async Task<TaskPlan> RefinePlanAsync(TaskPlan existingPlan, string feedback, IList<McpClientTool> availableTools)
+    public async Task<TaskPlan> RefinePlanAsync(TaskPlan existingPlan, string feedback, IList<IUnifiedTool> availableTools)
     {
         // Create a basic current state from the existing plan context
         var currentState = new CurrentState
@@ -170,7 +170,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
     /// <summary>
     /// Refine an existing plan with current state analysis
     /// </summary>
-    public async Task<TaskPlan> RefinePlanWithStateAsync(TaskPlan existingPlan, string feedback, IList<McpClientTool> availableTools, CurrentState currentState)
+    public async Task<TaskPlan> RefinePlanWithStateAsync(TaskPlan existingPlan, string feedback, IList<IUnifiedTool> availableTools, CurrentState currentState)
     {
         _logger.LogInformation("Refining existing plan with state analysis based on feedback");
 
@@ -274,7 +274,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
         }
     }
 
-    public Task<PlanValidationResult> ValidatePlanAsync(TaskPlan plan, IList<McpClientTool> availableTools)
+    public Task<PlanValidationResult> ValidatePlanAsync(TaskPlan plan, IList<IUnifiedTool> availableTools)
     {
         _logger.LogDebug("Validating plan for task: {Task}", plan.Task);
 
@@ -342,7 +342,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
         return Task.FromResult(result);
     }
 
-    private TaskPlan CreateFallbackPlan(string task, IList<McpClientTool> availableTools)
+    private TaskPlan CreateFallbackPlan(string task, IList<IUnifiedTool> availableTools)
     {
         _logger.LogInformation("Creating fallback plan for task: {Task}", task);
 
@@ -486,7 +486,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
             {
                 _logger.LogWarning("No plan creation tool call found in response");
                 LogFallbackPlanCreation(originalTask, "No plan creation tool call found in response", null);
-                return CreateFallbackPlan(originalTask, new List<McpClientTool>());
+                return CreateFallbackPlan(originalTask, new List<IUnifiedTool>());
             }
 
             var rawArguments = planToolCall.Arguments.Value;
@@ -503,7 +503,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
                 {
                     _logger.LogWarning("Tool call arguments string is null or empty");
                     LogFallbackPlanCreation(originalTask, "Tool call arguments string is null or empty", argumentsString);
-                    return CreateFallbackPlan(originalTask, new List<McpClientTool>());
+                    return CreateFallbackPlan(originalTask, new List<IUnifiedTool>());
                 }
 
                 try
@@ -514,7 +514,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
                 {
                     _logger.LogWarning(jsonEx, "Failed to parse tool call arguments JSON string: {ArgumentsString}", argumentsString);
                     LogFallbackPlanCreation(originalTask, $"Failed to parse tool call arguments JSON: {jsonEx.Message}", argumentsString);
-                    return CreateFallbackPlan(originalTask, new List<McpClientTool>());
+                    return CreateFallbackPlan(originalTask, new List<IUnifiedTool>());
                 }
             }
             else if (rawArguments.ValueKind == JsonValueKind.Object)
@@ -529,7 +529,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
                 _logger.LogWarning("Tool call arguments has unexpected JSON type: {ValueKind}, Raw content: {ArgumentsRaw}", 
                     rawArguments.ValueKind, argumentsRaw);
                 LogFallbackPlanCreation(originalTask, $"Tool call arguments has unexpected JSON type: {rawArguments.ValueKind}", argumentsRaw);
-                return CreateFallbackPlan(originalTask, new List<McpClientTool>());
+                return CreateFallbackPlan(originalTask, new List<IUnifiedTool>());
             }
             
             var plan = new TaskPlan
@@ -577,14 +577,14 @@ Create a logical, state-aware execution plan using the create_execution_plan too
             var rawArgumentsText = planToolCall?.Arguments?.GetRawText() ?? "null";
             _logger.LogWarning(ex, "Failed to extract plan from tool call, creating fallback plan. Raw arguments: {RawArguments}", rawArgumentsText);
             LogFallbackPlanCreation(originalTask, $"Exception during plan extraction: {ex.Message}", rawArgumentsText);
-            return CreateFallbackPlan(originalTask, new List<McpClientTool>());
+            return CreateFallbackPlan(originalTask, new List<IUnifiedTool>());
         }
     }
 
     /// <summary>
     /// Analyzes the current state to provide context for planning
     /// </summary>
-    private string AnalyzeCurrentState(CurrentState currentState, IList<McpClientTool> availableTools)
+    private string AnalyzeCurrentState(CurrentState currentState, IList<IUnifiedTool> availableTools)
     {
         var analysis = new List<string>();
         
@@ -807,7 +807,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
     /// <summary>
     /// Creates a fallback plan that considers basic state information
     /// </summary>
-    private TaskPlan CreateStateFallbackPlan(string task, IList<McpClientTool> availableTools, CurrentState currentState)
+    private TaskPlan CreateStateFallbackPlan(string task, IList<IUnifiedTool> availableTools, CurrentState currentState)
     {
         _logger.LogInformation("Creating state-aware fallback plan for task: {Task}", task);
 
@@ -837,7 +837,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
     /// <summary>
     /// Log detailed plan information to activity log for better tracking and debugging
     /// </summary>
-    private async Task LogPlanDetailsAsync(TaskPlan plan, IList<McpClientTool> availableTools)
+    private async Task LogPlanDetailsAsync(TaskPlan plan, IList<IUnifiedTool> availableTools)
     {
         if (_activityLogger == null) return;
 

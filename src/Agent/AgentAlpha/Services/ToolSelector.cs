@@ -49,7 +49,7 @@ public class ToolSelector : IToolSelector
             activityLogger != null ? "set" : "cleared");
     }
 
-    public async Task<ToolDefinition[]> SelectToolsForTaskAsync(string task, IList<McpClientTool> availableTools, int? maxTools = null)
+    public async Task<ToolDefinition[]> SelectToolsForTaskAsync(string task, IList<IUnifiedTool> availableTools, int? maxTools = null)
     {
         var stopwatch = Stopwatch.StartNew();
         var maxToolCount = maxTools ?? _config.MaxToolsPerRequest;
@@ -104,13 +104,13 @@ public class ToolSelector : IToolSelector
         {
             _logger.LogError(ex, "Failed to select tools for task, falling back to all tools");
             // Fallback: return all tools converted to OpenAI format
-            return availableTools.Select(t => _toolManager.CreateOpenAiToolDefinition(t)).ToArray();
+            return availableTools.Select(t => t.ToToolDefinition()).ToArray();
         }
     }
 
     public async Task<ToolDefinition[]> SelectAdditionalToolsAsync(
         IEnumerable<object> conversationContext, 
-        IList<McpClientTool> availableTools, 
+        IList<IUnifiedTool> availableTools, 
         ToolDefinition[] currentlySelectedTools,
         int maxAdditionalTools = 3)
     {
@@ -151,7 +151,7 @@ public class ToolSelector : IToolSelector
         }
     }
 
-    public Task<ToolDefinition[]> GetEssentialToolsAsync(IList<McpClientTool> availableTools)
+    public Task<ToolDefinition[]> GetEssentialToolsAsync(IList<IUnifiedTool> availableTools)
     {
         var essentialTools = new List<ToolDefinition>();
         
@@ -163,7 +163,7 @@ public class ToolSelector : IToolSelector
             
             if (tool != null)
             {
-                essentialTools.Add(_toolManager.CreateOpenAiToolDefinition(tool));
+                essentialTools.Add(tool.ToToolDefinition());
             }
         }
         
@@ -175,7 +175,7 @@ public class ToolSelector : IToolSelector
 
     private async Task<ToolDefinition[]> SelectToolsUsingLLMAsync(
         string task, 
-        IList<McpClientTool> availableTools, 
+        IList<IUnifiedTool> availableTools, 
         List<ToolDefinition> alreadySelectedTools,
         int maxAdditionalTools)
     {
@@ -254,17 +254,17 @@ public class ToolSelector : IToolSelector
             var selectedTools = new List<ToolDefinition>();
             foreach (var toolName in selectedToolNames.Take(maxAdditionalTools))
             {
-                // First try to find among MCP tools
-                var mcpTool = availableTools.FirstOrDefault(t => 
+                // Find the tool among available unified tools
+                var unifiedTool = availableTools.FirstOrDefault(t => 
                     string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
                 
-                if (mcpTool != null)
+                if (unifiedTool != null)
                 {
-                    selectedTools.Add(_toolManager.CreateOpenAiToolDefinition(mcpTool));
+                    selectedTools.Add(unifiedTool.ToToolDefinition());
                 }
                 else
                 {
-                    // Then try to find among built-in tools
+                    // Try to find among built-in tools not in availableTools
                     var builtInTool = GetBuiltInOpenAIToolDefinition(toolName);
                     if (builtInTool != null)
                     {
@@ -291,7 +291,7 @@ public class ToolSelector : IToolSelector
 
     private ToolDefinition[] SelectToolsUsingHeuristics(
         string task, 
-        IList<McpClientTool> availableTools, 
+        IList<IUnifiedTool> availableTools, 
         List<ToolDefinition> alreadySelectedTools,
         int maxAdditionalTools)
     {
@@ -332,7 +332,7 @@ public class ToolSelector : IToolSelector
                     
                     if (tool != null)
                     {
-                        selectedTools.Add(_toolManager.CreateOpenAiToolDefinition(tool));
+                        selectedTools.Add(tool.ToToolDefinition());
                         alreadySelectedNames.Add(tool.Name);
                     }
                 }
@@ -353,7 +353,7 @@ public class ToolSelector : IToolSelector
                 
                 if (tool != null)
                 {
-                    selectedTools.Add(_toolManager.CreateOpenAiToolDefinition(tool));
+                    selectedTools.Add(tool.ToToolDefinition());
                 }
             }
         }
@@ -364,7 +364,7 @@ public class ToolSelector : IToolSelector
 
     private async Task<ToolDefinition[]> SelectAdditionalToolsUsingLLMAsync(
         string conversationContext, 
-        IList<McpClientTool> remainingTools, 
+        IList<IUnifiedTool> remainingTools, 
         int maxAdditionalTools)
     {
         var toolDescriptions = remainingTools
@@ -417,7 +417,7 @@ public class ToolSelector : IToolSelector
                 
                 if (tool != null)
                 {
-                    selectedTools.Add(_toolManager.CreateOpenAiToolDefinition(tool));
+                    selectedTools.Add(tool.ToToolDefinition());
                 }
             }
             
@@ -518,7 +518,7 @@ public class ToolSelector : IToolSelector
     /// </summary>
     private async Task LogToolSelectionReasoningAsync(
         string task, 
-        IList<McpClientTool> availableTools, 
+        IList<IUnifiedTool> availableTools, 
         List<ToolDefinition> selectedTools, 
         long durationMs)
     {

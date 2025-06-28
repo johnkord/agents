@@ -59,7 +59,7 @@ public class OpenAIRequestLoggingIntegrationTests
         // For this test, we just need to trigger the LLM selection path.
         // However, ToolSelector checks availableTools.Count > 0, so an empty list won't trigger LLM calls
         // We'll pass an empty list for now, which means no OpenAI calls will be made
-        var mockTools = new List<McpClientTool>();
+        var mockTools = TestHelpers.WrapTools(new List<McpClientTool>());
         
         try
         {
@@ -112,7 +112,7 @@ public class OpenAIRequestLoggingIntegrationTests
         planningService.SetActivityLogger(activityLogger);
         
         // Act
-        var plan = await planningService.CreatePlanAsync("Test planning task", new List<McpClientTool>());
+        var plan = await planningService.CreatePlanAsync("Test planning task", TestHelpers.WrapTools(new List<McpClientTool>()));
         
         // Assert
         Assert.NotNull(plan);
