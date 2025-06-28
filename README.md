@@ -14,7 +14,7 @@ This repository provides a foundation for building AI agents that leverage the M
 ## Quick Start
 
 ### Prerequisites
-- .NET 8.0 SDK or later
+- .NET 9.0 SDK or later
 - Terminal/Command Prompt  
 - VS Code (optional, for debugging)
 
@@ -129,7 +129,7 @@ agents/
 
 ## Technology Stack
 
-- **.NET 8.0**: Modern, cross-platform runtime
+- **.NET 9.0**: Modern, cross-platform runtime
 - **Model Context Protocol C# SDK**: Official MCP implementation
 - **Microsoft Extensions**: Logging, dependency injection, configuration
 - **Console Applications**: Simple, cross-platform deployment
