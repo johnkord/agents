@@ -151,7 +151,7 @@
             "type": "coreclr",
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net9.0/AgentAlpha.dll",
-            "args": ["--max-iterations", "3", "--verbose", "test"],
+            "args": ["--max-iterations", "3", "--verbose", "which models are available through openai?"],
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",
             "stopAtEntry": false,

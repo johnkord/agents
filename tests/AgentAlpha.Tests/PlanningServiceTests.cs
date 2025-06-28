@@ -75,7 +75,7 @@ public class PlanningServiceTests
             Steps = new List<PlanStep>() // No steps
         };
 
-        var availableTools = new List<McpClientTool>();
+        var availableTools = new List<McpClientTool>(); // no concrete instances needed
 
         // Act
         var result = await planningService.ValidatePlanAsync(plan, availableTools);
@@ -200,11 +200,7 @@ public class PlanningServiceTests
             }
         };
 
-        var availableTools = new List<McpClientTool>
-        {
-            new McpClientTool { Name = "pandas", Description = "Data manipulation library" },
-            new McpClientTool { Name = "file_reader", Description = "Read files from filesystem" }
-        };
+        var availableTools = new List<McpClientTool>(); // no concrete instances needed
 
         // Act
         var plan = await planningService.CreatePlanWithStateAnalysisAsync(
@@ -231,10 +227,7 @@ public class PlanningServiceTests
         var mockOpenAI = new MockOpenAIService();
         var planningService = new PlanningService(mockOpenAI, _logger, _config);
         
-        var availableTools = new List<McpClientTool>
-        {
-            new McpClientTool { Name = "test_tool", Description = "Test tool" }
-        };
+        var availableTools = new List<McpClientTool>(); // no concrete instances needed
 
         // Act
         var plan = await planningService.CreatePlanAsync("Test task", availableTools, "Test context");
@@ -291,11 +284,7 @@ public class PlanningServiceTests
             }
         };
 
-        var availableTools = new List<McpClientTool>
-        {
-            new McpClientTool { Name = "file_reader", Description = "Read files" },
-            new McpClientTool { Name = "statistics", Description = "Statistical analysis" }
-        };
+        var availableTools = new List<McpClientTool>(); // no concrete instances needed
 
         // Act
         var refinedPlan = await planningService.RefinePlanWithStateAsync(

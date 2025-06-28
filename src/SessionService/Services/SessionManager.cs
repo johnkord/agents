@@ -17,11 +17,11 @@ public class SessionManager : ISessionManager
     {
         _logger = logger;
         
-        // Use env var, explicit parameter, or fallback to shared data directory
-        var dbPath = Environment.GetEnvironmentVariable("AGENT_SESSION_DB_PATH") 
-                    ?? databasePath 
-                    ?? "./data/agent_sessions.db";   // Shared agent sessions database
-                    
+        // Prefer explicitly provided path, then environment variable, then default
+        var dbPath = databasePath                                   // 1) caller-supplied
+                     ?? Environment.GetEnvironmentVariable("AGENT_SESSION_DB_PATH") // 2) env var
+                     ?? "./data/agent_sessions.db";                 // 3) fallback
+
         // Ensure directory exists
         var directory = Path.GetDirectoryName(dbPath);
         if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -29,7 +29,15 @@ public class SessionManager : ISessionManager
             Directory.CreateDirectory(directory);
         }
                     
-        _connectionString = $"Data Source={dbPath}";
+        // Explicitly configure connection for read-write-create access
+        var builder = new SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath,
+            Mode       = SqliteOpenMode.ReadWriteCreate,
+            Cache      = SqliteCacheMode.Shared
+        };
+        _connectionString = builder.ToString();
+
         EnsureDatabase();
     }
 
