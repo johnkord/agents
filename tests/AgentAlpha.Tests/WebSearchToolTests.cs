@@ -223,4 +223,30 @@ public class WebSearchToolTests
         // Assert - Web search should be included with heuristic selection too
         Assert.Contains(result, t => t.Type == "web_search_preview" && t.Name == "web_search");
     }
+
+    [Fact]
+    public async Task ToolSelector_SelectToolsForTaskAsync_IncludesWebSearchWithDefaultConfig()
+    {
+        // Arrange - Test with default configuration to ensure it works out of the box
+        var mockOpenAI = new Mock<ISessionAwareOpenAIService>();
+        var mockToolManager = new Mock<IToolManager>();
+        var mockLogger = new Mock<ILogger<ToolSelector>>();
+        var agentConfig = new AgentConfiguration(); // Default config includes WebSearch
+        var toolSelectionConfig = new ToolSelectionConfig(); // Default config
+
+        var toolSelector = new ToolSelector(
+            mockOpenAI.Object,
+            mockToolManager.Object,
+            mockLogger.Object,
+            agentConfig,
+            toolSelectionConfig);
+
+        var availableTools = new List<McpClientTool>();
+
+        // Act - Use the exact task from the issue
+        var result = await toolSelector.SelectToolsForTaskAsync("which models are available through openai?", availableTools);
+
+        // Assert - Web search should be included with default configuration
+        Assert.Contains(result, t => t.Type == "web_search_preview" && t.Name == "web_search");
+    }
 }
