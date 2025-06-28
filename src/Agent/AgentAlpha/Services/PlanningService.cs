@@ -365,7 +365,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
                 {
                     StepNumber = 2,
                     Description = "Execute the task using appropriate tools",
-                    PotentialTools = availableTools.Take(5).Select(t => t.Name).ToList(),
+                    PotentialTools = availableTools.Select(t => t.Name).ToList(),
                     IsMandatory = true,
                     ExpectedInput = "Task requirements",
                     ExpectedOutput = "Task completion"
@@ -380,7 +380,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
                     ExpectedOutput = "Confirmation of completion"
                 }
             },
-            RequiredTools = availableTools.Take(5).Select(t => t.Name).ToList(),
+            RequiredTools = availableTools.Select(t => t.Name).ToList(),
             Complexity = TaskComplexity.Medium,
             Confidence = 0.6
         };

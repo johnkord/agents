@@ -547,7 +547,7 @@ public class ToolSelector : IToolSelector
                 SelectionReason = DetermineSelectionReason(t.Name, task, taskAnalysis)
             }).ToList(),
             
-            RejectedTools = rejectedToolNames.Take(10).Select(name => new 
+            RejectedTools = rejectedToolNames.Select(name => new 
             { 
                 Name = name,
                 RejectionReason = DetermineRejectionReason(name, task, taskAnalysis)
