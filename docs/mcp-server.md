@@ -64,10 +64,10 @@ namespace MCPServer
 ### Dependencies
 
 The server project includes these NuGet packages:
-- `Microsoft.Extensions.Hosting` (v9.0.6) - Application hosting framework
+- `Microsoft.Extensions.Hosting` (v8.0.6) - Application hosting framework
 - `ModelContextProtocol` (v0.3.0-preview.1) - Official MCP SDK
-- `Microsoft.Extensions.Logging` (v9.0.6) - Logging framework
-- `Microsoft.Extensions.Logging.Console` (v9.0.6) - Console logging provider
+- `Microsoft.Extensions.Logging` (v8.0.6) - Logging framework
+- `Microsoft.Extensions.Logging.Console` (v8.0.6) - Console logging provider
 
 ## Current Tools and Resources
 
