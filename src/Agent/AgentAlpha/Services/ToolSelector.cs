@@ -67,7 +67,7 @@ public class ToolSelector : IToolSelector
                 return selectedTools.Take(maxToolCount).ToArray();
             }
             
-            // Use LLM to select additional relevant tools
+            // Use LLM to select additional relevant tools (including built-in tools)
             if (_config.UseLLMSelection && availableTools.Count > 0)
             {
                 var remainingSlots = maxToolCount - selectedTools.Count;
@@ -79,17 +79,18 @@ public class ToolSelector : IToolSelector
                 // Fallback: use simple heuristics if LLM selection is disabled
                 var additionalTools = SelectToolsUsingHeuristics(task, availableTools, selectedTools, maxToolCount - selectedTools.Count);
                 selectedTools.AddRange(additionalTools);
+                
+                // Add web search tool if task requires it and model supports it (only when not using LLM selection)
+                if (ShouldIncludeWebSearch(task) && selectedTools.Count < maxToolCount && 
+                    !selectedTools.Any(t => t.Name == "web_search") && _agentConfig.WebSearch != null)
+                {
+                    var webSearchTool = _agentConfig.WebSearch.ToToolDefinition();
+                    selectedTools.Add(webSearchTool);
+                    _logger.LogInformation("Added web search tool for task requiring current information");
+                }
             }
             
             stopwatch.Stop();
-            
-            // Add web search tool if task requires it and model supports it
-            if (ShouldIncludeWebSearch(task) && selectedTools.Count < maxToolCount)
-            {
-                var webSearchTool = _agentConfig.WebSearch.ToToolDefinition();
-                selectedTools.Add(webSearchTool);
-                _logger.LogInformation("Added web search tool for task requiring current information");
-            }
             
             // Log tool selection reasoning for better activity tracking
             await LogToolSelectionReasoningAsync(task, availableTools, selectedTools, stopwatch.ElapsedMilliseconds);
@@ -178,13 +179,21 @@ public class ToolSelector : IToolSelector
         List<ToolDefinition> alreadySelectedTools,
         int maxAdditionalTools)
     {
-        // Create a prompt for tool selection
-        var toolDescriptions = availableTools
+        // Create a list of all available tools including both MCP tools and built-in OpenAI tools
+        var allAvailableToolDescriptions = new List<string>();
+        
+        // Add MCP tools
+        var mcpToolDescriptions = availableTools
             .Where(t => !alreadySelectedTools.Any(s => s.Name == t.Name))
             .Select(t => $"- {t.Name}: {t.Description ?? "No description available"}")
             .ToList();
+        allAvailableToolDescriptions.AddRange(mcpToolDescriptions);
         
-        if (toolDescriptions.Count == 0)
+        // Add built-in OpenAI tools that could be relevant
+        var builtInTools = GetBuiltInOpenAIToolDescriptions(task, alreadySelectedTools);
+        allAvailableToolDescriptions.AddRange(builtInTools);
+        
+        if (allAvailableToolDescriptions.Count == 0)
         {
             return Array.Empty<ToolDefinition>();
         }
@@ -195,7 +204,7 @@ public class ToolSelector : IToolSelector
             Task: {task}
 
             Available tools:
-            {string.Join("\n", toolDescriptions)}
+            {string.Join("\n", allAvailableToolDescriptions)}
 
             Instructions:
             1. Analyze the task to understand what operations might be needed
@@ -228,19 +237,43 @@ public class ToolSelector : IToolSelector
                 
             var content = ExtractTextFromContent(outputMessage?.Content);
 
-            // Parse the JSON response
-            var selectedToolNames = JsonSerializer.Deserialize<string[]>(content.Trim()) ?? Array.Empty<string>();
+            // Parse the JSON response with better error handling
+            string[] selectedToolNames;
+            try
+            {
+                selectedToolNames = JsonSerializer.Deserialize<string[]>(content.Trim()) ?? Array.Empty<string>();
+            }
+            catch (JsonException jsonEx)
+            {
+                // Log the full request and response for debugging
+                await LogToolSelectionErrorAsync(request, response, content, jsonEx, "JSON parsing failed");
+                throw new InvalidOperationException($"Failed to parse LLM response as JSON array. Content: '{content.Trim()}'", jsonEx);
+            }
             
             // Convert selected tool names back to ToolDefinitions
             var selectedTools = new List<ToolDefinition>();
             foreach (var toolName in selectedToolNames.Take(maxAdditionalTools))
             {
-                var tool = availableTools.FirstOrDefault(t => 
+                // First try to find among MCP tools
+                var mcpTool = availableTools.FirstOrDefault(t => 
                     string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
                 
-                if (tool != null)
+                if (mcpTool != null)
                 {
-                    selectedTools.Add(_toolManager.CreateOpenAiToolDefinition(tool));
+                    selectedTools.Add(_toolManager.CreateOpenAiToolDefinition(mcpTool));
+                }
+                else
+                {
+                    // Then try to find among built-in tools
+                    var builtInTool = GetBuiltInOpenAIToolDefinition(toolName);
+                    if (builtInTool != null)
+                    {
+                        selectedTools.Add(builtInTool);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("LLM selected tool '{ToolName}' but it was not found in available tools", toolName);
+                    }
                 }
             }
             
@@ -249,6 +282,8 @@ public class ToolSelector : IToolSelector
         }
         catch (Exception ex)
         {
+            // Log detailed error information for debugging (without request details since it may not be available)
+            await LogToolSelectionErrorAsync(null, null, null, ex, "LLM tool selection failed");
             _logger.LogError(ex, "Failed to use LLM for tool selection, falling back to heuristics");
             return SelectToolsUsingHeuristics(task, availableTools, alreadySelectedTools, maxAdditionalTools);
         }
@@ -759,5 +794,107 @@ public class ToolSelector : IToolSelector
         public List<string> Keywords { get; set; } = new();
         public bool RequiresCurrentInfo { get; set; }
         public string ComplexityLevel { get; set; } = "Medium";
+    }
+
+    /// <summary>
+    /// Log detailed error information when tool selection fails
+    /// </summary>
+    private async Task LogToolSelectionErrorAsync(
+        ResponsesCreateRequest? request, 
+        ResponsesCreateResponse? response, 
+        string? extractedContent, 
+        Exception exception, 
+        string errorContext)
+    {
+        if (_activityLogger == null) return;
+
+        var errorDetails = new
+        {
+            ErrorContext = errorContext,
+            Exception = new
+            {
+                Type = exception.GetType().Name,
+                Message = exception.Message,
+                StackTrace = exception.StackTrace
+            },
+            Request = request != null ? new
+            {
+                Model = request.Model,
+                InputType = request.Input?.GetType().Name ?? "null",
+                ToolChoice = request.ToolChoice,
+                // Include partial request content for debugging (truncated for safety)
+                InputPreview = request.Input?.ToString()?.Substring(0, Math.Min(500, request.Input?.ToString()?.Length ?? 0))
+            } : null,
+            Response = response != null ? new
+            {
+                OutputItemCount = response.Output?.Count() ?? 0,
+                Usage = response.Usage,
+                // Include partial response for debugging
+                OutputTypes = response.Output?.Select(o => o.GetType().Name).ToArray()
+            } : null,
+            ExtractedContent = extractedContent != null ? new
+            {
+                Length = extractedContent.Length,
+                Content = extractedContent.Length > 1000 ? extractedContent.Substring(0, 1000) + "..." : extractedContent,
+                IsValidJson = IsValidJson(extractedContent)
+            } : null
+        };
+
+        await _activityLogger.LogActivityAsync(
+            ActivityTypes.Error,
+            $"Tool selection error: {errorContext}",
+            errorDetails
+        );
+    }
+
+    /// <summary>
+    /// Check if a string is valid JSON
+    /// </summary>
+    private bool IsValidJson(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return false;
+        
+        try
+        {
+            JsonDocument.Parse(content);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Get descriptions of built-in OpenAI tools that could be relevant for the task
+    /// </summary>
+    private List<string> GetBuiltInOpenAIToolDescriptions(string task, List<ToolDefinition> alreadySelectedTools)
+    {
+        var descriptions = new List<string>();
+        var alreadySelectedNames = alreadySelectedTools.Select(t => t.Name).ToHashSet();
+
+        // Add web search tool if it's not already selected and could be relevant
+        if (!alreadySelectedNames.Contains("web_search") && ShouldIncludeWebSearch(task) && _agentConfig.WebSearch != null)
+        {
+            descriptions.Add("- web_search: Search the web for current information and real-time data");
+        }
+
+        // Add other built-in tools as they become available
+        // Future: code_interpreter, file_search, etc.
+
+        return descriptions;
+    }
+
+    /// <summary>
+    /// Get a ToolDefinition for a built-in OpenAI tool by name
+    /// </summary>
+    private ToolDefinition? GetBuiltInOpenAIToolDefinition(string toolName)
+    {
+        return toolName.ToLowerInvariant() switch
+        {
+            "web_search" => _agentConfig.WebSearch?.ToToolDefinition(),
+            // Future: add other built-in tools
+            _ => null
+        };
     }
 }
