@@ -19,16 +19,19 @@ public class ToolSelector : IToolSelector
     private readonly IToolManager _toolManager;
     private readonly ILogger<ToolSelector> _logger;
     private readonly ToolSelectionConfig _config;
+    private readonly AgentConfiguration _agentConfig;
 
     public ToolSelector(
         IOpenAIResponsesService openAi,
         IToolManager toolManager,
         ILogger<ToolSelector> logger,
+        AgentConfiguration agentConfig,
         ToolSelectionConfig? config = null)
     {
         _openAi = openAi;
         _toolManager = toolManager;
         _logger = logger;
+        _agentConfig = agentConfig;
         _config = config ?? ToolSelectionConfig.Default;
     }
 
@@ -65,6 +68,15 @@ public class ToolSelector : IToolSelector
             }
             
             stopwatch.Stop();
+            
+            // Add web search tool if task requires it and model supports it
+            if (ShouldIncludeWebSearch(task) && selectedTools.Count < maxToolCount)
+            {
+                var webSearchTool = _agentConfig.WebSearch.ToToolDefinition();
+                selectedTools.Add(webSearchTool);
+                _logger.LogInformation("Added web search tool for task requiring current information");
+            }
+            
             _logger.LogInformation("Selected {Count} tools for task in {Duration}ms", 
                 selectedTools.Count, stopwatch.ElapsedMilliseconds);
             
@@ -247,7 +259,9 @@ public class ToolSelector : IToolSelector
             [new[] { "time", "date", "current", "now" }] = 
                 new[] { "current_time" },
             [new[] { "system", "environment", "variable", "info" }] = 
-                new[] { "get_env_var", "system_info" }
+                new[] { "get_env_var", "system_info" },
+            [new[] { "web", "search", "internet", "online", "news", "current", "latest", "recent", "today", "real-time", "live", "browse", "website", "url", "google", "find" }] = 
+                new[] { "web_search" }
         };
         
         foreach (var (keywords, toolNames) in keywordMappings)
@@ -257,6 +271,10 @@ public class ToolSelector : IToolSelector
                 foreach (var toolName in toolNames)
                 {
                     if (selectedTools.Count >= maxAdditionalTools) break;
+                    
+                    // Skip web_search as it's handled separately as a built-in OpenAI tool
+                    if (string.Equals(toolName, "web_search", StringComparison.OrdinalIgnoreCase))
+                        continue;
                     
                     var tool = availableTools.FirstOrDefault(t => 
                         string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase) &&
@@ -405,5 +423,22 @@ public class ToolSelector : IToolSelector
         }
         
         return "";
+    }
+
+    public bool ShouldIncludeWebSearch(string task)
+    {
+        if (string.IsNullOrWhiteSpace(task))
+            return false;
+
+        var taskLower = task.ToLowerInvariant();
+        
+        // Web search keywords from the heuristics mapping
+        var webSearchKeywords = new[] { 
+            "web", "search", "internet", "online", "news", "current", "latest", 
+            "recent", "today", "real-time", "live", "browse", "website", "url", 
+            "google", "find", "what's happening", "breaking", "update", "trending"
+        };
+        
+        return webSearchKeywords.Any(keyword => taskLower.Contains(keyword));
     }
 }
