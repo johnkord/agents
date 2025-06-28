@@ -15,18 +15,28 @@ namespace AgentAlpha.Services;
 /// </summary>
 public class PlanningService : IPlanningService
 {
-    private readonly IOpenAIResponsesService _openAi;
+    private readonly ISessionAwareOpenAIService _openAi;
     private readonly ILogger<PlanningService> _logger;
     private readonly AgentConfiguration _config;
 
     public PlanningService(
-        IOpenAIResponsesService openAi,
+        ISessionAwareOpenAIService openAi,
         ILogger<PlanningService> logger,
         AgentConfiguration config)
     {
         _openAi = openAi;
         _logger = logger;
         _config = config;
+    }
+
+    /// <summary>
+    /// Set the session activity logger for automatic OpenAI request logging
+    /// </summary>
+    public void SetActivityLogger(ISessionActivityLogger? activityLogger)
+    {
+        _openAi.SetActivityLogger(activityLogger);
+        _logger.LogDebug("Activity logger {Status} for PlanningService", 
+            activityLogger != null ? "set" : "cleared");
     }
 
     public async Task<TaskPlan> CreatePlanAsync(string task, IList<McpClientTool> availableTools, string? context = null)

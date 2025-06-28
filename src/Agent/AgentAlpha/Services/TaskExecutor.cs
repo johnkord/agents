@@ -102,6 +102,11 @@ public class TaskExecutor : ITaskExecutor
                 if (currentSession != null)
                 {
                     _activityLogger.SetCurrentSession(currentSession);
+                    
+                    // Set activity logger for all services that need OpenAI request logging
+                    _toolSelector.SetActivityLogger(_activityLogger);
+                    _planningService.SetActivityLogger(_activityLogger);
+                    
                     await _activityLogger.LogActivityAsync(
                         ActivityTypes.SessionStart,
                         $"Resumed session for task: {request.Task}",
@@ -113,6 +118,11 @@ public class TaskExecutor : ITaskExecutor
                 // Create new session
                 currentSession = await _sessionManager.CreateSessionAsync(request.SessionName);
                 _activityLogger.SetCurrentSession(currentSession);
+                
+                // Set activity logger for all services that need OpenAI request logging
+                _toolSelector.SetActivityLogger(_activityLogger);
+                _planningService.SetActivityLogger(_activityLogger);
+                
                 await _activityLogger.LogActivityAsync(
                     ActivityTypes.SessionStart,
                     $"Created new session for task: {request.Task}",
@@ -126,6 +136,11 @@ public class TaskExecutor : ITaskExecutor
                 var defaultSessionName = $"Session {timestamp}";
                 currentSession = await _sessionManager.CreateSessionAsync(defaultSessionName);
                 _activityLogger.SetCurrentSession(currentSession);
+                
+                // Set activity logger for all services that need OpenAI request logging
+                _toolSelector.SetActivityLogger(_activityLogger);
+                _planningService.SetActivityLogger(_activityLogger);
+                
                 await _activityLogger.LogActivityAsync(
                     ActivityTypes.SessionStart,
                     $"Created default session for task: {request.Task}",

@@ -54,6 +54,12 @@ public interface IPlanningService
     /// <param name="availableTools">Tools available to the agent</param>
     /// <returns>Validation result with any issues identified</returns>
     Task<PlanValidationResult> ValidatePlanAsync(TaskPlan plan, IList<McpClientTool> availableTools);
+    
+    /// <summary>
+    /// Set the session activity logger for automatic OpenAI request logging
+    /// </summary>
+    /// <param name="activityLogger">The activity logger to use for this session</param>
+    void SetActivityLogger(ISessionActivityLogger? activityLogger);
 }
 
 /// <summary>

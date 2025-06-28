@@ -51,8 +51,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IConversationManager, ConversationManager>();
         services.AddSingleton<ITaskExecutor, TaskExecutor>();
         
-        // Register OpenAI service
+        // Register OpenAI services
         services.AddSingleton<IOpenAIResponsesService>(provider => new OpenAIResponsesService(configuration.OpenAiApiKey));
+        services.AddSingleton<ISessionAwareOpenAIService>(provider =>
+        {
+            var innerService = provider.GetRequiredService<IOpenAIResponsesService>();
+            var logger = provider.GetRequiredService<ILogger<SessionAwareOpenAIService>>();
+            return new SessionAwareOpenAIService(innerService, logger);
+        });
         
         return services;
     }
