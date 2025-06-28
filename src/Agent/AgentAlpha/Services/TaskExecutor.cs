@@ -7,6 +7,7 @@ using AgentAlpha.Models;
 using Common.Interfaces.Session;
 using Common.Models.Session;
 using System.Text.Json;                 // +NEW
+using System.Text;
 
 namespace AgentAlpha.Services;
 
@@ -22,6 +23,7 @@ public class TaskExecutor : ITaskExecutor
     private readonly ISessionManager _sessionManager;
     private readonly IPlanningService _planningService;
     private readonly ISessionActivityLogger _activityLogger;
+    private readonly ITaskStateManager _taskStateManager;
     private readonly AgentConfiguration _config;
     private readonly ILogger<TaskExecutor> _logger;
 
@@ -33,6 +35,7 @@ public class TaskExecutor : ITaskExecutor
         ISessionManager sessionManager,
         IPlanningService planningService,
         ISessionActivityLogger activityLogger,
+        ITaskStateManager taskStateManager,
         AgentConfiguration config,
         ILogger<TaskExecutor> logger)
     {
@@ -43,6 +46,7 @@ public class TaskExecutor : ITaskExecutor
         _sessionManager = sessionManager;
         _planningService = planningService;
         _activityLogger = activityLogger;
+        _taskStateManager = taskStateManager;
         _config = config;
         _logger = logger;
     }
@@ -232,33 +236,15 @@ public class TaskExecutor : ITaskExecutor
                 DisplayTaskPlan(taskPlan);
             }
 
-            // Step 4: Discover tools and select relevant ones based on the plan
-            var toolSelectionActivityId = _activityLogger.StartActivity(
-                ActivityTypes.ToolSelection,
-                "Discovering and selecting tools for plan",
-                new { PlanTask = taskPlan?.Task, TaskCreatedAt = taskPlan?.CreatedAt });
-            
-            try
+            // Step 4: Create task state from plan and execute subtasks sequentially
+            if (taskPlan != null && !string.IsNullOrEmpty(request.SessionId))
             {
-                var availableTools = await DiscoverAndSelectToolsForPlanAsync(taskPlan!, request, isResumingSession);
-                await _activityLogger.CompleteActivityAsync(toolSelectionActivityId, 
-                    new { SelectedToolCount = availableTools?.Length, ToolNames = availableTools?.Select(t => t.Name).ToArray() });
-
-                // Step 5: Execute conversation loop with timeout if specified
-                if (request.Timeout.HasValue)
-                {
-                    using var cts = new CancellationTokenSource(request.Timeout.Value);
-                    await ExecuteConversationLoopAsync(availableTools!, effectiveConfig, taskPlan, cts.Token);
-                }
-                else
-                {
-                    await ExecuteConversationLoopAsync(availableTools!, effectiveConfig, taskPlan);
-                }
+                await ExecuteSubtasksSequentiallyAsync(taskPlan, request, effectiveConfig, currentSession!);
             }
-            catch (Exception ex)
+            else
             {
-                await _activityLogger.FailActivityAsync(toolSelectionActivityId, ex.Message);
-                throw;
+                // Fallback to original execution for cases without session or plan
+                await ExecuteTraditionalFlowAsync(taskPlan, request, effectiveConfig, isResumingSession);
             }
             
             // Step 6: Save session if applicable
@@ -1264,5 +1250,455 @@ public class TaskExecutor : ITaskExecutor
             return "";
             
         return text.Length <= maxLength ? text : text.Substring(0, maxLength - 3) + "...";
+    }
+
+    /// <summary>
+    /// Execute subtasks sequentially with context passing
+    /// </summary>
+    private async Task ExecuteSubtasksSequentiallyAsync(TaskPlan taskPlan, TaskExecutionRequest request, AgentConfiguration config, AgentSession session)
+    {
+        _logger.LogInformation("Starting sequential subtask execution for task: {Task}", taskPlan.Task);
+        
+        // Create or get existing task state
+        var taskState = await _taskStateManager.GetTaskStateAsync(request.SessionId!) 
+            ?? _taskStateManager.CreateTaskState(taskPlan);
+        
+        // Save initial task state
+        await _taskStateManager.SaveTaskStateAsync(request.SessionId!, taskState);
+        
+        // Log activity for subtask execution start
+        await _activityLogger.LogActivityAsync(
+            ActivityTypes.TaskPlanning,
+            "Starting sequential subtask execution",
+            new { 
+                TaskDescription = taskPlan.Task,
+                TotalSubtasks = taskState.Subtasks.Count,
+                CompletedSubtasks = taskState.GetCompletedCount() 
+            });
+        
+        // Show current task state to user
+        Console.WriteLine("\n📋 Task State:");
+        Console.WriteLine(taskState.ToMarkdown());
+        
+        // Execute each subtask sequentially
+        while (true)
+        {
+            var currentSubtask = await _taskStateManager.GetCurrentSubtaskAsync(request.SessionId!);
+            
+            if (currentSubtask == null)
+            {
+                _logger.LogInformation("All subtasks completed for task: {Task}", taskPlan.Task);
+                Console.WriteLine("✅ All subtasks completed!");
+                
+                // Get current task state for logging
+                var finalTaskState = await _taskStateManager.GetTaskStateAsync(request.SessionId!);
+                if (finalTaskState != null)
+                {
+                    await _activityLogger.LogActivityAsync(
+                        ActivityTypes.TaskCompletionEvaluation,
+                        "All subtasks completed - task finished",
+                        new { 
+                            TaskDescription = taskPlan.Task,
+                            CompletedSubtasks = finalTaskState.Subtasks.Count 
+                        });
+                }
+                
+                break;
+            }
+            
+            // Start the current subtask
+            await _taskStateManager.StartSubtaskAsync(request.SessionId!, currentSubtask.StepNumber);
+            
+            Console.WriteLine($"\n🎯 Starting Subtask {currentSubtask.StepNumber}: {currentSubtask.Description}");
+            
+            // Get fresh task state for subtask execution
+            var currentTaskState = await _taskStateManager.GetTaskStateAsync(request.SessionId!);
+            if (currentTaskState == null)
+            {
+                _logger.LogError("Task state became null during execution");
+                break;
+            }
+            
+            // Execute the current subtask
+            await ExecuteSubtaskAsync(currentSubtask, currentTaskState, request, config);
+            
+            // Refresh task state after subtask execution
+            taskState = await _taskStateManager.GetTaskStateAsync(request.SessionId!);
+            
+            // Show updated task state
+            if (taskState != null)
+            {
+                Console.WriteLine("\n📋 Updated Task State:");
+                Console.WriteLine(taskState.ToMarkdown());
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Execute a single subtask with context from previous subtasks
+    /// </summary>
+    private async Task ExecuteSubtaskAsync(SubtaskState subtask, TaskState taskState, TaskExecutionRequest request, AgentConfiguration config)
+    {
+        _logger.LogInformation("Executing subtask {StepNumber}: {Description}", subtask.StepNumber, subtask.Description);
+        
+        // Get accumulated context from previous subtasks
+        var context = await _taskStateManager.GetAccumulatedContextAsync(request.SessionId!);
+        
+        // Create subtask-specific conversation context
+        var subtaskContext = BuildSubtaskContext(subtask, taskState, context);
+        
+        // Add subtask context to conversation
+        _conversationManager.AddAssistantMessage(subtaskContext);
+        
+        // Discover and select tools relevant to this subtask
+        var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
+        var filteredTools = _toolManager.ApplyFiltersToAllTools(allTools, config.ToolFilter);
+        
+        // Select tools based on the subtask's potential tools
+        var relevantTools = filteredTools.Where(t => 
+            subtask.PotentialTools.Contains(t.Name, StringComparer.OrdinalIgnoreCase) ||
+            IsToolRelevantForSubtask(t.Name, subtask.Description)).ToList();
+        
+        // Always include the subtask completion tool
+        var subtaskCompletionTool = allTools.FirstOrDefault(t => t.Name == "complete_subtask");
+        if (subtaskCompletionTool != null && !relevantTools.Contains(subtaskCompletionTool))
+        {
+            relevantTools.Add(subtaskCompletionTool);
+        }
+        
+        // Also include task state tools
+        var taskStateTools = allTools.Where(t => t.Name.StartsWith("get_task_state") || t.Name.StartsWith("update_subtask")).ToList();
+        foreach (var tool in taskStateTools)
+        {
+            if (!relevantTools.Contains(tool))
+            {
+                relevantTools.Add(tool);
+            }
+        }
+        
+        var toolDefinitions = relevantTools.Select(t => t.ToToolDefinition()).ToArray();
+        
+        await _activityLogger.LogActivityAsync(
+            ActivityTypes.ToolSelection,
+            $"Selected tools for subtask {subtask.StepNumber}",
+            new { 
+                SubtaskDescription = subtask.Description,
+                SelectedToolCount = toolDefinitions.Length,
+                ToolNames = toolDefinitions.Select(t => t.Name).ToArray() 
+            });
+        
+        // Execute subtask-focused conversation loop
+        await ExecuteSubtaskConversationLoopAsync(subtask, toolDefinitions, config, request.SessionId!);
+    }
+    
+    /// <summary>
+    /// Build context message for a subtask including accumulated context
+    /// </summary>
+    private string BuildSubtaskContext(SubtaskState subtask, TaskState taskState, Dictionary<string, object> accumulatedContext)
+    {
+        var context = new StringBuilder();
+        
+        context.AppendLine($"🎯 **Current Subtask: Step {subtask.StepNumber}**");
+        context.AppendLine($"**Description:** {subtask.Description}");
+        context.AppendLine();
+        
+        if (!string.IsNullOrEmpty(subtask.ExpectedInput))
+        {
+            context.AppendLine($"**Expected Input:** {subtask.ExpectedInput}");
+        }
+        
+        if (!string.IsNullOrEmpty(subtask.ExpectedOutput))
+        {
+            context.AppendLine($"**Expected Output:** {subtask.ExpectedOutput}");
+        }
+        
+        if (subtask.PotentialTools.Any())
+        {
+            context.AppendLine($"**Suggested Tools:** {string.Join(", ", subtask.PotentialTools)}");
+        }
+        
+        context.AppendLine();
+        
+        // Add context from completed subtasks
+        if (accumulatedContext.Any())
+        {
+            context.AppendLine("📚 **Context from Previous Subtasks:**");
+            foreach (var ctx in accumulatedContext)
+            {
+                context.AppendLine($"- {ctx.Key}: {ctx.Value}");
+            }
+            context.AppendLine();
+        }
+        
+        // Add overall task context
+        context.AppendLine($"**Overall Task:** {taskState.Task}");
+        context.AppendLine($"**Strategy:** {taskState.Strategy}");
+        context.AppendLine($"**Progress:** {taskState.GetCompletedCount()}/{taskState.Subtasks.Count} subtasks completed");
+        context.AppendLine();
+        
+        context.AppendLine("**Instructions:**");
+        context.AppendLine("1. Focus only on completing this specific subtask");
+        context.AppendLine("2. Use the provided context from previous subtasks to inform your work");
+        context.AppendLine("3. When you have completed this subtask, use the 'complete_subtask' tool");
+        context.AppendLine("4. Provide a clear summary, evidence, and any context needed for the next subtask");
+        
+        return context.ToString();
+    }
+    
+    /// <summary>
+    /// Execute conversation loop focused on a specific subtask
+    /// </summary>
+    private async Task ExecuteSubtaskConversationLoopAsync(SubtaskState subtask, OpenAIIntegration.Model.ToolDefinition[] availableTools, AgentConfiguration config, string sessionId)
+    {
+        _logger.LogInformation("Starting conversation loop for subtask {StepNumber}", subtask.StepNumber);
+        
+        for (int i = 0; i < config.MaxIterations; i++)
+        {
+            Console.WriteLine($"\n--- Subtask {subtask.StepNumber} - Iteration {i + 1} ---");
+
+            var response = await _conversationManager.ProcessIterationAsync(availableTools);
+
+            if (response.HasToolCalls)
+            {
+                var toolSummaries = new List<string>();
+                var subtaskCompleted = false;
+
+                foreach (var toolCall in response.ToolCalls)
+                {
+                    if (!config.ToolFilter.ShouldIncludeTool(toolCall.Name))
+                    {
+                        toolSummaries.Add($"Tool '{toolCall.Name}' call blocked by tool filter configuration.");
+                        continue;
+                    }
+
+                    var result = await _toolManager.ExecuteToolAsync(
+                        _connectionManager,
+                        toolCall.Name,
+                        toolCall.Arguments ?? new Dictionary<string, object?>());
+
+                    var argsJson = toolCall.Arguments?.Count > 0
+                        ? JsonSerializer.Serialize(toolCall.Arguments)
+                        : "{}";
+                    toolSummaries.Add($"Tool '{toolCall.Name}' called with args {argsJson}. Result: {result}");
+
+                    // Handle subtask completion
+                    if (toolCall.Name.Equals("complete_subtask", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await HandleSubtaskCompletionAsync(toolCall, result.ToString(), sessionId);
+                        subtaskCompleted = true;
+                    }
+                    else if (toolCall.Name.Equals("update_subtask_notes", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await HandleSubtaskNotesUpdateAsync(toolCall, sessionId);
+                    }
+                    else if (toolCall.Name.Equals("get_task_state", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await HandleTaskStateRequestAsync(sessionId);
+                    }
+                }
+
+                _conversationManager.AddToolResults(toolSummaries);
+                Console.WriteLine($"🔧 {string.Join("\n", toolSummaries)}");
+
+                if (subtaskCompleted)
+                {
+                    Console.WriteLine($"✅ Subtask {subtask.StepNumber} completed!");
+                    return;
+                }
+
+                continue;
+            }
+
+            // Display assistant response
+            Console.WriteLine($"AI: {response.AssistantText}");
+
+            // Check for repetitive responses
+            if (_conversationManager.WouldBeRepetitive(response.AssistantText))
+            {
+                Console.WriteLine("🔄 Detected repetitive responses for subtask - providing guidance");
+                
+                var guidanceMessage = $"I notice I'm being repetitive. Let me focus on completing subtask {subtask.StepNumber}: {subtask.Description}. I should use the 'complete_subtask' tool when I'm done.";
+                _conversationManager.AddAssistantMessage(guidanceMessage);
+                
+                if (i >= 2)
+                {
+                    Console.WriteLine($"⚠️ Breaking subtask {subtask.StepNumber} loop due to repetitive responses.");
+                    break;
+                }
+            }
+            else
+            {
+                _conversationManager.AddAssistantMessage(response.AssistantText);
+            }
+        }
+
+        Console.WriteLine($"⚠️ Subtask {subtask.StepNumber} reached maximum iterations ({config.MaxIterations}).");
+    }
+    
+    /// <summary>
+    /// Handle subtask completion tool call
+    /// </summary>
+    private async Task HandleSubtaskCompletionAsync(ToolCall toolCall, string toolResult, string sessionId)
+    {
+        try
+        {
+            var args = toolCall.Arguments ?? new Dictionary<string, object?>();
+            var stepNumber = args.GetValueOrDefault("stepNumber")?.ToString();
+            var summary = args.GetValueOrDefault("summary")?.ToString();
+            var evidence = args.GetValueOrDefault("evidence")?.ToString();
+            var context = args.GetValueOrDefault("context")?.ToString();
+            
+            if (int.TryParse(stepNumber, out int step))
+            {
+                var contextDict = new Dictionary<string, object>();
+                if (!string.IsNullOrEmpty(context))
+                {
+                    contextDict["CompletionContext"] = context;
+                }
+                if (!string.IsNullOrEmpty(evidence))
+                {
+                    contextDict["Evidence"] = evidence;
+                }
+                
+                await _taskStateManager.CompleteSubtaskAsync(sessionId, step, summary ?? "Subtask completed", evidence, contextDict);
+                
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.TaskCompletionEvaluation,
+                    $"Subtask {step} completed",
+                    new {
+                        StepNumber = step,
+                        Summary = summary,
+                        Evidence = evidence,
+                        Context = context
+                    });
+                
+                _logger.LogInformation("Subtask {StepNumber} marked as completed", step);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to handle subtask completion");
+        }
+    }
+    
+    /// <summary>
+    /// Handle subtask notes update tool call
+    /// </summary>
+    private async Task HandleSubtaskNotesUpdateAsync(ToolCall toolCall, string sessionId)
+    {
+        try
+        {
+            var args = toolCall.Arguments ?? new Dictionary<string, object?>();
+            var stepNumber = args.GetValueOrDefault("stepNumber")?.ToString();
+            var notes = args.GetValueOrDefault("notes")?.ToString();
+            var progressUpdate = args.GetValueOrDefault("progressUpdate")?.ToString();
+            
+            if (int.TryParse(stepNumber, out int step))
+            {
+                await _taskStateManager.UpdateSubtaskNotesAsync(sessionId, step, notes, progressUpdate);
+                _logger.LogDebug("Updated notes for subtask {StepNumber}", step);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to handle subtask notes update");
+        }
+    }
+    
+    /// <summary>
+    /// Handle task state request
+    /// </summary>
+    private async Task HandleTaskStateRequestAsync(string sessionId)
+    {
+        try
+        {
+            var taskState = await _taskStateManager.GetTaskStateAsync(sessionId);
+            if (taskState != null)
+            {
+                var taskStateMarkdown = taskState.ToMarkdown();
+                _conversationManager.AddAssistantMessage($"Current Task State:\n\n{taskStateMarkdown}");
+                Console.WriteLine("\n📋 Task State Requested:");
+                Console.WriteLine(taskStateMarkdown);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to handle task state request");
+        }
+    }
+    
+    /// <summary>
+    /// Check if a tool is relevant for a subtask based on its name and description
+    /// </summary>
+    private bool IsToolRelevantForSubtask(string toolName, string subtaskDescription)
+    {
+        // Basic heuristic to determine tool relevance
+        var toolLower = toolName.ToLowerInvariant();
+        var descLower = subtaskDescription.ToLowerInvariant();
+        
+        // File operations
+        if (descLower.Contains("file") || descLower.Contains("read") || descLower.Contains("write"))
+        {
+            if (toolLower.Contains("file") || toolLower.Contains("read") || toolLower.Contains("write"))
+                return true;
+        }
+        
+        // Math operations
+        if (descLower.Contains("calculate") || descLower.Contains("math") || descLower.Contains("compute"))
+        {
+            if (toolLower.Contains("math") || toolLower.Contains("calculate"))
+                return true;
+        }
+        
+        // Text operations
+        if (descLower.Contains("text") || descLower.Contains("string") || descLower.Contains("search"))
+        {
+            if (toolLower.Contains("text") || toolLower.Contains("string") || toolLower.Contains("search"))
+                return true;
+        }
+        
+        // System operations
+        if (descLower.Contains("system") || descLower.Contains("environment") || descLower.Contains("time"))
+        {
+            if (toolLower.Contains("system") || toolLower.Contains("environment") || toolLower.Contains("time"))
+                return true;
+        }
+        
+        return false;
+    }
+    
+    /// <summary>
+    /// Fallback to traditional execution flow for backward compatibility
+    /// </summary>
+    private async Task ExecuteTraditionalFlowAsync(TaskPlan? taskPlan, TaskExecutionRequest request, AgentConfiguration config, bool isResumingSession)
+    {
+        _logger.LogInformation("Using traditional execution flow");
+        
+        var toolSelectionActivityId = _activityLogger.StartActivity(
+            ActivityTypes.ToolSelection,
+            "Discovering and selecting tools for traditional execution",
+            new { PlanTask = taskPlan?.Task, TaskCreatedAt = taskPlan?.CreatedAt });
+        
+        try
+        {
+            var availableTools = await DiscoverAndSelectToolsForPlanAsync(taskPlan!, request, isResumingSession);
+            await _activityLogger.CompleteActivityAsync(toolSelectionActivityId, 
+                new { SelectedToolCount = availableTools?.Length, ToolNames = availableTools?.Select(t => t.Name).ToArray() });
+
+            if (request.Timeout.HasValue)
+            {
+                using var cts = new CancellationTokenSource(request.Timeout.Value);
+                await ExecuteConversationLoopAsync(availableTools!, config, taskPlan, cts.Token);
+            }
+            else
+            {
+                await ExecuteConversationLoopAsync(availableTools!, config, taskPlan);
+            }
+        }
+        catch (Exception ex)
+        {
+            await _activityLogger.FailActivityAsync(toolSelectionActivityId, ex.Message);
+            throw;
+        }
     }
 }
