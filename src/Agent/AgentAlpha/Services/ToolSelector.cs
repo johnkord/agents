@@ -448,23 +448,36 @@ public class ToolSelector : IToolSelector
             return false;
 
         var taskLower = task.ToLowerInvariant();
-        
-        // Web search keywords from the heuristics mapping
-        var webSearchKeywords = new[] { 
-            "web", "search", "internet", "online", "news", "current", "latest", 
-            "recent", "today", "real-time", "live", "browse", "website", "url", 
+
+        // Keywords that explicitly imply web search
+        var webSearchKeywords = new[] {
+            "web", "search", "internet", "online", "news", "current", "latest",
+            "recent", "today", "real-time", "live", "browse", "website", "url",
             "google", "find", "what's happening", "breaking", "update", "trending"
         };
-        
-        // Keywords that indicate need for current/up-to-date information
+
+        // Keywords that suggest need for up-to-date information
         var currentInfoKeywords = new[] {
             "available", "which", "what", "list", "models", "options", "versions",
             "supported", "offerings", "plans", "pricing", "features", "capabilities",
             "services", "apis", "endpoints", "status", "working", "active"
         };
-        
-        return webSearchKeywords.Any(keyword => taskLower.Contains(keyword)) ||
-               currentInfoKeywords.Any(keyword => taskLower.Contains(keyword));
+
+        // NEW – keywords indicating local file / directory operations.
+        var fileOperationKeywords = new[] {
+            "file", "files", "directory", "folder", "path", "contents", "content",
+            "read", "write", "save", "load"
+        };
+
+        // If it looks like a local file-system task and lacks explicit web-search terms, skip web search
+        if (fileOperationKeywords.Any(k => taskLower.Contains(k)) &&
+            !webSearchKeywords.Any(k => taskLower.Contains(k)))
+        {
+            return false;
+        }
+
+        return webSearchKeywords.Any(k => taskLower.Contains(k)) ||
+               currentInfoKeywords.Any(k => taskLower.Contains(k));
     }
 
     /// <summary>
