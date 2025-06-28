@@ -12,8 +12,7 @@ AgentAlpha is currently a basic ReAct (Reasoning and Acting) agent with the foll
 - Support for both stdio and HTTP transports
 
 ### Current Limitations
-- **Limited Tool Scope**: Only supports basic math operations (add, subtract, multiply, divide)
-- **Hard-coded Tool Schemas**: Assumes all tools take two number parameters
+- **Tool Schema Assumptions**: Hard-coded tool schemas that assume specific parameter patterns
 - **No Dynamic Discovery**: Cannot adapt to new tool types automatically
 - **Simple Interaction**: Basic text-based input/output only
 - **No Memory**: No persistence between sessions

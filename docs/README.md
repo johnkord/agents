@@ -49,7 +49,7 @@ Error: Cannot divide by zero
 ## Documentation Index
 
 - [Getting Started](getting-started.md) - Setup and initial configuration
-- [MCP Server](mcp-server.md) - MCP Server implementation with mathematical tools
+- [MCP Server](mcp-server.md) - MCP Server implementation with comprehensive tools
 - [MCP Client](mcp-client.md) - MCP Client usage and interactive features  
 - [Architecture](architecture.md) - System architecture and design decisions
 - [Tests](../tests/README.md) - Comprehensive testing including AI validation

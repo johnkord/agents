@@ -67,7 +67,7 @@ dotnet run --priority High --timeout 10 "Urgent calculation needed"
 dotnet run --verbose "Debug this issue"
 
 # With custom system prompt
-dotnet run --system-prompt "You are a math tutor" "Help me learn algebra"
+dotnet run --system-prompt "You are a helpful assistant" "Help me organize my project files"
 ```
 
 ## Parameter Details
