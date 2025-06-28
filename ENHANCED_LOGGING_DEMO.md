@@ -38,7 +38,7 @@
         "SelectionReason": "Essential tool always included"
       },
       {
-        "Name": "web_search", 
+        "Name": "web_search_preview", 
         "SelectionReason": "Task requires current OpenAI model information"
       }
     ],
@@ -74,7 +74,7 @@
       {
         "StepNumber": 1,
         "Description": "Search for current OpenAI model information",
-        "PotentialTools": ["web_search"],
+        "PotentialTools": ["web_search_preview"],
         "ExpectedOutput": "Current model list and capabilities"
       },
       {

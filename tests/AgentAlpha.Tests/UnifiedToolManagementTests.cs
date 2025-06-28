@@ -54,11 +54,11 @@ public class UnifiedToolManagementTests
 
         // Assert
         Assert.Equal(1, registry.Count);
-        Assert.True(registry.IsBuiltInTool("web_search"));
+        Assert.True(registry.IsBuiltInTool("web_search_preview"));
         
-        var webSearchTool = registry.GetBuiltInTool("web_search");
+        var webSearchTool = registry.GetBuiltInTool("web_search_preview");
         Assert.NotNull(webSearchTool);
-        Assert.Equal("web_search", webSearchTool.Name);
+        Assert.Equal("web_search_preview", webSearchTool.Name);
         Assert.Equal(ToolType.BuiltInOpenAI, webSearchTool.Type);
         Assert.Contains("Search the web", webSearchTool.Description);
     }
@@ -78,8 +78,8 @@ public class UnifiedToolManagementTests
 
         // Assert
         Assert.Equal(0, registry.Count);
-        Assert.False(registry.IsBuiltInTool("web_search"));
-        Assert.Null(registry.GetBuiltInTool("web_search"));
+        Assert.False(registry.IsBuiltInTool("web_search_preview"));
+        Assert.Null(registry.GetBuiltInTool("web_search_preview"));
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public class UnifiedToolManagementTests
         // Assert
         Assert.Single(allTools); // Should have web search tool (no MCP tools in mock)
         
-        var webSearchTool = allTools.FirstOrDefault(t => t.Name == "web_search");
+        var webSearchTool = allTools.FirstOrDefault(t => t.Name == "web_search_preview");
         Assert.NotNull(webSearchTool);
         Assert.Equal(ToolType.BuiltInOpenAI, webSearchTool.Type);
         Assert.True(webSearchTool.CanExecute());
@@ -126,7 +126,7 @@ public class UnifiedToolManagementTests
         };
         
         // Configure filter to exclude web search
-        config.ToolFilter.Blacklist.Add("web_search");
+        config.ToolFilter.Blacklist.Add("web_search_preview");
         
         var registry = new BuiltInToolRegistry(builderLogger, config);
         var toolManager = new ToolManager(logger, config, registry);
@@ -166,7 +166,7 @@ public class UnifiedToolManagementTests
         
         var webSearchDef = toolDefinitions.First();
         Assert.Equal("web_search_preview", webSearchDef.Type); // Built-in OpenAI tool type
-        Assert.Equal("web_search", webSearchDef.Name);
+        Assert.Equal("web_search_preview", webSearchDef.Name);
     }
 
     [Fact]
@@ -186,7 +186,7 @@ public class UnifiedToolManagementTests
         var registry = new BuiltInToolRegistry(builderLogger, config);
         var toolManager = new ToolManager(logger, config, registry);
         
-        var webSearchTool = registry.GetBuiltInTool("web_search");
+        var webSearchTool = registry.GetBuiltInTool("web_search_preview");
         Assert.NotNull(webSearchTool);
 
         // Act
@@ -211,7 +211,7 @@ public class UnifiedToolManagementTests
         var metadata = webSearchTool.GetMetadata();
 
         // Assert
-        Assert.Equal("web_search", webSearchTool.Name);
+        Assert.Equal("web_search_preview", webSearchTool.Name);
         Assert.Equal(ToolType.BuiltInOpenAI, webSearchTool.Type);
         Assert.Contains("Search the web", webSearchTool.Description);
         

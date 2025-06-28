@@ -37,7 +37,7 @@ Enhanced rejection reasoning to prioritize web search when current information i
 
 ```csharp
 // If task requires current info but this isn't web search, prioritize web search
-if (analysis.RequiresCurrentInfo && !toolLower.Contains("web_search") && !toolLower.Contains("search"))
+if (analysis.RequiresCurrentInfo && !toolLower.Contains("web_search_preview") && !toolLower.Contains("search"))
 {
     return "Task requires current information - web search prioritized";
 }

@@ -72,7 +72,7 @@ var config = new AgentConfiguration
 };
 
 // Exclude specific tools
-config.ToolFilter.Blacklist.Add("web_search");
+config.ToolFilter.Blacklist.Add("web_search_preview");
 
 var allTools = await toolManager.DiscoverAllToolsAsync(connection);
 var filteredTools = toolManager.ApplyFiltersToAllTools(allTools, config.ToolFilter);
@@ -99,14 +99,14 @@ var config = new AgentConfiguration
 var registry = new BuiltInToolRegistry(logger, config);
 
 // Web search tool is now available in the unified system
-var webSearchTool = registry.GetBuiltInTool("web_search");
+var webSearchTool = registry.GetBuiltInTool("web_search_preview");
 var toolDefinition = webSearchTool.ToToolDefinition();
 ```
 
 ### 4. Tool Execution
 ```csharp
 var tools = await toolManager.DiscoverAllToolsAsync(connection);
-var webSearchTool = tools.FirstOrDefault(t => t.Name == "web_search");
+var webSearchTool = tools.FirstOrDefault(t => t.Name == "web_search_preview");
 
 if (webSearchTool != null)
 {

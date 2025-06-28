@@ -25,7 +25,7 @@ public class WebSearchTool
         var toolDef = new ToolDefinition
         {
             Type = Type,
-            Name = "web_search",
+            Name = "web_search_preview",
             Description = "Search the web for current information and real-time data"
         };
 

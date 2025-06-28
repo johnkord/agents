@@ -37,7 +37,7 @@ public class WebSearchToolTests
 
         // Assert
         Assert.Equal("web_search_preview", toolDefinition.Type);
-        Assert.Equal("web_search", toolDefinition.Name);
+        Assert.Equal("web_search_preview", toolDefinition.Name);
         Assert.Equal("Search the web for current information and real-time data", toolDefinition.Description);
         Assert.NotNull(toolDefinition.Parameters);
     }
@@ -53,7 +53,7 @@ public class WebSearchToolTests
 
         // Assert
         Assert.Equal("web_search_preview", toolDefinition.Type);
-        Assert.Equal("web_search", toolDefinition.Name);
+        Assert.Equal("web_search_preview", toolDefinition.Name);
         Assert.Equal("Search the web for current information and real-time data", toolDefinition.Description);
     }
 
@@ -125,7 +125,7 @@ public class WebSearchToolTests
         var result = await toolSelector.SelectToolsForTaskAsync("What's the latest news today?", availableTools);
 
         // Assert
-        Assert.Contains(result, t => t.Type == "web_search_preview" && t.Name == "web_search");
+        Assert.Contains(result, t => t.Type == "web_search_preview" && t.Name == "web_search_preview");
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public class WebSearchToolTests
         var result = await toolSelector.SelectToolsForTaskAsync("which models are available through openai?", availableTools);
 
         // Assert - Web search should be included regardless of LLM selection
-        Assert.Contains(result, t => t.Type == "web_search_preview" && t.Name == "web_search");
+        Assert.Contains(result, t => t.Type == "web_search_preview" && t.Name == "web_search_preview");
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public class WebSearchToolTests
         var result = await toolSelector.SelectToolsForTaskAsync("which models are available through openai?", availableTools);
 
         // Assert - Web search should be included with heuristic selection too
-        Assert.Contains(result, t => t.Type == "web_search_preview" && t.Name == "web_search");
+        Assert.Contains(result, t => t.Type == "web_search_preview" && t.Name == "web_search_preview");
     }
 
     [Fact]
@@ -247,6 +247,6 @@ public class WebSearchToolTests
         var result = await toolSelector.SelectToolsForTaskAsync("which models are available through openai?", availableTools);
 
         // Assert - Web search should be included with default configuration
-        Assert.Contains(result, t => t.Type == "web_search_preview" && t.Name == "web_search");
+        Assert.Contains(result, t => t.Type == "web_search_preview" && t.Name == "web_search_preview");
     }
 }

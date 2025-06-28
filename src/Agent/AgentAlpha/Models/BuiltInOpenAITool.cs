@@ -71,7 +71,7 @@ public class WebSearchBuiltInTool : BuiltInOpenAITool
 {
     public WebSearchBuiltInTool(WebSearchTool webSearchConfig) 
         : base(
-            name: "web_search",
+            name: "web_search_preview",
             description: "Search the web for current information and real-time data",
             toolDefinition: webSearchConfig.ToToolDefinition(),
             metadata: new Dictionary<string, object?>

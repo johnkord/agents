@@ -63,9 +63,9 @@ namespace AgentAlpha.Tests
             Assert.Contains("- web_search: Search the web for current information and real-time data", builtInDescriptions);
             
             // Verify we can get the tool definition
-            var webSearchDef = GetBuiltInToolDefinitionViaReflection(toolSelector, "web_search");
+            var webSearchDef = GetBuiltInToolDefinitionViaReflection(toolSelector, "web_search_preview");
             Assert.NotNull(webSearchDef);
-            Assert.Equal("web_search", webSearchDef.Name);
+            Assert.Equal("web_search_preview", webSearchDef.Name);
         }
 
         [Fact]

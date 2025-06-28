@@ -83,7 +83,7 @@ public class ToolSelector : IToolSelector
             
             // Add web search tool if task requires it and model supports it (for both LLM and heuristic selection)
             if (ShouldIncludeWebSearch(task) && selectedTools.Count < maxToolCount && 
-                !selectedTools.Any(t => t.Name == "web_search") && _agentConfig.WebSearch != null)
+                !selectedTools.Any(t => t.Name == "web_search_preview") && _agentConfig.WebSearch != null)
             {
                 var webSearchTool = _agentConfig.WebSearch.ToToolDefinition();
                 selectedTools.Add(webSearchTool);
@@ -311,7 +311,7 @@ public class ToolSelector : IToolSelector
             [new[] { "system", "environment", "variable", "info" }] = 
                 new[] { "get_env_var", "system_info" },
             [new[] { "web", "search", "internet", "online", "news", "current", "latest", "recent", "today", "real-time", "live", "browse", "website", "url", "google", "find", "available", "which", "what", "list", "models", "options", "versions", "supported", "offerings", "plans", "pricing", "features", "capabilities", "services", "apis", "endpoints", "status", "working", "active" }] = 
-                new[] { "web_search" }
+                new[] { "web_search_preview" }
         };
         
         foreach (var (keywords, toolNames) in keywordMappings)
@@ -323,7 +323,7 @@ public class ToolSelector : IToolSelector
                     if (selectedTools.Count >= maxAdditionalTools) break;
                     
                     // Skip web_search as it's handled separately as a built-in OpenAI tool
-                    if (string.Equals(toolName, "web_search", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(toolName, "web_search_preview", StringComparison.OrdinalIgnoreCase))
                         continue;
                     
                     var tool = availableTools.FirstOrDefault(t => 
@@ -645,7 +645,7 @@ public class ToolSelector : IToolSelector
             return "Essential tool always included";
         }
 
-        if (toolName.Equals("web_search", StringComparison.OrdinalIgnoreCase) && analysis.RequiresCurrentInfo)
+        if (toolName.Equals("web_search_preview", StringComparison.OrdinalIgnoreCase) && analysis.RequiresCurrentInfo)
         {
             return "Task requires current/real-time information";
         }
@@ -679,7 +679,7 @@ public class ToolSelector : IToolSelector
         var toolLower = toolName.ToLowerInvariant();
         
         // If task requires current info but this isn't web search, prioritize web search
-        if (analysis.RequiresCurrentInfo && !toolLower.Contains("web_search") && !toolLower.Contains("search"))
+        if (analysis.RequiresCurrentInfo && !toolLower.Contains("web_search_preview") && !toolLower.Contains("search"))
         {
             return "Task requires current information - web search prioritized";
         }
@@ -869,7 +869,7 @@ public class ToolSelector : IToolSelector
         var alreadySelectedNames = alreadySelectedTools.Select(t => t.Name).ToHashSet();
 
         // Add web search tool if it's not already selected and could be relevant
-        if (!alreadySelectedNames.Contains("web_search") && ShouldIncludeWebSearch(task) && _agentConfig.WebSearch != null)
+        if (!alreadySelectedNames.Contains("web_search_preview") && ShouldIncludeWebSearch(task) && _agentConfig.WebSearch != null)
         {
             descriptions.Add("- web_search: Search the web for current information and real-time data");
         }
@@ -887,7 +887,7 @@ public class ToolSelector : IToolSelector
     {
         return toolName.ToLowerInvariant() switch
         {
-            "web_search" => _agentConfig.WebSearch?.ToToolDefinition(),
+            "web_search_preview" => _agentConfig.WebSearch?.ToToolDefinition(),
             // Future: add other built-in tools
             _ => null
         };
