@@ -79,15 +79,15 @@ public class ToolSelector : IToolSelector
                 // Fallback: use simple heuristics if LLM selection is disabled
                 var additionalTools = SelectToolsUsingHeuristics(task, availableTools, selectedTools, maxToolCount - selectedTools.Count);
                 selectedTools.AddRange(additionalTools);
-                
-                // Add web search tool if task requires it and model supports it (only when not using LLM selection)
-                if (ShouldIncludeWebSearch(task) && selectedTools.Count < maxToolCount && 
-                    !selectedTools.Any(t => t.Name == "web_search") && _agentConfig.WebSearch != null)
-                {
-                    var webSearchTool = _agentConfig.WebSearch.ToToolDefinition();
-                    selectedTools.Add(webSearchTool);
-                    _logger.LogInformation("Added web search tool for task requiring current information");
-                }
+            }
+            
+            // Add web search tool if task requires it and model supports it (for both LLM and heuristic selection)
+            if (ShouldIncludeWebSearch(task) && selectedTools.Count < maxToolCount && 
+                !selectedTools.Any(t => t.Name == "web_search") && _agentConfig.WebSearch != null)
+            {
+                var webSearchTool = _agentConfig.WebSearch.ToToolDefinition();
+                selectedTools.Add(webSearchTool);
+                _logger.LogInformation("Added web search tool for task requiring current information");
             }
             
             stopwatch.Stop();
