@@ -39,6 +39,11 @@ public class TaskPlan
     /// When this plan was created
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    
+    /// <summary>
+    /// Additional context and metadata for the plan
+    /// </summary>
+    public Dictionary<string, object>? AdditionalContext { get; set; }
 }
 
 /// <summary>

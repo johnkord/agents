@@ -110,6 +110,215 @@ public class PlanningServiceTests
         Assert.Empty(result.Suggestions);
     }
 
+    [Fact]
+    public void CurrentState_Creation_SetsDefaultValues()
+    {
+        // Arrange & Act
+        var state = new CurrentState();
+
+        // Assert
+        Assert.Null(state.SessionContext);
+        Assert.Empty(state.PreviousResults);
+        Assert.Empty(state.AvailableResources);
+        Assert.Null(state.UserPreferences);
+        Assert.Null(state.Environment);
+        Assert.True(state.CapturedAt <= DateTime.UtcNow);
+        Assert.Empty(state.AdditionalContext);
+    }
+
+    [Fact]
+    public void ExecutionResult_Creation_SetsDefaultValues()
+    {
+        // Arrange & Act
+        var result = new ExecutionResult
+        {
+            Task = "Test task",
+            Success = true,
+            Summary = "Test summary"
+        };
+
+        // Assert
+        Assert.Equal("Test task", result.Task);
+        Assert.True(result.Success);
+        Assert.Equal("Test summary", result.Summary);
+        Assert.Empty(result.ToolsUsed);
+        Assert.True(result.CompletedAt <= DateTime.UtcNow);
+        Assert.Null(result.Insights);
+    }
+
+    [Fact]
+    public void UserPreferences_Creation_SetsDefaultValues()
+    {
+        // Arrange & Act
+        var preferences = new UserPreferences();
+
+        // Assert
+        Assert.Null(preferences.PreferredApproach);
+        Assert.Empty(preferences.PreferredTools);
+        Assert.Empty(preferences.AvoidedTools);
+        Assert.Null(preferences.MaxExecutionTime);
+        Assert.Equal(0.5, preferences.RiskTolerance);
+    }
+
+    [Fact]
+    public async Task CreatePlanWithStateAnalysisAsync_WithCompleteState_CreatesEnhancedPlan()
+    {
+        // Arrange
+        var mockOpenAI = new MockOpenAIService();
+        var planningService = new PlanningService(mockOpenAI, _logger, _config);
+        
+        var currentState = new CurrentState
+        {
+            SessionContext = "User working on data analysis project",
+            PreviousResults = new List<ExecutionResult>
+            {
+                new ExecutionResult
+                {
+                    Task = "Load data file",
+                    Success = true,
+                    Summary = "Successfully loaded CSV file with 1000 rows",
+                    ToolsUsed = new List<string> { "file_reader" },
+                    Insights = "Data quality is good"
+                }
+            },
+            UserPreferences = new UserPreferences
+            {
+                PreferredApproach = "thorough",
+                RiskTolerance = 0.3,
+                PreferredTools = new List<string> { "pandas", "numpy" }
+            },
+            Environment = new EnvironmentCapabilities
+            {
+                ComputeResources = "8GB RAM, 4 CPU cores",
+                NetworkStatus = "Connected",
+                SecurityConstraints = new List<string> { "no_external_apis" }
+            },
+            AvailableResources = new Dictionary<string, string>
+            {
+                ["DataFile"] = "customer_data.csv",
+                ["OutputFormat"] = "JSON"
+            }
+        };
+
+        var availableTools = new List<McpClientTool>
+        {
+            new McpClientTool { Name = "pandas", Description = "Data manipulation library" },
+            new McpClientTool { Name = "file_reader", Description = "Read files from filesystem" }
+        };
+
+        // Act
+        var plan = await planningService.CreatePlanWithStateAnalysisAsync(
+            "Analyze customer data and generate insights", 
+            availableTools, 
+            currentState
+        );
+
+        // Assert
+        Assert.NotNull(plan);
+        Assert.Equal("Analyze customer data and generate insights", plan.Task);
+        Assert.NotEmpty(plan.Strategy);
+        Assert.NotEmpty(plan.Steps);
+        Assert.NotNull(plan.AdditionalContext);
+        Assert.True(plan.AdditionalContext.ContainsKey("StateAnalysisTimestamp"));
+        Assert.True(plan.AdditionalContext.ContainsKey("UserRiskTolerance"));
+        Assert.Equal(0.3, plan.AdditionalContext["UserRiskTolerance"]);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_CallsStateAnalysisVersion()
+    {
+        // Arrange
+        var mockOpenAI = new MockOpenAIService();
+        var planningService = new PlanningService(mockOpenAI, _logger, _config);
+        
+        var availableTools = new List<McpClientTool>
+        {
+            new McpClientTool { Name = "test_tool", Description = "Test tool" }
+        };
+
+        // Act
+        var plan = await planningService.CreatePlanAsync("Test task", availableTools, "Test context");
+
+        // Assert
+        Assert.NotNull(plan);
+        Assert.Equal("Test task", plan.Task);
+        Assert.NotEmpty(plan.Strategy);
+        // The plan should have additional context since it now goes through state analysis
+        Assert.NotNull(plan.AdditionalContext);
+    }
+
+    [Fact]
+    public async Task RefinePlanWithStateAsync_WithStateContext_CreatesEnhancedRefinedPlan()
+    {
+        // Arrange
+        var mockOpenAI = new MockOpenAIService();
+        var planningService = new PlanningService(mockOpenAI, _logger, _config);
+        
+        var existingPlan = new TaskPlan
+        {
+            Task = "Analyze data",
+            Strategy = "Simple analysis",
+            Steps = new List<PlanStep>
+            {
+                new PlanStep
+                {
+                    StepNumber = 1,
+                    Description = "Load data",
+                    PotentialTools = new List<string> { "file_reader" }
+                }
+            },
+            Complexity = TaskComplexity.Simple,
+            Confidence = 0.6
+        };
+
+        var currentState = new CurrentState
+        {
+            SessionContext = "User needs more detailed analysis",
+            PreviousResults = new List<ExecutionResult>
+            {
+                new ExecutionResult
+                {
+                    Task = "Previous analysis",
+                    Success = false,
+                    Summary = "Analysis was too shallow",
+                    Insights = "Need more statistical analysis"
+                }
+            },
+            UserPreferences = new UserPreferences
+            {
+                PreferredApproach = "thorough",
+                RiskTolerance = 0.8
+            }
+        };
+
+        var availableTools = new List<McpClientTool>
+        {
+            new McpClientTool { Name = "file_reader", Description = "Read files" },
+            new McpClientTool { Name = "statistics", Description = "Statistical analysis" }
+        };
+
+        // Act
+        var refinedPlan = await planningService.RefinePlanWithStateAsync(
+            existingPlan,
+            "Need more thorough statistical analysis with charts",
+            availableTools,
+            currentState
+        );
+
+        // Assert
+        Assert.NotNull(refinedPlan);
+        Assert.Equal("Analyze data", refinedPlan.Task);
+        Assert.NotEmpty(refinedPlan.Strategy);
+        Assert.NotNull(refinedPlan.AdditionalContext);
+        Assert.True(refinedPlan.AdditionalContext.ContainsKey("RefinementFeedback"));
+        Assert.True(refinedPlan.AdditionalContext.ContainsKey("RefinedAt"));
+        Assert.True(refinedPlan.AdditionalContext.ContainsKey("OriginalComplexity"));
+        Assert.True(refinedPlan.AdditionalContext.ContainsKey("OriginalConfidence"));
+        Assert.Equal("Need more thorough statistical analysis with charts", refinedPlan.AdditionalContext["RefinementFeedback"]);
+        Assert.Equal("Simple", refinedPlan.AdditionalContext["OriginalComplexity"]);
+        Assert.Equal(0.6, refinedPlan.AdditionalContext["OriginalConfidence"]);
+    }
+
     // Mock OpenAI service for testing
     private class MockOpenAIService : IOpenAIResponsesService
     {
