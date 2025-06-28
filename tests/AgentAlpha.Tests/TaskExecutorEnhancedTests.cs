@@ -32,7 +32,7 @@ public class TaskExecutorEnhancedTests
         var request = new TaskExecutionRequest
         {
             Task = "Test task",
-            Model = "gpt-3.5-turbo",
+            Model = "gpt-4.1-nano",
             Temperature = 0.5,
             MaxIterations = 3,
             SystemPrompt = "Custom prompt",
@@ -43,7 +43,7 @@ public class TaskExecutorEnhancedTests
 
         // Assert - Verify all parameters are properly stored
         Assert.Equal("Test task", request.Task);
-        Assert.Equal("gpt-3.5-turbo", request.Model);
+        Assert.Equal("gpt-4.1-nano", request.Model);
         Assert.Equal(0.5, request.Temperature);
         Assert.Equal(3, request.MaxIterations);
         Assert.Equal("Custom prompt", request.SystemPrompt);
@@ -54,7 +54,7 @@ public class TaskExecutorEnhancedTests
 
     [Theory]
     [InlineData("gpt-4o")]
-    [InlineData("gpt-3.5-turbo")]
+    [InlineData("gpt-4.1-nano")]
     [InlineData("gpt-4-turbo")]
     public void TaskExecutionRequest_AcceptsValidModelNames(string model)
     {

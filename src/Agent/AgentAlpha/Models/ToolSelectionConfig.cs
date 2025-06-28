@@ -16,9 +16,9 @@ public class ToolSelectionConfig
     public bool UseLLMSelection { get; set; } = true;
     
     /// <summary>
-    /// Model to use for tool selection (should be fast/cheap, default: gpt-3.5-turbo)
+    /// Model to use for tool selection (should be fast/cheap, default: gpt-4.1-nano)
     /// </summary>
-    public string SelectionModel { get; set; } = "gpt-3.5-turbo";
+    public string SelectionModel { get; set; } = "gpt-4.1-nano";
     
     /// <summary>
     /// Temperature for tool selection LLM calls (default: 0.1 for consistent results)

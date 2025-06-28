@@ -18,7 +18,7 @@ public class ToolSelectionTests
         // Assert
         Assert.Equal(10, config.MaxToolsPerRequest);
         Assert.True(config.UseLLMSelection);
-        Assert.Equal("gpt-3.5-turbo", config.SelectionModel);
+        Assert.Equal("gpt-4.1-nano", config.SelectionModel);
         Assert.Equal(0.1, config.SelectionTemperature);
         Assert.True(config.AllowDynamicExpansion);
         Assert.Equal(3, config.MaxAdditionalToolsPerIteration);

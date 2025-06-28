@@ -19,7 +19,7 @@ public class PlanningServiceTests
     {
         var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         _logger = loggerFactory.CreateLogger<PlanningService>();
-        _config = new AgentConfiguration { Model = "gpt-3.5-turbo" };
+        _config = new AgentConfiguration { Model = "gpt-4.1-nano" };
     }
 
     [Fact]

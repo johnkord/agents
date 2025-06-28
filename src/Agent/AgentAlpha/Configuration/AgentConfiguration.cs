@@ -181,7 +181,7 @@ public class AgentConfiguration
     /// <exception cref="InvalidOperationException">Thrown when model name is invalid</exception>
     private static string ValidateModel(string model)
     {
-        var validModels = new[] { "gpt-4o", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-4o-mini" };
+        var validModels = new[] { "gpt-4o", "gpt-4", "gpt-4-turbo", "gpt-4.1-nano", "gpt-4o-mini" };
         
         if (validModels.Contains(model, StringComparer.OrdinalIgnoreCase))
         {

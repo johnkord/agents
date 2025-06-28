@@ -93,7 +93,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
 
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-3.5-turbo", // Consider upgrading to gpt-4 for more sophisticated analysis
+                Model = "gpt-4.1-nano", // Consider upgrading to gpt-4 for more sophisticated analysis
                 Input = new[]
                 {
                     new { role = "user", content = prompt }
@@ -222,7 +222,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
 
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-3.5-turbo",
+                Model = "gpt-4.1-nano",
                 Input = new[]
                 {
                     new { role = "user", content = prompt }

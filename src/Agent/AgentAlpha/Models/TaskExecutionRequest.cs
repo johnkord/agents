@@ -13,7 +13,7 @@ public class TaskExecutionRequest
     public string Task { get; set; } = string.Empty;
     
     /// <summary>
-    /// OpenAI model to use for this task (e.g., "gpt-4o", "gpt-3.5-turbo")
+    /// OpenAI model to use for this task (e.g., "gpt-4o", "gpt-4.1-nano")
     /// </summary>
     public string? Model { get; set; }
     
