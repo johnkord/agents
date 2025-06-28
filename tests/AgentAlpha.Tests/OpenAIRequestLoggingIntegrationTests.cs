@@ -4,11 +4,13 @@ using AgentAlpha.Services;
 using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
 using OpenAIIntegration;
+using OpenAIIntegration.Model;
 using SessionService.Services;
 using Common.Models.Session;
 using ModelContextProtocol.Client;
 using AgentAlpha.Models;
 using System.Text.Json;
+using System.Linq;
 
 namespace AgentAlpha.Tests;
 
@@ -268,5 +270,26 @@ public class MockToolManager : IToolManager
     public Task<string> ExecuteToolAsync(IConnectionManager connection, string toolName, Dictionary<string, object?> arguments)
     {
         return Task.FromResult("Mock tool execution result");
+    }
+
+    // New unified methods
+    public Task<IList<IUnifiedTool>> DiscoverAllToolsAsync(IConnectionManager connection)
+    {
+        return Task.FromResult<IList<IUnifiedTool>>(new List<IUnifiedTool>());
+    }
+
+    public IList<IUnifiedTool> ApplyFiltersToAllTools(IList<IUnifiedTool> tools, ToolFilterConfig filter)
+    {
+        return tools;
+    }
+
+    public Task<string> ExecuteUnifiedToolAsync(IUnifiedTool tool, IConnectionManager connection, Dictionary<string, object?> arguments)
+    {
+        return Task.FromResult("Mock unified tool execution result");
+    }
+
+    public ToolDefinition[] ConvertToToolDefinitions(IList<IUnifiedTool> tools)
+    {
+        return tools.Select(t => t.ToToolDefinition()).ToArray();
     }
 }
