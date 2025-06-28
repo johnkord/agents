@@ -474,20 +474,63 @@ Create a logical, state-aware execution plan using the create_execution_plan too
 
     private TaskPlan ExtractPlanFromToolCall(ResponsesCreateResponse response, string originalTask)
     {
+        FunctionToolCall? planToolCall = null;
         try
         {
             // Find the function tool call for plan creation
-            var planToolCall = response.Output?
+            planToolCall = response.Output?
                 .OfType<FunctionToolCall>()
                 .FirstOrDefault(tc => tc.Name == "create_execution_plan");
 
             if (planToolCall?.Arguments == null)
             {
                 _logger.LogWarning("No plan creation tool call found in response");
+                LogFallbackPlanCreation(originalTask, "No plan creation tool call found in response", null);
                 return CreateFallbackPlan(originalTask, new List<McpClientTool>());
             }
 
-            var args = planToolCall.Arguments.Value;
+            var rawArguments = planToolCall.Arguments.Value;
+            JsonElement args;
+
+            // Handle both string and object arguments
+            if (rawArguments.ValueKind == JsonValueKind.String)
+            {
+                // Arguments is a JSON string that needs to be parsed
+                var argumentsString = rawArguments.GetString();
+                _logger.LogDebug("Tool call arguments received as string, parsing JSON: {ArgumentsString}", argumentsString);
+                
+                if (string.IsNullOrWhiteSpace(argumentsString))
+                {
+                    _logger.LogWarning("Tool call arguments string is null or empty");
+                    LogFallbackPlanCreation(originalTask, "Tool call arguments string is null or empty", argumentsString);
+                    return CreateFallbackPlan(originalTask, new List<McpClientTool>());
+                }
+
+                try
+                {
+                    args = JsonSerializer.Deserialize<JsonElement>(argumentsString);
+                }
+                catch (JsonException jsonEx)
+                {
+                    _logger.LogWarning(jsonEx, "Failed to parse tool call arguments JSON string: {ArgumentsString}", argumentsString);
+                    LogFallbackPlanCreation(originalTask, $"Failed to parse tool call arguments JSON: {jsonEx.Message}", argumentsString);
+                    return CreateFallbackPlan(originalTask, new List<McpClientTool>());
+                }
+            }
+            else if (rawArguments.ValueKind == JsonValueKind.Object)
+            {
+                // Arguments is already a JSON object
+                args = rawArguments;
+                _logger.LogDebug("Tool call arguments received as object, using directly");
+            }
+            else
+            {
+                var argumentsRaw = rawArguments.GetRawText();
+                _logger.LogWarning("Tool call arguments has unexpected JSON type: {ValueKind}, Raw content: {ArgumentsRaw}", 
+                    rawArguments.ValueKind, argumentsRaw);
+                LogFallbackPlanCreation(originalTask, $"Tool call arguments has unexpected JSON type: {rawArguments.ValueKind}", argumentsRaw);
+                return CreateFallbackPlan(originalTask, new List<McpClientTool>());
+            }
             
             var plan = new TaskPlan
             {
@@ -531,7 +574,9 @@ Create a logical, state-aware execution plan using the create_execution_plan too
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to extract plan from tool call, creating fallback plan");
+            var rawArgumentsText = planToolCall?.Arguments?.GetRawText() ?? "null";
+            _logger.LogWarning(ex, "Failed to extract plan from tool call, creating fallback plan. Raw arguments: {RawArguments}", rawArgumentsText);
+            LogFallbackPlanCreation(originalTask, $"Exception during plan extraction: {ex.Message}", rawArgumentsText);
             return CreateFallbackPlan(originalTask, new List<McpClientTool>());
         }
     }
@@ -824,5 +869,45 @@ Create a logical, state-aware execution plan using the create_execution_plan too
             $"Created execution plan with {plan.Steps.Count} steps and {plan.Complexity} complexity",
             planDetails
         );
+    }
+
+    /// <summary>
+    /// Logs when a fallback plan has to be created due to parsing failures
+    /// </summary>
+    private void LogFallbackPlanCreation(string originalTask, string reason, string? rawContent)
+    {
+        _logger.LogWarning("Creating fallback plan due to parsing failure. Task: {Task}, Reason: {Reason}", 
+            originalTask, reason);
+
+        // Also log to activity logger if available for comprehensive audit trail
+        if (_activityLogger != null)
+        {
+            var fallbackData = new
+            {
+                OriginalTask = originalTask,
+                FailureReason = reason,
+                RawContent = SessionActivity.TruncateString(rawContent, 2000), // Limit raw content size
+                FallbackCreatedAt = DateTime.UtcNow,
+                Severity = "Warning"
+            };
+
+            // Use async fire-and-forget since this is a synchronous method
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _activityLogger.LogFailedActivityAsync(
+                        ActivityTypes.TaskPlanning,
+                        $"Plan extraction failed, creating fallback plan for task: {originalTask}",
+                        reason,
+                        fallbackData
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to log fallback plan creation to activity logger");
+                }
+            });
+        }
     }
 }

@@ -355,4 +355,76 @@ public class PlanningServiceTests
             return Task.FromResult(mockResponse);
         }
     }
+
+    // Test specifically for the string arguments parsing fix
+    private class MockOpenAIServiceWithStringArguments : ISessionAwareOpenAIService
+    {
+        public void SetActivityLogger(ISessionActivityLogger? activityLogger)
+        {
+            // No-op for testing
+        }
+
+        public Task<OpenAIIntegration.Model.ResponsesCreateResponse> CreateResponseAsync(
+            OpenAIIntegration.Model.ResponsesCreateRequest request, 
+            CancellationToken cancellationToken = default)
+        {
+            // Return a mock response with string arguments to test the parsing fix
+            var argumentsAsString = JsonSerializer.Serialize(new
+            {
+                strategy = "Test strategy from string",
+                steps = new[]
+                {
+                    new
+                    {
+                        stepNumber = 1,
+                        description = "Test step from string",
+                        potentialTools = new[] { "test_tool_string" },
+                        isMandatory = true,
+                        expectedInput = "Test input from string",
+                        expectedOutput = "Test output from string"
+                    }
+                },
+                requiredTools = new[] { "test_tool_string" },
+                complexity = "Simple",
+                confidence = 0.9
+            });
+
+            var mockResponse = new OpenAIIntegration.Model.ResponsesCreateResponse
+            {
+                Output = new[]
+                {
+                    new OpenAIIntegration.Model.FunctionToolCall
+                    {
+                        Name = "create_execution_plan",
+                        Arguments = JsonSerializer.SerializeToElement(argumentsAsString) // This creates a string JsonElement
+                    }
+                }
+            };
+
+            return Task.FromResult(mockResponse);
+        }
+    }
+
+    [Fact]
+    public async Task ExtractPlanFromToolCall_WithStringArguments_ParsesSuccessfully()
+    {
+        // Arrange
+        var mockOpenAI = new MockOpenAIServiceWithStringArguments();
+        var planningService = new PlanningService(mockOpenAI, _logger, _config);
+        
+        var availableTools = new List<McpClientTool>();
+
+        // Act
+        var plan = await planningService.CreatePlanAsync("Test task with string arguments", availableTools);
+
+        // Assert
+        Assert.NotNull(plan);
+        Assert.Equal("Test task with string arguments", plan.Task);
+        Assert.Contains("Test strategy from string", plan.Strategy);
+        Assert.NotEmpty(plan.Steps);
+        Assert.Contains(plan.Steps, s => s.Description.Contains("Test step from string"));
+        Assert.Contains(plan.RequiredTools, tool => tool == "test_tool_string");
+        Assert.Equal(TaskComplexity.Simple, plan.Complexity);
+        Assert.Equal(0.9, plan.Confidence);
+    }
 }
