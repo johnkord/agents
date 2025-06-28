@@ -45,4 +45,10 @@ public interface IToolSelector
     /// <param name="task">The user's task description</param>
     /// <returns>True if web search tool should be included</returns>
     bool ShouldIncludeWebSearch(string task);
+    
+    /// <summary>
+    /// Set the session activity logger for automatic OpenAI request logging
+    /// </summary>
+    /// <param name="activityLogger">The activity logger to use for this session</param>
+    void SetActivityLogger(ISessionActivityLogger? activityLogger);
 }

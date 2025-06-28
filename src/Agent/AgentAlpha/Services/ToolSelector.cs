@@ -15,14 +15,14 @@ namespace AgentAlpha.Services;
 /// </summary>
 public class ToolSelector : IToolSelector
 {
-    private readonly IOpenAIResponsesService _openAi;
+    private readonly ISessionAwareOpenAIService _openAi;
     private readonly IToolManager _toolManager;
     private readonly ILogger<ToolSelector> _logger;
     private readonly ToolSelectionConfig _config;
     private readonly AgentConfiguration _agentConfig;
 
     public ToolSelector(
-        IOpenAIResponsesService openAi,
+        ISessionAwareOpenAIService openAi,
         IToolManager toolManager,
         ILogger<ToolSelector> logger,
         AgentConfiguration agentConfig,
@@ -33,6 +33,16 @@ public class ToolSelector : IToolSelector
         _logger = logger;
         _agentConfig = agentConfig;
         _config = config ?? ToolSelectionConfig.Default;
+    }
+
+    /// <summary>
+    /// Set the session activity logger for automatic OpenAI request logging
+    /// </summary>
+    public void SetActivityLogger(ISessionActivityLogger? activityLogger)
+    {
+        _openAi.SetActivityLogger(activityLogger);
+        _logger.LogDebug("Activity logger {Status} for ToolSelector", 
+            activityLogger != null ? "set" : "cleared");
     }
 
     public async Task<ToolDefinition[]> SelectToolsForTaskAsync(string task, IList<McpClientTool> availableTools, int? maxTools = null)
