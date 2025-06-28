@@ -19,6 +19,7 @@ public class PlanningService : IPlanningService
     private readonly ISessionAwareOpenAIService _openAi;
     private readonly ILogger<PlanningService> _logger;
     private readonly AgentConfiguration _config;
+    private ISessionActivityLogger? _activityLogger;
 
     public PlanningService(
         ISessionAwareOpenAIService openAi,
@@ -35,6 +36,7 @@ public class PlanningService : IPlanningService
     /// </summary>
     public void SetActivityLogger(ISessionActivityLogger? activityLogger)
     {
+        _activityLogger = activityLogger;
         _openAi.SetActivityLogger(activityLogger);
         _logger.LogDebug("Activity logger {Status} for PlanningService", 
             activityLogger != null ? "set" : "cleared");
@@ -120,6 +122,9 @@ Create a logical, state-aware execution plan using the create_execution_plan too
             
             // Enhance plan with state-derived insights
             EnhancePlanWithStateInsights(plan, currentState);
+            
+            // Log detailed plan information for better activity tracking
+            await LogPlanDetailsAsync(plan, availableTools);
             
             _logger.LogInformation("Created state-aware plan with {StepCount} steps and complexity {Complexity}", 
                 plan.Steps.Count, plan.Complexity);
@@ -782,5 +787,42 @@ Create a logical, state-aware execution plan using the create_execution_plan too
         EnhancePlanWithStateInsights(fallbackPlan, currentState);
         
         return fallbackPlan;
+    }
+
+    /// <summary>
+    /// Log detailed plan information to activity log for better tracking and debugging
+    /// </summary>
+    private async Task LogPlanDetailsAsync(TaskPlan plan, IList<McpClientTool> availableTools)
+    {
+        if (_activityLogger == null) return;
+
+        var planDetails = new
+        {
+            Task = plan.Task,
+            Strategy = plan.Strategy,
+            Complexity = plan.Complexity.ToString(),
+            Confidence = plan.Confidence,
+            StepCount = plan.Steps.Count,
+            Steps = plan.Steps.Select(s => new
+            {
+                StepNumber = s.StepNumber,
+                Description = s.Description,
+                PotentialTools = s.PotentialTools,
+                IsMandatory = s.IsMandatory,
+                ExpectedInput = s.ExpectedInput,
+                ExpectedOutput = s.ExpectedOutput
+            }).ToList(),
+            RequiredTools = plan.RequiredTools,
+            AvailableToolsCount = availableTools.Count,
+            SelectedToolsRatio = plan.RequiredTools.Count > 0 ? (double)plan.RequiredTools.Count / availableTools.Count : 0.0,
+            CreatedAt = plan.CreatedAt,
+            AdditionalContext = plan.AdditionalContext
+        };
+
+        await _activityLogger.LogActivityAsync(
+            ActivityTypes.PlanDetails,
+            $"Created execution plan with {plan.Steps.Count} steps and {plan.Complexity} complexity",
+            planDetails
+        );
     }
 }

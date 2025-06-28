@@ -8,6 +8,7 @@ using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
 using AgentAlpha.Configuration;
 using Common.Interfaces.Session;
+using Common.Models.Session;
 
 namespace AgentAlpha.Services;
 
@@ -21,6 +22,7 @@ public class ToolSelector : IToolSelector
     private readonly ILogger<ToolSelector> _logger;
     private readonly ToolSelectionConfig _config;
     private readonly AgentConfiguration _agentConfig;
+    private ISessionActivityLogger? _activityLogger;
 
     public ToolSelector(
         ISessionAwareOpenAIService openAi,
@@ -41,6 +43,7 @@ public class ToolSelector : IToolSelector
     /// </summary>
     public void SetActivityLogger(ISessionActivityLogger? activityLogger)
     {
+        _activityLogger = activityLogger;
         _openAi.SetActivityLogger(activityLogger);
         _logger.LogDebug("Activity logger {Status} for ToolSelector", 
             activityLogger != null ? "set" : "cleared");
@@ -87,6 +90,9 @@ public class ToolSelector : IToolSelector
                 selectedTools.Add(webSearchTool);
                 _logger.LogInformation("Added web search tool for task requiring current information");
             }
+            
+            // Log tool selection reasoning for better activity tracking
+            await LogToolSelectionReasoningAsync(task, availableTools, selectedTools, stopwatch.ElapsedMilliseconds);
             
             _logger.LogInformation("Selected {Count} tools for task in {Duration}ms", 
                 selectedTools.Count, stopwatch.ElapsedMilliseconds);
@@ -451,5 +457,232 @@ public class ToolSelector : IToolSelector
         };
         
         return webSearchKeywords.Any(keyword => taskLower.Contains(keyword));
+    }
+
+    /// <summary>
+    /// Log detailed tool selection reasoning for better activity tracking and debugging
+    /// </summary>
+    private async Task LogToolSelectionReasoningAsync(
+        string task, 
+        IList<McpClientTool> availableTools, 
+        List<ToolDefinition> selectedTools, 
+        long durationMs)
+    {
+        if (_activityLogger == null) return;
+
+        var availableToolNames = availableTools.Select(t => t.Name).ToList();
+        var selectedToolNames = selectedTools.Select(t => t.Name).ToList();
+        var rejectedToolNames = availableToolNames.Except(selectedToolNames).ToList();
+
+        // Analyze task to determine reasoning
+        var taskAnalysis = AnalyzeTaskForToolSelection(task);
+        
+        var selectionReasoning = new
+        {
+            Task = task,
+            TaskAnalysis = taskAnalysis,
+            SelectionDurationMs = durationMs,
+            AvailableToolsCount = availableTools.Count,
+            SelectedToolsCount = selectedTools.Count,
+            MaxToolsAllowed = _config.MaxToolsPerRequest,
+            
+            SelectedTools = selectedTools.Select(t => new 
+            { 
+                Name = t.Name, 
+                Description = t.Description,
+                SelectionReason = DetermineSelectionReason(t.Name, task, taskAnalysis)
+            }).ToList(),
+            
+            RejectedTools = rejectedToolNames.Take(10).Select(name => new 
+            { 
+                Name = name,
+                RejectionReason = DetermineRejectionReason(name, task, taskAnalysis)
+            }).ToList(),
+            
+            SelectionMethod = _config.UseLLMSelection ? "LLM-based" : "Heuristic-based",
+            WebSearchIncluded = ShouldIncludeWebSearch(task),
+            
+            TaskCategories = taskAnalysis.Categories,
+            RelevanceFiltering = new
+            {
+                TaskKeywords = taskAnalysis.Keywords,
+                ToolMatchingCriteria = "Keywords, categories, and context-based relevance"
+            }
+        };
+
+        await _activityLogger.LogActivityAsync(
+            ActivityTypes.ToolSelectionReasoning,
+            $"Selected {selectedTools.Count} tools from {availableTools.Count} available for task",
+            selectionReasoning
+        );
+    }
+
+    /// <summary>
+    /// Analyze task to categorize and extract keywords for tool selection reasoning
+    /// </summary>
+    private TaskAnalysis AnalyzeTaskForToolSelection(string task)
+    {
+        var taskLower = task.ToLowerInvariant();
+        var categories = new List<string>();
+        var keywords = new List<string>();
+
+        // Extract keywords and categorize
+        if (taskLower.Contains("math") || taskLower.Contains("calculate") || taskLower.Contains("number"))
+        {
+            categories.Add("Mathematical");
+            keywords.AddRange(new[] { "math", "calculate", "number" });
+        }
+        
+        if (taskLower.Contains("file") || taskLower.Contains("read") || taskLower.Contains("write"))
+        {
+            categories.Add("File Operations");
+            keywords.AddRange(new[] { "file", "read", "write" });
+        }
+        
+        if (taskLower.Contains("openai") || taskLower.Contains("model") || taskLower.Contains("ai"))
+        {
+            categories.Add("AI/OpenAI");
+            keywords.AddRange(new[] { "openai", "model", "ai" });
+        }
+        
+        if (taskLower.Contains("github") || taskLower.Contains("repository") || taskLower.Contains("pull request"))
+        {
+            categories.Add("GitHub/Repository");
+            keywords.AddRange(new[] { "github", "repository", "pull request" });
+        }
+        
+        if (taskLower.Contains("web") || taskLower.Contains("search") || taskLower.Contains("current") || taskLower.Contains("latest"))
+        {
+            categories.Add("Web/Search");
+            keywords.AddRange(new[] { "web", "search", "current", "latest" });
+        }
+
+        if (categories.Count == 0)
+        {
+            categories.Add("General");
+        }
+
+        return new TaskAnalysis
+        {
+            Categories = categories,
+            Keywords = keywords.Distinct().ToList(),
+            RequiresCurrentInfo = ShouldIncludeWebSearch(task),
+            ComplexityLevel = DetermineTaskComplexity(task)
+        };
+    }
+
+    /// <summary>
+    /// Determine why a tool was selected
+    /// </summary>
+    private string DetermineSelectionReason(string toolName, string task, TaskAnalysis analysis)
+    {
+        if (_config.EssentialTools.Contains(toolName, StringComparer.OrdinalIgnoreCase))
+        {
+            return "Essential tool always included";
+        }
+
+        if (toolName.Equals("web_search", StringComparison.OrdinalIgnoreCase) && analysis.RequiresCurrentInfo)
+        {
+            return "Task requires current/real-time information";
+        }
+
+        // Check for keyword matches
+        var toolLower = toolName.ToLowerInvariant();
+        var matchingKeywords = analysis.Keywords.Where(k => toolLower.Contains(k) || task.ToLowerInvariant().Contains(toolLower)).ToList();
+        
+        if (matchingKeywords.Any())
+        {
+            return $"Matches task keywords: {string.Join(", ", matchingKeywords)}";
+        }
+
+        // Check for category matches
+        foreach (var category in analysis.Categories)
+        {
+            if (IsToolRelevantToCategory(toolName, category))
+            {
+                return $"Relevant to task category: {category}";
+            }
+        }
+
+        return "Selected by LLM analysis";
+    }
+
+    /// <summary>
+    /// Determine why a tool was rejected
+    /// </summary>
+    private string DetermineRejectionReason(string toolName, string task, TaskAnalysis analysis)
+    {
+        var toolLower = toolName.ToLowerInvariant();
+        
+        // Check if tool is completely unrelated to task categories
+        var isRelevant = analysis.Categories.Any(category => IsToolRelevantToCategory(toolName, category));
+        
+        if (!isRelevant)
+        {
+            return $"Not relevant to task categories: {string.Join(", ", analysis.Categories)}";
+        }
+
+        if (toolLower.Contains("github") && !analysis.Categories.Contains("GitHub/Repository"))
+        {
+            return "GitHub tool not needed for non-repository task";
+        }
+
+        if (toolLower.Contains("vector") && !task.ToLowerInvariant().Contains("vector") && !task.ToLowerInvariant().Contains("search"))
+        {
+            return "Vector store operations not required";
+        }
+
+        return "Lower priority or space limitations";
+    }
+
+    /// <summary>
+    /// Check if a tool is relevant to a specific category
+    /// </summary>
+    private bool IsToolRelevantToCategory(string toolName, string category)
+    {
+        var toolLower = toolName.ToLowerInvariant();
+        
+        return category switch
+        {
+            "Mathematical" => toolLower.Contains("add") || toolLower.Contains("subtract") || 
+                             toolLower.Contains("multiply") || toolLower.Contains("divide") || 
+                             toolLower.Contains("math"),
+            "File Operations" => toolLower.Contains("file") || toolLower.Contains("read") || 
+                               toolLower.Contains("write") || toolLower.Contains("directory"),
+            "AI/OpenAI" => toolLower.Contains("openai") || toolLower.Contains("gpt") || 
+                          toolLower.Contains("complete"),
+            "GitHub/Repository" => toolLower.Contains("github") || toolLower.Contains("pull") || 
+                                  toolLower.Contains("repository"),
+            "Web/Search" => toolLower.Contains("web") || toolLower.Contains("search"),
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Determine task complexity based on content
+    /// </summary>
+    private string DetermineTaskComplexity(string task)
+    {
+        var wordCount = task.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        var hasMultipleVerbs = task.ToLowerInvariant().Split(' ').Count(w => 
+            new[] { "analyze", "create", "generate", "build", "develop", "implement", "design" }.Contains(w)) > 1;
+        
+        if (wordCount > 20 || hasMultipleVerbs)
+            return "High";
+        else if (wordCount > 10)
+            return "Medium";
+        else
+            return "Low";
+    }
+
+    /// <summary>
+    /// Task analysis result for tool selection reasoning
+    /// </summary>
+    private class TaskAnalysis
+    {
+        public List<string> Categories { get; set; } = new();
+        public List<string> Keywords { get; set; } = new();
+        public bool RequiresCurrentInfo { get; set; }
+        public string ComplexityLevel { get; set; } = "Medium";
     }
 }
