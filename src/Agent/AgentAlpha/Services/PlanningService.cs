@@ -33,56 +33,94 @@ public class PlanningService : IPlanningService
     {
         _logger.LogInformation("Creating execution plan for task: {Task}", task);
 
+        // Try to create a basic current state if none provided
+        var basicState = new CurrentState
+        {
+            SessionContext = context,
+            AvailableResources = new Dictionary<string, string>
+            {
+                ["ToolCount"] = availableTools.Count.ToString(),
+                ["AvailableTools"] = string.Join(", ", availableTools.Select(t => t.Name))
+            }
+        };
+
+        // Use the enhanced state-aware planning when possible
+        return await CreatePlanWithStateAnalysisAsync(task, availableTools, basicState, context);
+    }
+
+    public async Task<TaskPlan> CreatePlanWithStateAnalysisAsync(string task, IList<McpClientTool> availableTools, CurrentState currentState, string? context = null)
+    {
+        _logger.LogInformation("Creating execution plan with state analysis for task: {Task}", task);
+
         var toolDescriptions = availableTools.Select(t => $"- {t.Name}: {t.Description}").ToList();
         var contextSection = string.IsNullOrEmpty(context) ? "" : $"\n\nAdditional Context:\n{context}";
+        
+        // Analyze the current state to provide comprehensive context
+        var stateAnalysis = AnalyzeCurrentState(currentState, availableTools);
+        
+        var prompt = $@"You are an advanced AI task planning assistant with deep analytical capabilities. 
+You must analyze the current state and create a sophisticated execution plan that considers all available context.
 
-        var prompt = $@"You are an AI task planning assistant. Given a task and available tools, create a detailed execution plan.
+TASK TO PLAN: {task}{contextSection}
 
-Task to plan: {task}{contextSection}
+CURRENT STATE ANALYSIS:
+{stateAnalysis}
 
-Available Tools:
+AVAILABLE TOOLS:
 {string.Join("\n", toolDescriptions)}
 
-Create a comprehensive execution plan by calling the create_execution_plan tool. For each step, specify:
-- Step description
-- Potential tools needed
-- Whether the step is mandatory
-- Expected input/output
+PLANNING INSTRUCTIONS:
+Based on your analysis of the current state, create a comprehensive execution plan that:
 
-Focus on creating a logical, executable plan that efficiently uses the available tools.";
+1. LEVERAGES CONTEXT: Use insights from previous executions, available resources, and environmental constraints
+2. OPTIMIZES FOR EFFICIENCY: Consider user preferences, risk tolerance, and resource limitations  
+3. ADAPTS TO CONDITIONS: Account for current environment capabilities and any constraints
+4. LEARNS FROM HISTORY: Apply lessons from previous similar tasks if available
+5. MANAGES COMPLEXITY: Break down the task appropriately based on available tools and resources
+
+For each step in your plan:
+- Explain WHY this step is necessary given the current state
+- Specify HOW it builds on previous context or resources
+- Identify DEPENDENCIES on state conditions or previous results
+- Note any ADAPTATIONS made based on current constraints
+
+Create a logical, state-aware execution plan using the create_execution_plan tool.";
 
         try
         {
-            // Define the tool for creating execution plans
-            var planCreationTool = CreatePlanCreationToolDefinition();
+            // Define the enhanced tool for creating execution plans
+            var planCreationTool = CreateEnhancedPlanCreationToolDefinition();
 
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-3.5-turbo", // Use faster model for planning
+                Model = "gpt-3.5-turbo", // Consider upgrading to gpt-4 for more sophisticated analysis
                 Input = new[]
                 {
                     new { role = "user", content = prompt }
                 },
                 Tools = new[] { planCreationTool },
-                ToolChoice = "required" // Force the model to call one of the available tools
+                ToolChoice = "required"
             };
 
             var response = await _openAi.CreateResponseAsync(request);
             
-            // Extract plan from tool call
+            // Extract plan from tool call with state context
             var plan = ExtractPlanFromToolCall(response, task);
             
-            _logger.LogInformation("Created plan with {StepCount} steps and complexity {Complexity}", 
+            // Enhance plan with state-derived insights
+            EnhancePlanWithStateInsights(plan, currentState);
+            
+            _logger.LogInformation("Created state-aware plan with {StepCount} steps and complexity {Complexity}", 
                 plan.Steps.Count, plan.Complexity);
 
             return plan;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create plan for task: {Task}", task);
+            _logger.LogError(ex, "Failed to create state-aware plan for task: {Task}", task);
             
-            // Return a fallback plan
-            return CreateFallbackPlan(task, availableTools);
+            // Return a fallback plan that still considers basic state information
+            return CreateStateFallbackPlan(task, availableTools, currentState);
         }
     }
 
@@ -425,5 +463,258 @@ Focus on creating a logical, executable plan that efficiently uses the available
             _logger.LogWarning(ex, "Failed to extract plan from tool call, creating fallback plan");
             return CreateFallbackPlan(originalTask, new List<McpClientTool>());
         }
+    }
+
+    /// <summary>
+    /// Analyzes the current state to provide context for planning
+    /// </summary>
+    private string AnalyzeCurrentState(CurrentState currentState, IList<McpClientTool> availableTools)
+    {
+        var analysis = new List<string>();
+        
+        // Session context analysis
+        if (!string.IsNullOrEmpty(currentState.SessionContext))
+        {
+            analysis.Add($"SESSION CONTEXT: {currentState.SessionContext}");
+        }
+        
+        // Previous execution results analysis
+        if (currentState.PreviousResults.Any())
+        {
+            analysis.Add("PREVIOUS EXECUTION HISTORY:");
+            foreach (var result in currentState.PreviousResults.TakeLast(3)) // Limit to last 3 results
+            {
+                var status = result.Success ? "SUCCESS" : "FAILED";
+                analysis.Add($"  - Task: '{result.Task}' [{status}] - {result.Summary}");
+                if (!string.IsNullOrEmpty(result.Insights))
+                {
+                    analysis.Add($"    Insights: {result.Insights}");
+                }
+                if (result.ToolsUsed.Any())
+                {
+                    analysis.Add($"    Tools Used: {string.Join(", ", result.ToolsUsed)}");
+                }
+            }
+        }
+        
+        // Resource availability analysis
+        if (currentState.AvailableResources.Any())
+        {
+            analysis.Add("AVAILABLE RESOURCES:");
+            foreach (var resource in currentState.AvailableResources)
+            {
+                analysis.Add($"  - {resource.Key}: {resource.Value}");
+            }
+        }
+        
+        // User preferences analysis
+        if (currentState.UserPreferences != null)
+        {
+            analysis.Add("USER PREFERENCES:");
+            var prefs = currentState.UserPreferences;
+            
+            if (!string.IsNullOrEmpty(prefs.PreferredApproach))
+            {
+                analysis.Add($"  - Preferred Approach: {prefs.PreferredApproach}");
+            }
+            
+            if (prefs.PreferredTools.Any())
+            {
+                analysis.Add($"  - Preferred Tools: {string.Join(", ", prefs.PreferredTools)}");
+            }
+            
+            if (prefs.AvoidedTools.Any())
+            {
+                analysis.Add($"  - Avoided Tools: {string.Join(", ", prefs.AvoidedTools)}");
+            }
+            
+            analysis.Add($"  - Risk Tolerance: {prefs.RiskTolerance:F2} (0.0=conservative, 1.0=high risk)");
+            
+            if (prefs.MaxExecutionTime.HasValue)
+            {
+                analysis.Add($"  - Max Execution Time: {prefs.MaxExecutionTime.Value}");
+            }
+        }
+        
+        // Environment capabilities analysis
+        if (currentState.Environment != null)
+        {
+            analysis.Add("ENVIRONMENT CAPABILITIES:");
+            var env = currentState.Environment;
+            
+            if (!string.IsNullOrEmpty(env.ComputeResources))
+            {
+                analysis.Add($"  - Compute Resources: {env.ComputeResources}");
+            }
+            
+            if (!string.IsNullOrEmpty(env.NetworkStatus))
+            {
+                analysis.Add($"  - Network Status: {env.NetworkStatus}");
+            }
+            
+            if (!string.IsNullOrEmpty(env.StorageInfo))
+            {
+                analysis.Add($"  - Storage Info: {env.StorageInfo}");
+            }
+            
+            if (env.SecurityConstraints.Any())
+            {
+                analysis.Add($"  - Security Constraints: {string.Join(", ", env.SecurityConstraints)}");
+            }
+            
+            if (env.PerformanceMetrics.Any())
+            {
+                analysis.Add("  - Performance Metrics:");
+                foreach (var metric in env.PerformanceMetrics)
+                {
+                    analysis.Add($"    {metric.Key}: {metric.Value:F2}");
+                }
+            }
+        }
+        
+        // Tool compatibility analysis
+        analysis.Add("\nTOOL COMPATIBILITY ANALYSIS:");
+        var toolNames = availableTools.Select(t => t.Name).ToHashSet();
+        
+        if (currentState.UserPreferences?.PreferredTools.Any() == true)
+        {
+            var availablePreferred = currentState.UserPreferences.PreferredTools
+                .Where(t => toolNames.Contains(t)).ToList();
+            if (availablePreferred.Any())
+            {
+                analysis.Add($"  - Available Preferred Tools: {string.Join(", ", availablePreferred)}");
+            }
+            
+            var unavailablePreferred = currentState.UserPreferences.PreferredTools
+                .Where(t => !toolNames.Contains(t)).ToList();
+            if (unavailablePreferred.Any())
+            {
+                analysis.Add($"  - Unavailable Preferred Tools: {string.Join(", ", unavailablePreferred)}");
+            }
+        }
+        
+        // Additional context analysis
+        if (currentState.AdditionalContext.Any())
+        {
+            analysis.Add("\nADDITIONAL CONTEXT:");
+            foreach (var context in currentState.AdditionalContext)
+            {
+                analysis.Add($"  - {context.Key}: {context.Value}");
+            }
+        }
+        
+        analysis.Add($"\nSTATE CAPTURED AT: {currentState.CapturedAt:yyyy-MM-dd HH:mm:ss} UTC");
+        
+        return string.Join("\n", analysis);
+    }
+
+    /// <summary>
+    /// Creates an enhanced tool definition for state-aware plan creation
+    /// </summary>
+    private ToolDefinition CreateEnhancedPlanCreationToolDefinition()
+    {
+        // Use the same base structure but with enhanced descriptions
+        var baseTool = CreatePlanCreationToolDefinition();
+        
+        // Enhance the description to emphasize state awareness
+        return new ToolDefinition
+        {
+            Name = baseTool.Name,
+            Description = "Create a comprehensive execution plan that leverages current state analysis, environmental context, user preferences, and historical insights to optimize task completion",
+            Parameters = baseTool.Parameters
+        };
+    }
+
+    /// <summary>
+    /// Enhances a plan with insights derived from current state analysis
+    /// </summary>
+    private void EnhancePlanWithStateInsights(TaskPlan plan, CurrentState currentState)
+    {
+        // Add state-derived metadata to the plan
+        plan.AdditionalContext ??= new Dictionary<string, object>();
+        plan.AdditionalContext["StateAnalysisTimestamp"] = currentState.CapturedAt;
+        
+        // Record user preferences that influenced the plan
+        if (currentState.UserPreferences != null)
+        {
+            plan.AdditionalContext["UserRiskTolerance"] = currentState.UserPreferences.RiskTolerance;
+            plan.AdditionalContext["PreferredApproach"] = currentState.UserPreferences.PreferredApproach ?? "default";
+        }
+        
+        // Record environmental constraints that influenced the plan
+        if (currentState.Environment?.SecurityConstraints.Any() == true)
+        {
+            plan.AdditionalContext["SecurityConstraints"] = currentState.Environment.SecurityConstraints;
+        }
+        
+        // Adjust confidence based on state factors
+        var confidenceAdjustment = CalculateStateBasedConfidenceAdjustment(currentState);
+        plan.Confidence = Math.Max(0.0, Math.Min(1.0, plan.Confidence + confidenceAdjustment));
+        
+        _logger.LogDebug("Enhanced plan with state insights. Confidence adjusted by {Adjustment:F3}", confidenceAdjustment);
+    }
+
+    /// <summary>
+    /// Calculates confidence adjustment based on current state factors
+    /// </summary>
+    private double CalculateStateBasedConfidenceAdjustment(CurrentState currentState)
+    {
+        double adjustment = 0.0;
+        
+        // Boost confidence if we have successful execution history
+        var recentSuccesses = currentState.PreviousResults
+            .Where(r => r.Success && r.CompletedAt > DateTime.UtcNow.AddHours(-24))
+            .Count();
+        adjustment += Math.Min(0.2, recentSuccesses * 0.05);
+        
+        // Reduce confidence if there are recent failures
+        var recentFailures = currentState.PreviousResults
+            .Where(r => !r.Success && r.CompletedAt > DateTime.UtcNow.AddHours(-24))
+            .Count();
+        adjustment -= Math.Min(0.2, recentFailures * 0.08);
+        
+        // Adjust based on resource availability
+        if (currentState.AvailableResources.Any())
+        {
+            adjustment += 0.05; // Having documented resources boosts confidence
+        }
+        
+        // Adjust based on environmental constraints
+        if (currentState.Environment?.SecurityConstraints.Any() == true)
+        {
+            adjustment -= 0.03; // Security constraints add complexity
+        }
+        
+        return adjustment;
+    }
+
+    /// <summary>
+    /// Creates a fallback plan that considers basic state information
+    /// </summary>
+    private TaskPlan CreateStateFallbackPlan(string task, IList<McpClientTool> availableTools, CurrentState currentState)
+    {
+        _logger.LogInformation("Creating state-aware fallback plan for task: {Task}", task);
+
+        var fallbackPlan = CreateFallbackPlan(task, availableTools);
+        
+        // Enhance fallback plan with basic state considerations
+        if (currentState.UserPreferences?.PreferredApproach != null)
+        {
+            fallbackPlan.Strategy = $"Execute the task using a {currentState.UserPreferences.PreferredApproach} approach with available tools";
+        }
+        
+        // Adjust complexity based on user risk tolerance
+        if (currentState.UserPreferences?.RiskTolerance < 0.3)
+        {
+            // Conservative users get simpler plans
+            if (fallbackPlan.Complexity > TaskComplexity.Medium)
+            {
+                fallbackPlan.Complexity = TaskComplexity.Medium;
+            }
+        }
+        
+        EnhancePlanWithStateInsights(fallbackPlan, currentState);
+        
+        return fallbackPlan;
     }
 }

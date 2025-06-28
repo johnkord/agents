@@ -19,6 +19,16 @@ public interface IPlanningService
     Task<TaskPlan> CreatePlanAsync(string task, IList<McpClientTool> availableTools, string? context = null);
     
     /// <summary>
+    /// Create a detailed execution plan for the given task with current state analysis
+    /// </summary>
+    /// <param name="task">The task to plan for</param>
+    /// <param name="availableTools">Tools available to the agent</param>
+    /// <param name="currentState">Current state of the environment and context</param>
+    /// <param name="context">Optional additional context</param>
+    /// <returns>A detailed execution plan based on current state analysis</returns>
+    Task<TaskPlan> CreatePlanWithStateAnalysisAsync(string task, IList<McpClientTool> availableTools, CurrentState currentState, string? context = null);
+    
+    /// <summary>
     /// Refine an existing plan based on new information or execution results
     /// </summary>
     /// <param name="existingPlan">The plan to refine</param>
