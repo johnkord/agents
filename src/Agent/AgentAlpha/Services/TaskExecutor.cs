@@ -877,7 +877,11 @@ public class TaskExecutor : ITaskExecutor
                     // ------------------------------------------------------
 
                     if (toolCall.Name.Equals("complete_task", StringComparison.OrdinalIgnoreCase))
+                    {
                         taskCompleted = true;
+                        // Generate comprehensive task completion report
+                        await GenerateTaskCompletionReportAsync(toolCall, result.ToString(), taskPlan, planStepsCompleted);
+                    }
                 }
 
                 _conversationManager.AddToolResults(toolSummaries);
@@ -992,5 +996,273 @@ public class TaskExecutor : ITaskExecutor
                 _logger.LogError(ex, "Failed to save session {SessionId}", request.SessionId);
             }
         }
+    }
+
+    /// <summary>
+    /// Generates a comprehensive task completion report with reasoning and evidence
+    /// </summary>
+    private async Task GenerateTaskCompletionReportAsync(ToolCall completeTaskCall, string toolResult, TaskPlan? taskPlan, HashSet<int> completedSteps)
+    {
+        try
+        {
+            // Extract completion information from the tool call arguments
+            var completionArgs = completeTaskCall.Arguments ?? new Dictionary<string, object?>();
+            var summary = completionArgs.GetValueOrDefault("summary")?.ToString() ?? "Task completed";
+            var reasoning = completionArgs.GetValueOrDefault("reasoning")?.ToString() ?? "";
+            var evidence = completionArgs.GetValueOrDefault("evidence")?.ToString() ?? "";
+            var deliverables = completionArgs.GetValueOrDefault("deliverables")?.ToString() ?? "";
+            var keyActions = completionArgs.GetValueOrDefault("keyActions")?.ToString() ?? "";
+
+            // Gather evidence from session activities
+            var sessionActivities = await _activityLogger.GetSessionActivitiesAsync();
+            var evidenceFromActivities = GatherEvidenceFromActivities(sessionActivities);
+
+            // Analyze task plan completion
+            var planAnalysis = AnalyzeTaskPlanCompletion(taskPlan, completedSteps);
+            
+            // Extract completion rate for quality calculation
+            var completionRate = GetCompletionRateFromPlanAnalysis(planAnalysis);
+
+            // Gather conversation statistics
+            var conversationStats = _conversationManager.GetConversationStatistics();
+
+            // Build comprehensive completion report
+            var completionReport = new
+            {
+                TaskCompletion = new
+                {
+                    Status = "COMPLETED",
+                    CompletedAt = DateTime.UtcNow,
+                    Summary = summary,
+                    ProvidedReasoning = reasoning,
+                    ProvidedEvidence = evidence,
+                    Deliverables = deliverables,
+                    KeyActions = keyActions
+                },
+                ExecutionEvidence = evidenceFromActivities,
+                PlanCompletion = planAnalysis,
+                ConversationMetrics = new
+                {
+                    TotalMessages = conversationStats.TotalMessages,
+                    EstimatedTokens = conversationStats.EstimatedTokens,
+                    TotalActivities = sessionActivities.Count,
+                    SuccessfulActivities = sessionActivities.Count(a => a.Success),
+                    FailedActivities = sessionActivities.Count(a => !a.Success)
+                },
+                TaskCompletionQuality = new
+                {
+                    HasDetailedReasoning = !string.IsNullOrWhiteSpace(reasoning),
+                    HasExplicitEvidence = !string.IsNullOrWhiteSpace(evidence),
+                    HasDeliverables = !string.IsNullOrWhiteSpace(deliverables),
+                    PlanCompletionRate = completionRate,
+                    RecommendationScore = CalculateCompletionQualityScore(reasoning, evidence, deliverables, completionRate)
+                }
+            };
+
+            // Log the comprehensive completion report
+            await _activityLogger.LogActivityAsync(
+                ActivityTypes.TaskCompletionEvaluation,
+                $"Task completion report - {summary}",
+                completionReport);
+
+            _logger.LogInformation("Generated comprehensive task completion report with {ActivityCount} activities analyzed", 
+                sessionActivities.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate task completion report");
+            
+            // Log a basic completion report if detailed generation fails
+            await _activityLogger.LogActivityAsync(
+                ActivityTypes.TaskCompletionEvaluation,
+                "Task completion (basic report due to error)",
+                new { 
+                    Status = "COMPLETED", 
+                    CompletedAt = DateTime.UtcNow,
+                    Error = ex.Message,
+                    ToolResult = toolResult
+                });
+        }
+    }
+
+    /// <summary>
+    /// Gathers evidence from session activities to support task completion
+    /// </summary>
+    private object GatherEvidenceFromActivities(List<SessionActivity> activities)
+    {
+        var toolCalls = activities.Where(a => a.ActivityType == ActivityTypes.ToolCall).ToList();
+        var toolResults = activities.Where(a => a.ActivityType == ActivityTypes.ToolResult).ToList();
+        var errors = activities.Where(a => !a.Success).ToList();
+
+        var evidenceSummary = new
+        {
+            ToolsUsed = toolCalls.Select(a => new
+            {
+                Tool = ExtractToolNameFromActivity(a),
+                Timestamp = a.Timestamp,
+                Success = a.Success,
+                Description = a.Description
+            }).ToList(),
+            
+            ResultsGenerated = toolResults.Select(a => new
+            {
+                Tool = ExtractToolNameFromActivity(a),
+                Timestamp = a.Timestamp,
+                Success = a.Success,
+                ResultSummary = TruncateForEvidence(a.Description, 200)
+            }).Take(10).ToList(), // Limit to prevent oversized logs
+
+            OpenAIInteractions = activities.Where(a => 
+                a.ActivityType == ActivityTypes.OpenAIRequest || 
+                a.ActivityType == ActivityTypes.OpenAIResponse).Count(),
+
+            ErrorsEncountered = errors.Select(a => new
+            {
+                Type = a.ActivityType,
+                Error = a.ErrorMessage,
+                Timestamp = a.Timestamp
+            }).Take(5).ToList(), // Limit error details
+
+            ExecutionSpan = new
+            {
+                StartTime = activities.FirstOrDefault()?.Timestamp,
+                EndTime = activities.LastOrDefault()?.Timestamp,
+                TotalDurationMinutes = activities.Any() ? 
+                    (activities.Last().Timestamp - activities.First().Timestamp).TotalMinutes : 0
+            },
+
+            KeyMilestones = activities.Where(a => 
+                a.ActivityType == ActivityTypes.TaskPlanning ||
+                a.ActivityType == ActivityTypes.PlanDetails ||
+                a.ActivityType == ActivityTypes.ToolSelectionReasoning).Select(a => new
+                {
+                    Type = a.ActivityType,
+                    Description = TruncateForEvidence(a.Description, 150),
+                    Timestamp = a.Timestamp
+                }).ToList()
+        };
+
+        return evidenceSummary;
+    }
+
+    /// <summary>
+    /// Analyzes task plan completion status
+    /// </summary>
+    private object AnalyzeTaskPlanCompletion(TaskPlan? taskPlan, HashSet<int> completedSteps)
+    {
+        if (taskPlan == null)
+        {
+            return new
+            {
+                HasPlan = false,
+                CompletionRate = 1.0, // Assume complete if no plan was used
+                Message = "Task completed without explicit plan"
+            };
+        }
+
+        var totalSteps = taskPlan.Steps.Count;
+        var completedCount = completedSteps.Count;
+        var completionRate = totalSteps > 0 ? (double)completedCount / totalSteps : 1.0;
+
+        return new
+        {
+            HasPlan = true,
+            TotalSteps = totalSteps,
+            CompletedSteps = completedCount,
+            CompletionRate = Math.Round(completionRate, 2),
+            PlanDetails = new
+            {
+                Strategy = taskPlan.Strategy,
+                Complexity = taskPlan.Complexity,
+                Confidence = taskPlan.Confidence
+            },
+            StepCompletion = taskPlan.Steps.Select(step => new
+            {
+                StepNumber = step.StepNumber,
+                Description = TruncateForEvidence(step.Description, 100),
+                Completed = completedSteps.Contains(step.StepNumber),
+                PotentialTools = step.PotentialTools.Take(3).ToList() // Limit tools listed
+            }).ToList()
+        };
+    }
+
+    /// <summary>
+    /// Calculates a quality score for the task completion
+    /// </summary>
+    private double CalculateCompletionQualityScore(string reasoning, string evidence, string deliverables, double planCompletionRate)
+    {
+        double score = 0.0;
+        
+        // Base score for completion
+        score += 0.4;
+        
+        // Bonus for detailed reasoning
+        if (!string.IsNullOrWhiteSpace(reasoning) && reasoning.Length > 50)
+            score += 0.2;
+        
+        // Bonus for explicit evidence
+        if (!string.IsNullOrWhiteSpace(evidence) && evidence.Length > 30)
+            score += 0.15;
+            
+        // Bonus for deliverables mentioned
+        if (!string.IsNullOrWhiteSpace(deliverables))
+            score += 0.1;
+            
+        // Bonus for plan completion rate
+        score += planCompletionRate * 0.15;
+        
+        return Math.Round(Math.Min(score, 1.0), 2);
+    }
+
+    /// <summary>
+    /// Extracts tool name from activity data
+    /// </summary>
+    private string ExtractToolNameFromActivity(SessionActivity activity)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(activity.Data))
+                return "unknown";
+
+            var data = JsonSerializer.Deserialize<JsonElement>(activity.Data);
+            if (data.TryGetProperty("ToolName", out var toolNameElement))
+                return toolNameElement.GetString() ?? "unknown";
+
+            return "unknown";
+        }
+        catch
+        {
+            return "unknown";
+        }
+    }
+
+    /// <summary>
+    /// Extracts completion rate from plan analysis object
+    /// </summary>
+    private double GetCompletionRateFromPlanAnalysis(object planAnalysis)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(planAnalysis);
+            var element = JsonSerializer.Deserialize<JsonElement>(json);
+            if (element.TryGetProperty("CompletionRate", out var rateElement))
+                return rateElement.GetDouble();
+            return 1.0; // Default to complete if no plan analysis
+        }
+        catch
+        {
+            return 1.0; // Default to complete on error
+        }
+    }
+
+    /// <summary>
+    /// Truncates text for evidence summary to prevent oversized logs
+    /// </summary>
+    private string TruncateForEvidence(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text))
+            return "";
+            
+        return text.Length <= maxLength ? text : text.Substring(0, maxLength - 3) + "...";
     }
 }
