@@ -129,7 +129,9 @@ namespace AgentAlpha.Tests
             // Test getting tool definition for web_search
             var webSearchDef = GetBuiltInToolDefinitionHelper("web_search_preview");
             Assert.NotNull(webSearchDef);
-            Assert.Equal("web_search_preview", webSearchDef.Name);
+            Assert.Equal("web_search_preview", webSearchDef.Type);
+            // Built-in tools should not have names
+            Assert.True(string.IsNullOrEmpty(webSearchDef.Name), "Built-in tools should not have a Name field");
         }
 
         [Fact]
