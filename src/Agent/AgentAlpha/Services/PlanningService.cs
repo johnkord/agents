@@ -126,7 +126,37 @@ Create a logical, state-aware execution plan using the create_execution_plan too
 
     public async Task<TaskPlan> RefinePlanAsync(TaskPlan existingPlan, string feedback, IList<McpClientTool> availableTools)
     {
-        _logger.LogInformation("Refining existing plan based on feedback");
+        // Create a basic current state from the existing plan context
+        var currentState = new CurrentState
+        {
+            SessionContext = $"Refining plan for: {existingPlan.Task}",
+            AvailableResources = new Dictionary<string, string>
+            {
+                ["ExistingStrategy"] = existingPlan.Strategy,
+                ["ExistingComplexity"] = existingPlan.Complexity.ToString(),
+                ["ExistingConfidence"] = existingPlan.Confidence.ToString("F2"),
+                ["ExistingStepCount"] = existingPlan.Steps.Count.ToString()
+            }
+        };
+
+        // If the plan has additional context, extract relevant state information
+        if (existingPlan.AdditionalContext != null)
+        {
+            foreach (var context in existingPlan.AdditionalContext)
+            {
+                currentState.AdditionalContext[context.Key] = context.Value;
+            }
+        }
+
+        return await RefinePlanWithStateAsync(existingPlan, feedback, availableTools, currentState);
+    }
+
+    /// <summary>
+    /// Refine an existing plan with current state analysis
+    /// </summary>
+    public async Task<TaskPlan> RefinePlanWithStateAsync(TaskPlan existingPlan, string feedback, IList<McpClientTool> availableTools, CurrentState currentState)
+    {
+        _logger.LogInformation("Refining existing plan with state analysis based on feedback");
 
         var toolDescriptions = availableTools.Select(t => $"- {t.Name}: {t.Description}").ToList();
         
@@ -147,34 +177,48 @@ Create a logical, state-aware execution plan using the create_execution_plan too
             confidence = existingPlan.Confidence
         }, new JsonSerializerOptions { WriteIndented = true });
 
+        // Analyze current state for refinement context
+        var stateAnalysis = AnalyzeCurrentState(currentState, availableTools);
+
         var prompt = $"""
-            You are refining an existing task execution plan based on new feedback or information.
+            You are an advanced AI task planning assistant performing plan refinement with comprehensive state analysis.
+            
+            ORIGINAL TASK: {existingPlan.Task}
 
-            Original Task: {existingPlan.Task}
-
-            Current Plan:
+            CURRENT PLAN TO REFINE:
             {existingPlanJson}
 
-            Feedback/New Information:
+            FEEDBACK/NEW REQUIREMENTS:
             {feedback}
 
-            Available Tools:
+            CURRENT STATE ANALYSIS:
+            {stateAnalysis}
+
+            AVAILABLE TOOLS:
             {string.Join("\n", toolDescriptions)}
 
-            Based on the feedback, refine the plan to address the issues or incorporate new requirements.
-            Use the create_execution_plan tool to return the refined plan.
+            REFINEMENT INSTRUCTIONS:
+            Based on the feedback and current state analysis, refine the execution plan with these priorities:
 
-            Focus on:
-            - Addressing specific feedback points
-            - Maintaining plan coherence
-            - Optimizing tool usage
-            - Adjusting complexity and confidence as needed
+            1. FEEDBACK INTEGRATION: Address all specific feedback points and requirements
+            2. STATE OPTIMIZATION: Leverage current state insights to improve efficiency
+            3. CONTEXT PRESERVATION: Maintain valuable aspects of the original plan
+            4. CONSTRAINT ADAPTATION: Adapt to any new constraints or limitations identified
+            5. LEARNING APPLICATION: Apply lessons from previous executions if available
+
+            For each modification:
+            - EXPLAIN why the change is needed based on feedback and state analysis
+            - JUSTIFY how it improves upon the original plan
+            - CONSIDER impact on overall plan coherence and feasibility
+            - ACCOUNT FOR any state-specific constraints or opportunities
+
+            Use the create_execution_plan tool to return the refined plan that addresses the feedback while optimizing for current conditions.
             """;
 
         try
         {
-            // Use the same tool definition for refinement
-            var planCreationTool = CreatePlanCreationToolDefinition();
+            // Use the enhanced tool definition for refinement
+            var planCreationTool = CreateEnhancedPlanCreationToolDefinition();
 
             var request = new ResponsesCreateRequest
             {
@@ -184,7 +228,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
                     new { role = "user", content = prompt }
                 },
                 Tools = new[] { planCreationTool },
-                ToolChoice = "required" // Force the model to call one of the available tools
+                ToolChoice = "required"
             };
 
             var response = await _openAi.CreateResponseAsync(request);
@@ -192,13 +236,24 @@ Create a logical, state-aware execution plan using the create_execution_plan too
             var refinedPlan = ExtractPlanFromToolCall(response, existingPlan.Task);
             refinedPlan.CreatedAt = DateTime.UtcNow; // Update creation time for refined plan
 
-            _logger.LogInformation("Refined plan with {StepCount} steps", refinedPlan.Steps.Count);
+            // Enhance the refined plan with state insights
+            EnhancePlanWithStateInsights(refinedPlan, currentState);
+            
+            // Add refinement metadata
+            refinedPlan.AdditionalContext ??= new Dictionary<string, object>();
+            refinedPlan.AdditionalContext["RefinementFeedback"] = feedback;
+            refinedPlan.AdditionalContext["RefinedAt"] = DateTime.UtcNow;
+            refinedPlan.AdditionalContext["OriginalComplexity"] = existingPlan.Complexity.ToString();
+            refinedPlan.AdditionalContext["OriginalConfidence"] = existingPlan.Confidence;
+
+            _logger.LogInformation("Refined plan with {StepCount} steps. Complexity: {OriginalComplexity} -> {NewComplexity}", 
+                refinedPlan.Steps.Count, existingPlan.Complexity, refinedPlan.Complexity);
 
             return refinedPlan;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to refine plan, returning original");
+            _logger.LogError(ex, "Failed to refine plan with state analysis, returning original");
             return existingPlan;
         }
     }

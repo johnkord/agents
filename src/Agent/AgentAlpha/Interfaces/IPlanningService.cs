@@ -38,6 +38,16 @@ public interface IPlanningService
     Task<TaskPlan> RefinePlanAsync(TaskPlan existingPlan, string feedback, IList<McpClientTool> availableTools);
     
     /// <summary>
+    /// Refine an existing plan with current state analysis
+    /// </summary>
+    /// <param name="existingPlan">The plan to refine</param>
+    /// <param name="feedback">Feedback from execution or new requirements</param>
+    /// <param name="availableTools">Currently available tools</param>
+    /// <param name="currentState">Current state of the environment and context</param>
+    /// <returns>A refined execution plan based on current state analysis</returns>
+    Task<TaskPlan> RefinePlanWithStateAsync(TaskPlan existingPlan, string feedback, IList<McpClientTool> availableTools, CurrentState currentState);
+    
+    /// <summary>
     /// Validate that a plan is feasible with the available tools
     /// </summary>
     /// <param name="plan">The plan to validate</param>

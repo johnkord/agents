@@ -194,6 +194,130 @@ var refinedPlan = await planningService.RefinePlanAsync(originalPlan,
     "User needs Excel output instead of CSV", availableTools);
 ```
 
+## Enhanced State-Aware Planning
+
+### Overview
+The planning system has been enhanced to perform sophisticated analysis of the current state before creating execution plans. This enables the LLM to make more informed decisions based on context, history, user preferences, and environmental constraints.
+
+### Current State Analysis
+The system now captures and analyzes:
+
+#### Session Context
+- Previous conversation history
+- Current task context and objectives
+- User interaction patterns
+
+#### Execution History  
+- Previous task results (success/failure)
+- Tools used in past executions
+- Lessons learned and insights
+- Performance patterns
+
+#### User Preferences
+- Preferred execution approach (thorough, fast, interactive)
+- Tool preferences and avoidances
+- Risk tolerance level (0.0 = conservative, 1.0 = high risk)
+- Time constraints and priorities
+
+#### Environment Capabilities
+- Available computational resources
+- Network connectivity and limitations
+- File system access and storage
+- Security constraints and permissions
+- Current system performance metrics
+
+#### Resource Availability
+- Available data files and formats
+- External services and APIs
+- Tool-specific resources
+- Custom configurations
+
+### Enhanced Planning Process
+
+```mermaid
+graph TD
+    A[Task Request] --> B[Capture Current State]
+    B --> C[Analyze State Context]
+    C --> D[Generate State Analysis]
+    D --> E[Create LLM Prompt with State]
+    E --> F[Generate Execution Plan]
+    F --> G[Enhance Plan with State Insights]
+    G --> H[Adjust Confidence Based on History]
+    H --> I[Return State-Aware Plan]
+```
+
+### State-Aware Prompting
+The LLM receives comprehensive context including:
+
+1. **Task Description** - What needs to be accomplished
+2. **State Analysis** - Detailed breakdown of current conditions
+3. **Available Tools** - Tools and their capabilities
+4. **Historical Context** - Previous execution results and insights
+5. **User Context** - Preferences, constraints, and approach
+6. **Environmental Context** - Capabilities, limitations, and constraints
+
+### Planning Intelligence Features
+
+#### Contextual Adaptation
+- Plans adapt to user preferences (e.g., thorough vs. fast execution)
+- Tool selection considers user preferences and past success rates
+- Complexity adjusts based on available resources and constraints
+
+#### Historical Learning
+- Failed executions inform plan improvements
+- Successful patterns are reinforced in new plans
+- Tool effectiveness is tracked and applied
+
+#### Risk Management
+- Plans adjust complexity based on user risk tolerance
+- Conservative users receive simpler, more reliable plans
+- High-risk tolerance enables more innovative approaches
+
+#### Resource Optimization
+- Plans leverage available resources efficiently
+- Environmental constraints guide tool and approach selection
+- Performance metrics influence execution strategies
+
+### API Usage Examples
+
+#### Basic State-Aware Planning
+```csharp
+var currentState = new CurrentState
+{
+    SessionContext = "User working on data analysis project",
+    UserPreferences = new UserPreferences
+    {
+        PreferredApproach = "thorough",
+        RiskTolerance = 0.3
+    }
+};
+
+var plan = await planningService.CreatePlanWithStateAnalysisAsync(
+    "Analyze customer data and generate insights",
+    availableTools,
+    currentState
+);
+```
+
+#### Plan Refinement with State
+```csharp
+var refinedPlan = await planningService.RefinePlanWithStateAsync(
+    existingPlan,
+    "Add statistical validation and error handling",
+    availableTools,
+    currentState
+);
+```
+
+### Benefits of Enhanced Planning
+
+1. **Improved Accuracy**: Plans are more realistic and executable
+2. **User Alignment**: Plans match user preferences and constraints  
+3. **Efficiency Optimization**: Better resource utilization and tool selection
+4. **Learning Integration**: System improves over time based on results
+5. **Risk Awareness**: Appropriate complexity for user comfort level
+6. **Context Sensitivity**: Plans adapt to current environment and situation
+
 ## Future Enhancements
 
 ### Planned Features
@@ -202,12 +326,34 @@ var refinedPlan = await planningService.RefinePlanAsync(originalPlan,
 3. **Learning Integration**: Plan improvement from execution feedback
 4. **Branching Plans**: Conditional execution paths
 5. **Sub-task Planning**: Hierarchical plan decomposition
+6. **Dynamic Re-planning**: Real-time plan adjustment during execution
 
 ### Metrics & Analytics
 1. **Plan Accuracy**: Success rate by complexity level
 2. **Tool Prediction**: Accuracy of required tool identification
 3. **Execution Efficiency**: Plan vs. actual execution comparison
 4. **User Satisfaction**: Plan quality feedback
+5. **State Analysis Quality**: Effectiveness of context utilization
+
+## Configuration
+
+### Model Selection
+The enhanced planning system supports different LLM models:
+- **GPT-3.5-turbo**: Fast planning for most scenarios
+- **GPT-4**: More sophisticated analysis for complex tasks
+- **Custom Models**: Support for specialized planning models
+
+### Confidence Thresholds
+Configure when to use enhanced planning:
+- **Always**: Use state analysis for all planning
+- **Complex Tasks**: Only for high-complexity scenarios
+- **Low Confidence**: When basic planning confidence is low
+
+### State Capture Settings
+Control what state information to capture:
+- **Full Context**: Comprehensive state analysis
+- **Selective**: Only relevant context for the task type
+- **Minimal**: Basic state information only
 
 ## Technical Implementation Notes
 

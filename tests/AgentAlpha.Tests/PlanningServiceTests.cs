@@ -247,6 +247,78 @@ public class PlanningServiceTests
         Assert.NotNull(plan.AdditionalContext);
     }
 
+    [Fact]
+    public async Task RefinePlanWithStateAsync_WithStateContext_CreatesEnhancedRefinedPlan()
+    {
+        // Arrange
+        var mockOpenAI = new MockOpenAIService();
+        var planningService = new PlanningService(mockOpenAI, _logger, _config);
+        
+        var existingPlan = new TaskPlan
+        {
+            Task = "Analyze data",
+            Strategy = "Simple analysis",
+            Steps = new List<PlanStep>
+            {
+                new PlanStep
+                {
+                    StepNumber = 1,
+                    Description = "Load data",
+                    PotentialTools = new List<string> { "file_reader" }
+                }
+            },
+            Complexity = TaskComplexity.Simple,
+            Confidence = 0.6
+        };
+
+        var currentState = new CurrentState
+        {
+            SessionContext = "User needs more detailed analysis",
+            PreviousResults = new List<ExecutionResult>
+            {
+                new ExecutionResult
+                {
+                    Task = "Previous analysis",
+                    Success = false,
+                    Summary = "Analysis was too shallow",
+                    Insights = "Need more statistical analysis"
+                }
+            },
+            UserPreferences = new UserPreferences
+            {
+                PreferredApproach = "thorough",
+                RiskTolerance = 0.8
+            }
+        };
+
+        var availableTools = new List<McpClientTool>
+        {
+            new McpClientTool { Name = "file_reader", Description = "Read files" },
+            new McpClientTool { Name = "statistics", Description = "Statistical analysis" }
+        };
+
+        // Act
+        var refinedPlan = await planningService.RefinePlanWithStateAsync(
+            existingPlan,
+            "Need more thorough statistical analysis with charts",
+            availableTools,
+            currentState
+        );
+
+        // Assert
+        Assert.NotNull(refinedPlan);
+        Assert.Equal("Analyze data", refinedPlan.Task);
+        Assert.NotEmpty(refinedPlan.Strategy);
+        Assert.NotNull(refinedPlan.AdditionalContext);
+        Assert.True(refinedPlan.AdditionalContext.ContainsKey("RefinementFeedback"));
+        Assert.True(refinedPlan.AdditionalContext.ContainsKey("RefinedAt"));
+        Assert.True(refinedPlan.AdditionalContext.ContainsKey("OriginalComplexity"));
+        Assert.True(refinedPlan.AdditionalContext.ContainsKey("OriginalConfidence"));
+        Assert.Equal("Need more thorough statistical analysis with charts", refinedPlan.AdditionalContext["RefinementFeedback"]);
+        Assert.Equal("Simple", refinedPlan.AdditionalContext["OriginalComplexity"]);
+        Assert.Equal(0.6, refinedPlan.AdditionalContext["OriginalConfidence"]);
+    }
+
     // Mock OpenAI service for testing
     private class MockOpenAIService : IOpenAIResponsesService
     {
