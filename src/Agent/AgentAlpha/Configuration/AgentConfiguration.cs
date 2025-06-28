@@ -86,6 +86,11 @@ public class AgentConfiguration
     public ActivityLoggingConfig ActivityLogging { get; set; } = new();
     
     /// <summary>
+    /// Web search tool configuration
+    /// </summary>
+    public WebSearchTool WebSearch { get; set; } = new();
+    
+    /// <summary>
     /// Create configuration from environment variables
     /// </summary>
     /// <returns>Validated configuration instance</returns>

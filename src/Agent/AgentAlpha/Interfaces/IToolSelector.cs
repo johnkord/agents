@@ -1,5 +1,6 @@
 using ModelContextProtocol.Client;
 using OpenAIIntegration.Model;
+using AgentAlpha.Models;
 
 namespace AgentAlpha.Interfaces;
 
@@ -9,7 +10,7 @@ namespace AgentAlpha.Interfaces;
 public interface IToolSelector
 {
     /// <summary>
-    /// Select relevant tools for the initial task
+    /// Select relevant tools for the initial task (includes both MCP tools and built-in OpenAI tools)
     /// </summary>
     /// <param name="task">The user's task description</param>
     /// <param name="availableTools">All available tools from MCP server</param>
@@ -37,4 +38,11 @@ public interface IToolSelector
     /// <param name="availableTools">All available tools</param>
     /// <returns>Essential tools that should always be available</returns>
     Task<ToolDefinition[]> GetEssentialToolsAsync(IList<McpClientTool> availableTools);
+    
+    /// <summary>
+    /// Determine if web search should be included based on task analysis
+    /// </summary>
+    /// <param name="task">The user's task description</param>
+    /// <returns>True if web search tool should be included</returns>
+    bool ShouldIncludeWebSearch(string task);
 }
