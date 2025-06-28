@@ -82,7 +82,7 @@ public class ToolSelector : IToolSelector
                 
                 // Add web search tool if task requires it and model supports it (only when not using LLM selection)
                 if (ShouldIncludeWebSearch(task) && selectedTools.Count < maxToolCount && 
-                    !selectedTools.Any(t => t.Name == "web_search"))
+                    !selectedTools.Any(t => t.Name == "web_search") && _agentConfig.WebSearch != null)
                 {
                     var webSearchTool = _agentConfig.WebSearch.ToToolDefinition();
                     selectedTools.Add(webSearchTool);
@@ -874,7 +874,7 @@ public class ToolSelector : IToolSelector
         var alreadySelectedNames = alreadySelectedTools.Select(t => t.Name).ToHashSet();
 
         // Add web search tool if it's not already selected and could be relevant
-        if (!alreadySelectedNames.Contains("web_search") && ShouldIncludeWebSearch(task))
+        if (!alreadySelectedNames.Contains("web_search") && ShouldIncludeWebSearch(task) && _agentConfig.WebSearch != null)
         {
             descriptions.Add("- web_search: Search the web for current information and real-time data");
         }
@@ -892,7 +892,7 @@ public class ToolSelector : IToolSelector
     {
         return toolName.ToLowerInvariant() switch
         {
-            "web_search" => _agentConfig.WebSearch.ToToolDefinition(),
+            "web_search" => _agentConfig.WebSearch?.ToToolDefinition(),
             // Future: add other built-in tools
             _ => null
         };
