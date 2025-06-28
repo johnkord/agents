@@ -183,4 +183,8 @@ public static class ActivityTypes
     public const string ToolResult = "Tool_Result";
     public const string ConversationIteration = "Conversation_Iteration";
     public const string Error = "Error";
+    public const string PlanDetails = "Plan_Details";
+    public const string ToolSelectionReasoning = "Tool_Selection_Reasoning";
+    public const string ResponseQualityAssessment = "Response_Quality_Assessment";
+    public const string TaskCompletionEvaluation = "Task_Completion_Evaluation";
 }
