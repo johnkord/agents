@@ -75,12 +75,12 @@ public class EndToEndOpenAILoggingTests
         // Act - Execute operations that make OpenAI calls
         
         // 1. PlanningService makes OpenAI calls
-        var plan = await planningService.CreatePlanAsync("Create a test plan", new List<ModelContextProtocol.Client.McpClientTool>());
+        var plan = await planningService.CreatePlanAsync("Create a test plan", TestHelpers.WrapTools(new List<ModelContextProtocol.Client.McpClientTool>()));
         
         // 2. ToolSelector makes OpenAI calls (would normally work, but ToolManager is null)
         try
         {
-            await toolSelector.SelectToolsForTaskAsync("Select tools for task", new List<ModelContextProtocol.Client.McpClientTool>(), 5);
+            await toolSelector.SelectToolsForTaskAsync("Select tools for task", TestHelpers.WrapTools(new List<ModelContextProtocol.Client.McpClientTool>()), 5);
         }
         catch
         {
