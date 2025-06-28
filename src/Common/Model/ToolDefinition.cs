@@ -38,14 +38,41 @@ public sealed class ToolDefinition
 
 public class ToolDefinitionConverter : JsonConverter<ToolDefinition>
 {
+    /* DTO without the [JsonConverter] attribute –
+       used to bypass the converter during nested deserialisation */
+    private sealed class ToolDefinitionDto
+    {
+        public string           Type              { get; set; } = "function";
+        public string           Name              { get; set; } = "";
+        public string?          Description       { get; set; }
+        public object?          Parameters        { get; set; }
+        public bool?            Strict            { get; set; }
+        public object?          UserLocation      { get; set; }
+        public string?          SearchContextSize { get; set; }
+    }
+
     public override ToolDefinition Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        // Create a new options instance without the converter to avoid recursion
-        var optionsWithoutConverter = new JsonSerializerOptions(options);
-        optionsWithoutConverter.Converters.Clear();
-        
+        // Clone options but keep converters list; no need to clear it now
+        var safeOptions = new JsonSerializerOptions(options);
+
         var jsonElement = JsonElement.ParseValue(ref reader);
-        return JsonSerializer.Deserialize<ToolDefinition>(jsonElement.GetRawText(), optionsWithoutConverter) ?? new ToolDefinition();
+
+        // Deserialize into DTO (no converter attribute → no recursion)
+        var dto = JsonSerializer.Deserialize<ToolDefinitionDto>(jsonElement.GetRawText(), safeOptions)
+                  ?? new ToolDefinitionDto();
+
+        // Map DTO → actual instance
+        return new ToolDefinition
+        {
+            Type              = dto.Type,
+            Name              = dto.Name,
+            Description       = dto.Description,
+            Parameters        = dto.Parameters,
+            Strict            = dto.Strict,
+            UserLocation      = dto.UserLocation,
+            SearchContextSize = dto.SearchContextSize
+        };
     }
 
     public override void Write(Utf8JsonWriter writer, ToolDefinition value, JsonSerializerOptions options)
