@@ -2,5 +2,7 @@
   <PropertyGroup>
     <!-- Enforce warnings as errors for all projects in the repo -->
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Use .NET 8.0 since 9.0 is not available in this environment -->
+    <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
 </Project>
