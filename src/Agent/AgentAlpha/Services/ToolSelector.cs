@@ -277,7 +277,7 @@ public class ToolSelector : IToolSelector
                 new[] { "current_time" },
             [new[] { "system", "environment", "variable", "info" }] = 
                 new[] { "get_env_var", "system_info" },
-            [new[] { "web", "search", "internet", "online", "news", "current", "latest", "recent", "today", "real-time", "live", "browse", "website", "url", "google", "find" }] = 
+            [new[] { "web", "search", "internet", "online", "news", "current", "latest", "recent", "today", "real-time", "live", "browse", "website", "url", "google", "find", "available", "which", "what", "list", "models", "options", "versions", "supported", "offerings", "plans", "pricing", "features", "capabilities", "services", "apis", "endpoints", "status", "working", "active" }] = 
                 new[] { "web_search" }
         };
         
@@ -456,7 +456,15 @@ public class ToolSelector : IToolSelector
             "google", "find", "what's happening", "breaking", "update", "trending"
         };
         
-        return webSearchKeywords.Any(keyword => taskLower.Contains(keyword));
+        // Keywords that indicate need for current/up-to-date information
+        var currentInfoKeywords = new[] {
+            "available", "which", "what", "list", "models", "options", "versions",
+            "supported", "offerings", "plans", "pricing", "features", "capabilities",
+            "services", "apis", "endpoints", "status", "working", "active"
+        };
+        
+        return webSearchKeywords.Any(keyword => taskLower.Contains(keyword)) ||
+               currentInfoKeywords.Any(keyword => taskLower.Contains(keyword));
     }
 
     /// <summary>
@@ -501,6 +509,7 @@ public class ToolSelector : IToolSelector
             
             SelectionMethod = _config.UseLLMSelection ? "LLM-based" : "Heuristic-based",
             WebSearchIncluded = ShouldIncludeWebSearch(task),
+            WebSearchReasoning = GetWebSearchReasoning(task),
             
             TaskCategories = taskAnalysis.Categories,
             RelevanceFiltering = new
@@ -543,6 +552,15 @@ public class ToolSelector : IToolSelector
         {
             categories.Add("AI/OpenAI");
             keywords.AddRange(new[] { "openai", "model", "ai" });
+            
+            // If asking about available models, pricing, features, etc. - likely needs current info
+            if (taskLower.Contains("available") || taskLower.Contains("models") || 
+                taskLower.Contains("which") || taskLower.Contains("list") ||
+                taskLower.Contains("pricing") || taskLower.Contains("features") ||
+                taskLower.Contains("capabilities") || taskLower.Contains("options"))
+            {
+                keywords.AddRange(new[] { "available", "current", "latest" });
+            }
         }
         
         if (taskLower.Contains("github") || taskLower.Contains("repository") || taskLower.Contains("pull request"))
@@ -614,6 +632,12 @@ public class ToolSelector : IToolSelector
     {
         var toolLower = toolName.ToLowerInvariant();
         
+        // If task requires current info but this isn't web search, prioritize web search
+        if (analysis.RequiresCurrentInfo && !toolLower.Contains("web_search") && !toolLower.Contains("search"))
+        {
+            return "Task requires current information - web search prioritized";
+        }
+        
         // Check if tool is completely unrelated to task categories
         var isRelevant = analysis.Categories.Any(category => IsToolRelevantToCategory(toolName, category));
         
@@ -633,6 +657,44 @@ public class ToolSelector : IToolSelector
         }
 
         return "Lower priority or space limitations";
+    }
+
+    /// <summary>
+    /// Get detailed reasoning for why web search was or wasn't included
+    /// </summary>
+    private string GetWebSearchReasoning(string task)
+    {
+        if (string.IsNullOrWhiteSpace(task))
+            return "No task provided";
+
+        var taskLower = task.ToLowerInvariant();
+        
+        var webSearchKeywords = new[] { 
+            "web", "search", "internet", "online", "news", "current", "latest", 
+            "recent", "today", "real-time", "live", "browse", "website", "url", 
+            "google", "find", "what's happening", "breaking", "update", "trending"
+        };
+        
+        var currentInfoKeywords = new[] {
+            "available", "which", "what", "list", "models", "options", "versions",
+            "supported", "offerings", "plans", "pricing", "features", "capabilities",
+            "services", "apis", "endpoints", "status", "working", "active"
+        };
+        
+        var foundWebKeywords = webSearchKeywords.Where(k => taskLower.Contains(k)).ToList();
+        var foundCurrentInfoKeywords = currentInfoKeywords.Where(k => taskLower.Contains(k)).ToList();
+        
+        if (foundWebKeywords.Any() || foundCurrentInfoKeywords.Any())
+        {
+            var reasons = new List<string>();
+            if (foundWebKeywords.Any())
+                reasons.Add($"Web search keywords: {string.Join(", ", foundWebKeywords)}");
+            if (foundCurrentInfoKeywords.Any())
+                reasons.Add($"Current info keywords: {string.Join(", ", foundCurrentInfoKeywords)}");
+            return string.Join("; ", reasons);
+        }
+        
+        return "No keywords indicating need for current information or web search";
     }
 
     /// <summary>

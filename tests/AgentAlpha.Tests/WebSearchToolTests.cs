@@ -64,6 +64,11 @@ public class WebSearchToolTests
     [InlineData("What's happening online right now?", true)]
     [InlineData("Browse the web for information", true)]
     [InlineData("Google the latest trends", true)]
+    [InlineData("which models are available through openai?", true)]  // Original problematic case
+    [InlineData("what pricing options are available?", true)]
+    [InlineData("list all supported versions", true)]
+    [InlineData("which apis are active?", true)]
+    [InlineData("what features does the service offer?", true)]
     [InlineData("Calculate 2 + 2", false)]
     [InlineData("Read the file contents", false)]
     [InlineData("List directory contents", false)]
