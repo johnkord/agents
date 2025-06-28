@@ -11,7 +11,7 @@ echo "   dotnet run \"Calculate 2 + 2\""
 echo ""
 
 echo "2. With specific model:"
-echo "   dotnet run --model \"gpt-3.5-turbo\" \"Write a haiku\""
+echo "   dotnet run --model \"gpt-4.1-nano\" \"Write a haiku\""
 echo ""
 
 echo "3. With temperature control:"

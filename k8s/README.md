@@ -85,7 +85,7 @@ The applications use the following environment variables (configured via ConfigM
 | `MCP_TRANSPORT` | sse | Transport type (stdio/sse) |
 | `LOGGING__LOGLEVEL__DEFAULT` | Information | Default log level |
 | `AGENT_MAX_ITERATIONS` | 10 | Maximum agent iterations |
-| `AGENT_MODEL` | gpt-3.5-turbo | Default OpenAI model for AgentAlpha |
+| `AGENT_MODEL` | gpt-4.1-nano | Default OpenAI model for AgentAlpha |
 | `AGENT_TEMPERATURE` | 0.7 | Default temperature for AgentAlpha responses |
 | `AGENT_TIMEOUT_MINUTES` | 5 | Default timeout for AgentAlpha tasks |
 | `APPROVAL_PROVIDER_TYPE` | Rest | Approval provider type |
@@ -238,7 +238,7 @@ helm install agents ./helm/agents \
 
 # Deploy with resource optimization
 helm install agents ./helm/agents \
-  --set agentAlpha.parameters.model="gpt-3.5-turbo" \
+  --set agentAlpha.parameters.model="gpt-4.1-nano" \
   --set agentAlpha.parameters.maxIterations=5 \
   --set agentAlpha.parameters.timeoutMinutes=3
 ```

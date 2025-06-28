@@ -27,7 +27,7 @@ public class ArgumentParsingTests
 
     [Theory]
     [InlineData("gpt-4o")]
-    [InlineData("gpt-3.5-turbo")]
+    [InlineData("gpt-4.1-nano")]
     [InlineData("gpt-4-turbo")]
     public void TaskExecutionRequest_SupportsModelParameter(string modelValue)
     {

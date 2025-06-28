@@ -135,7 +135,7 @@
             "type": "coreclr",
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net9.0/AgentAlpha.dll",
-            "args": ["--model", "gpt-3.5-turbo", "--temperature", "0.1", "--system-prompt", "You are a precise mathematics tutor", "--timeout", "2", "Calculate the area of a circle with radius 5.7 meters"],
+            "args": ["--model", "gpt-4.1-nano", "--temperature", "0.1", "--system-prompt", "You are a precise mathematics tutor", "--timeout", "2", "Calculate the area of a circle with radius 5.7 meters"],
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",
             "stopAtEntry": false,
@@ -351,7 +351,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net9.0/AgentAlpha.dll",
             "args": [
-                "--model", "gpt-3.5-turbo",
+                "--model", "gpt-4.1-nano",
                 "--temperature", "0.5",
                 "--system-prompt", "You are a technical writer reviewing documentation changes. Focus on clarity, completeness, accuracy, and user experience. Suggest improvements for better comprehension.",
                 "--verbose",

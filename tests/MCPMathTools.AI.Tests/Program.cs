@@ -159,7 +159,7 @@ public class Program
     {
         var requestData = new
         {
-            model = "gpt-3.5-turbo",
+            model = "gpt-4.1-nano",
             messages = new[]
             {
                 new { role = "system", content = "You are a helpful assistant that can perform mathematical calculations using the provided tools. Always use the appropriate tool for mathematical operations." },

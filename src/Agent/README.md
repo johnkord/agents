@@ -82,7 +82,7 @@ dotnet run "Calculate 25 + 17"
 
 **With specific OpenAI model:**
 ```bash
-dotnet run --model "gpt-3.5-turbo" "Calculate 25 + 17"
+dotnet run --model "gpt-4.1-nano" "Calculate 25 + 17"
 dotnet run -m "gpt-4o" "Write a creative story"
 ```
 
@@ -129,7 +129,7 @@ dotnet run --model "gpt-4o" --temperature 0.7 --priority High --verbose "Creativ
 
 | Parameter | Short | Description | Example |
 |-----------|-------|-------------|---------|
-| `--model` | `-m` | OpenAI model to use | `gpt-4o`, `gpt-3.5-turbo` |
+| `--model` | `-m` | OpenAI model to use | `gpt-4o`, `gpt-4.1-nano` |
 | `--temperature` | `-t` | Response creativity (0.0-1.0) | `0.2` (precise), `0.8` (creative) |
 | `--max-iterations` | `--iterations` | Max conversation loops | `5`, `15` |
 | `--priority` | | Task priority level | `Low`, `Normal`, `High` |

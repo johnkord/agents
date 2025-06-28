@@ -54,7 +54,7 @@ This repository provides a foundation for building AI agents that leverage the M
    # Tool selection configuration (optional)
    export MAX_TOOLS_PER_REQUEST=5        # Limit tools per request (default: 10)
    export USE_LLM_TOOL_SELECTION=true    # Use LLM for tool selection (default: true)
-   export TOOL_SELECTION_MODEL=gpt-3.5-turbo  # Model for tool selection
+   export TOOL_SELECTION_MODEL=gpt-4.1-nano  # Model for tool selection
    ```
 
 ### Alternative: SSE Transport

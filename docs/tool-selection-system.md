@@ -24,7 +24,7 @@ Provides intelligent tool selection capabilities:
 
 #### 2. ToolSelector Service
 Implementation that uses multiple strategies for tool selection:
-- **LLM-based Selection**: Uses a lightweight OpenAI model (gpt-3.5-turbo) to analyze task requirements and select relevant tools
+- **LLM-based Selection**: Uses a lightweight OpenAI model (gpt-4.1-nano) to analyze task requirements and select relevant tools
 - **Heuristic Fallback**: Keyword-based selection when LLM is unavailable or disabled
 - **Essential Tools**: Always includes critical tools like "complete_task"
 
@@ -35,7 +35,7 @@ public class ToolSelectionConfig
 {
     public int MaxToolsPerRequest { get; set; } = 10;           // Max tools per request
     public bool UseLLMSelection { get; set; } = true;           // Use LLM vs heuristics
-    public string SelectionModel { get; set; } = "gpt-3.5-turbo"; // Model for selection
+    public string SelectionModel { get; set; } = "gpt-4.1-nano"; // Model for selection
     public double SelectionTemperature { get; set; } = 0.1;     // Temperature for consistency
     public bool AllowDynamicExpansion { get; set; } = true;     // Enable tool expansion
     public int MaxAdditionalToolsPerIteration { get; set; } = 3; // Max tools to add per iteration
@@ -59,7 +59,7 @@ Updated to:
 ## Tool Selection Strategies
 
 ### 1. LLM-Based Selection (Primary)
-Uses OpenAI's gpt-3.5-turbo to analyze task descriptions and select relevant tools:
+Uses OpenAI's gpt-4.1-nano to analyze task descriptions and select relevant tools:
 
 **Prompt Template:**
 ```
@@ -128,7 +128,7 @@ The system supports adding tools during conversation when needed:
 ### Environment Variables
 - `MAX_TOOLS_PER_REQUEST`: Maximum number of tools to send per request (default: 10)
 - `USE_LLM_TOOL_SELECTION`: Enable/disable LLM-based selection (default: true)
-- `TOOL_SELECTION_MODEL`: Model to use for tool selection (default: gpt-3.5-turbo)
+- `TOOL_SELECTION_MODEL`: Model to use for tool selection (default: gpt-4.1-nano)
 
 ### Code Configuration
 ```csharp
@@ -136,7 +136,7 @@ var config = new ToolSelectionConfig
 {
     MaxToolsPerRequest = 8,
     UseLLMSelection = true,
-    SelectionModel = "gpt-3.5-turbo",
+    SelectionModel = "gpt-4.1-nano",
     SelectionTemperature = 0.1,
     AllowDynamicExpansion = true,
     MaxAdditionalToolsPerIteration = 2,
@@ -157,7 +157,7 @@ var config = new ToolSelectionConfig
 - **Fallback Safety**: Multiple selection strategies ensure robustness
 
 ### Performance
-- **Fast Selection**: Uses lightweight model (gpt-3.5-turbo) for quick tool selection
+- **Fast Selection**: Uses lightweight model (gpt-4.1-nano) for quick tool selection
 - **Minimal Overhead**: Selection happens once per task with optional expansion
 - **Caching Potential**: Selected tools are reused across conversation iterations
 

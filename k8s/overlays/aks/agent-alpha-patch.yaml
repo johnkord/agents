@@ -29,10 +29,10 @@ spec:
         spec:
           containers:
           - name: agent-alpha
-            args: ["--model", "gpt-3.5-turbo", "--temperature", "0.5", "--system-prompt", "You are a Kubernetes monitoring agent", "--verbose", "Check cluster health and report status"]
+            args: ["--model", "gpt-4.1-nano", "--temperature", "0.5", "--system-prompt", "You are a Kubernetes monitoring agent", "--verbose", "Check cluster health and report status"]
             env:
             - name: AGENT_MODEL
-              value: "gpt-3.5-turbo"
+              value: "gpt-4.1-nano"
             - name: AGENT_TEMPERATURE
               value: "0.5"
             - name: AGENT_MAX_ITERATIONS
