@@ -12,18 +12,20 @@ using System.Text.Json;   // new
 namespace AgentAlpha.Services;
 
 /// <summary>
-/// Implementation of tool discovery, validation, and schema management
+/// Implementation of tool discovery, validation, and schema management for both MCP and built-in tools
 /// </summary>
 public class ToolManager : IToolManager
 {
     private readonly ILogger<ToolManager> _logger;
     private readonly ISessionActivityLogger? _activityLogger;
     private readonly AgentConfiguration _config;
+    private readonly IBuiltInToolRegistry _builtInToolRegistry;
 
-    public ToolManager(ILogger<ToolManager> logger, AgentConfiguration config, ISessionActivityLogger? activityLogger = null)
+    public ToolManager(ILogger<ToolManager> logger, AgentConfiguration config, IBuiltInToolRegistry builtInToolRegistry, ISessionActivityLogger? activityLogger = null)
     {
         _logger = logger;
         _config = config;
+        _builtInToolRegistry = builtInToolRegistry ?? throw new ArgumentNullException(nameof(builtInToolRegistry));
         _activityLogger = activityLogger;
     }
 
@@ -208,5 +210,88 @@ public class ToolManager : IToolManager
             _logger.LogError(ex, "Failed to execute tool {ToolName}", toolName);
             return $"Error executing {toolName}: {ex.Message}";
         }
+    }
+
+    // New unified methods for handling all tool types
+    
+    public async Task<IList<IUnifiedTool>> DiscoverAllToolsAsync(IConnectionManager connection)
+    {
+        var unifiedTools = new List<IUnifiedTool>();
+        
+        try
+        {
+            // Discover MCP tools
+            var mcpTools = await DiscoverToolsAsync(connection);
+            foreach (var mcpTool in mcpTools)
+            {
+                unifiedTools.Add(new McpUnifiedTool(mcpTool, this));
+            }
+            
+            // Add built-in tools
+            var builtInTools = _builtInToolRegistry.GetAvailableBuiltInTools();
+            unifiedTools.AddRange(builtInTools);
+            
+            _logger.LogInformation("Discovered {McpCount} MCP tools and {BuiltInCount} built-in tools, total: {TotalCount}", 
+                mcpTools.Count, builtInTools.Count, unifiedTools.Count);
+            
+            return unifiedTools;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to discover unified tools");
+            
+            // Return at least the built-in tools if MCP discovery fails
+            var builtInTools = _builtInToolRegistry.GetAvailableBuiltInTools();
+            _logger.LogWarning("Returning only {Count} built-in tools due to MCP discovery failure", builtInTools.Count);
+            return builtInTools.ToList();
+        }
+    }
+
+    public IList<IUnifiedTool> ApplyFiltersToAllTools(IList<IUnifiedTool> tools, ToolFilterConfig filter)
+    {
+        var filteredTools = tools.Where(t => filter.ShouldIncludeTool(t.Name)).ToList();
+        
+        _logger.LogInformation("Applied filters to unified tools: {Total} tools -> {Filtered} tools", 
+            tools.Count, filteredTools.Count);
+        
+        if (filteredTools.Count != tools.Count)
+        {
+            var excluded = tools.Where(t => !filter.ShouldIncludeTool(t.Name)).Select(t => $"{t.Name} ({t.Type})");
+            _logger.LogDebug("Excluded unified tools: {ExcludedTools}", string.Join(", ", excluded));
+        }
+        
+        return filteredTools;
+    }
+
+    public async Task<string> ExecuteUnifiedToolAsync(IUnifiedTool tool, IConnectionManager connection, Dictionary<string, object?> arguments)
+    {
+        if (tool == null) throw new ArgumentNullException(nameof(tool));
+        
+        switch (tool.Type)
+        {
+            case ToolType.MCP:
+                if (tool is McpUnifiedTool mcpUnifiedTool)
+                {
+                    return await ExecuteToolAsync(connection, mcpUnifiedTool.McpTool.Name, arguments);
+                }
+                throw new InvalidOperationException($"MCP tool {tool.Name} is not a valid McpUnifiedTool");
+                
+            case ToolType.BuiltInOpenAI:
+                // Built-in OpenAI tools are executed by OpenAI itself, not locally
+                _logger.LogInformation("Built-in OpenAI tool {ToolName} execution is handled by OpenAI", tool.Name);
+                return "Built-in OpenAI tool execution is handled by the OpenAI API";
+                
+            case ToolType.Custom:
+                // Future: Handle custom tool execution
+                throw new NotImplementedException($"Custom tool execution is not yet implemented for {tool.Name}");
+                
+            default:
+                throw new InvalidOperationException($"Unknown tool type: {tool.Type} for tool {tool.Name}");
+        }
+    }
+
+    public ToolDefinition[] ConvertToToolDefinitions(IList<IUnifiedTool> tools)
+    {
+        return tools.Select(tool => tool.ToToolDefinition()).ToArray();
     }
 }

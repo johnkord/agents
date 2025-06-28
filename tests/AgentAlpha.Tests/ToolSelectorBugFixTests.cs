@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using Xunit;
 using AgentAlpha.Services;
@@ -253,6 +254,18 @@ namespace AgentAlpha.Tests
         
         public Task<string> ExecuteToolAsync(AgentAlpha.Interfaces.IConnectionManager connection, string toolName, Dictionary<string, object?> arguments) => 
             Task.FromResult("mock result");
+
+        // New unified methods
+        public Task<IList<IUnifiedTool>> DiscoverAllToolsAsync(AgentAlpha.Interfaces.IConnectionManager connection) =>
+            Task.FromResult<IList<IUnifiedTool>>(new List<IUnifiedTool>());
+
+        public IList<IUnifiedTool> ApplyFiltersToAllTools(IList<IUnifiedTool> tools, ToolFilterConfig filter) => tools;
+
+        public Task<string> ExecuteUnifiedToolAsync(IUnifiedTool tool, AgentAlpha.Interfaces.IConnectionManager connection, Dictionary<string, object?> arguments) =>
+            Task.FromResult("mock unified result");
+
+        public ToolDefinition[] ConvertToToolDefinitions(IList<IUnifiedTool> tools) =>
+            tools.Select(t => t.ToToolDefinition()).ToArray();
     }
 
     public class MockLoggerForBugFix<T> : ILogger<T>
