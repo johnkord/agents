@@ -14,7 +14,7 @@ This repository provides a foundation for building AI agents that leverage the M
 ## Quick Start
 
 ### Prerequisites
-- .NET 9.0 SDK or later
+- .NET 8.0 SDK (LTS) or later
 - Terminal/Command Prompt  
 - VS Code (optional, for debugging)
 
