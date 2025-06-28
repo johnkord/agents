@@ -89,12 +89,12 @@ Keyword-based matching when LLM selection is disabled or fails:
 ```csharp
 var keywordMappings = new Dictionary<string[], string[]>
 {
-    [new[] { "math", "calculate", "add", "subtract" }] = 
-        new[] { "add", "subtract", "multiply", "divide" },
     [new[] { "file", "read", "write", "directory" }] = 
         new[] { "read_file", "write_file", "list_directory" },
     [new[] { "text", "search", "replace", "word" }] = 
         new[] { "search_in_file", "replace_in_file", "word_count" },
+    [new[] { "git", "github", "code", "review" }] = 
+        new[] { "github_pr_review", "code_analysis" },
     // ... more mappings
 };
 ```
@@ -167,13 +167,13 @@ var config = new ToolSelectionConfig
 ```csharp
 var toolSelector = new ToolSelector(openAiService, toolManager, logger, config);
 
-// Select tools for a math task
+// Select tools for a file processing task
 var selectedTools = await toolSelector.SelectToolsForTaskAsync(
-    "Calculate the sum of 5 and 10", 
+    "Read and analyze the contents of a configuration file", 
     allAvailableTools, 
     maxTools: 5);
 
-// Result: [complete_task, add, subtract] (3 tools instead of 20+ available)
+// Result: [complete_task, read_file, write_file] (3 tools instead of 20+ available)
 ```
 
 ### With Dynamic Expansion
@@ -199,7 +199,7 @@ The system provides comprehensive logging:
 Example log output:
 ```
 🔧 Discovered 25 tools total, 20 after filtering
-🎯 Selected 4 relevant tools: complete_task, add, subtract, multiply
+🎯 Selected 4 relevant tools: complete_task, read_file, write_file, list_directory
 💡 Available for expansion: 16 additional tools
 🔧 Expanded tools for next iteration: +2 tools
 ```

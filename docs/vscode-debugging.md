@@ -99,7 +99,7 @@ ASPNETCORE_URLS=http://localhost:5000 dotnet run -- --transport sse
 dotnet run test
 
 # Interactive mode (requires OPENAI_API_KEY)
-dotnet run "Calculate the sum of 15 and 27"
+dotnet run "List the files in the current directory"
 ```
 
 ## Development Workflow

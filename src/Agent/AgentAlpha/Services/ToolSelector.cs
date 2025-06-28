@@ -302,8 +302,6 @@ public class ToolSelector : IToolSelector
         // Simple keyword-based heuristics
         var keywordMappings = new Dictionary<string[], string[]>
         {
-            [new[] { "math", "calculate", "add", "subtract", "multiply", "divide", "number" }] = 
-                new[] { "add", "subtract", "multiply", "divide" },
             [new[] { "file", "files", "read", "write", "directory", "folder", "save", "load", "list" }] = 
                 new[] { "read_file", "write_file", "list_directory", "file_info" },
             [new[] { "text", "search", "replace", "word", "count", "format" }] = 
@@ -754,9 +752,6 @@ public class ToolSelector : IToolSelector
         
         return category switch
         {
-            "Mathematical" => toolLower.Contains("add") || toolLower.Contains("subtract") || 
-                             toolLower.Contains("multiply") || toolLower.Contains("divide") || 
-                             toolLower.Contains("math"),
             "File Operations" => toolLower.Contains("file") || toolLower.Contains("read") || 
                                toolLower.Contains("write") || toolLower.Contains("directory"),
             "AI/OpenAI" => toolLower.Contains("openai") || toolLower.Contains("gpt") || 

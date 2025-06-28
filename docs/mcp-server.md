@@ -8,7 +8,7 @@ The current implementation provides a complete MCP server that:
 - Starts and runs as a console application using the hosting framework
 - Uses Microsoft Extensions for logging and dependency injection
 - References the official ModelContextProtocol NuGet package (see also the `reference/csharp-sdk` submodule for full SDK source)
-- Implements mathematical tools (add, subtract, multiply, divide) using the MCP SDK
+- Implements comprehensive tools for shell operations, file management, GitHub/Azure DevOps integration, and more using the MCP SDK
 - Provides proper stdio transport for client communication
 - Handles tool registration and execution through the MCP framework
 
@@ -16,7 +16,7 @@ The current implementation provides a complete MCP server that:
 
 ### Basic Structure
 
-The server is implemented in `src/MCPServer/Program.cs` and `src/MCPServer/Tools/MathTools.cs`:
+The server is implemented in `src/MCPServer/Program.cs` with comprehensive tool implementations:
 
 ```csharp
 // Program.cs - Server setup and hosting
@@ -43,44 +43,20 @@ namespace MCPServer
             builder.Services
                 .AddMcpServer()
                 .WithStdioServerTransport()
-                .WithTools<MathTools>();
+                .WithTools<ShellTools>()
+                .WithTools<TaskCompletionTool>()
+                .WithTools<GitHubTools>()
+                .WithTools<AzureDevOpsTools>()
+                .WithTools<OpenAIVectorStoreTools>()
+                .WithTools<CodeReviewTools>();
 
             var host = builder.Build();
             
             Console.WriteLine("MCP Server Starting...");
-            Console.WriteLine("Available tools: add, subtract, multiply, divide");
+            Console.WriteLine("Available tools: GitHub PR review, Azure DevOps PR review, OpenAI Vector Store, Code Review analysis, and more...");
             
             await host.RunAsync();
         }
-    }
-}
-```
-
-```csharp
-// Tools/MathTools.cs - Mathematical operations
-using ModelContextProtocol.Server;
-using System.ComponentModel;
-
-namespace MCPServer.Tools;
-
-[McpServerToolType]
-public class MathTools
-{
-    [McpServerTool(Name = "add"), Description("Adds two numbers.")]
-    public static string Add(double a, double b) => $"The sum of {a} and {b} is {a + b}";
-
-    [McpServerTool(Name = "subtract"), Description("Subtracts the second number from the first number.")]
-    public static string Subtract(double a, double b) => $"The difference of {a} and {b} is {a - b}";
-
-    [McpServerTool(Name = "multiply"), Description("Multiplies two numbers.")]
-    public static string Multiply(double a, double b) => $"The product of {a} and {b} is {a * b}";
-
-    [McpServerTool(Name = "divide"), Description("Divides the first number by the second number.")]
-    public static string Divide(double a, double b)
-    {
-        if (b == 0)
-            return "Error: Cannot divide by zero";
-        return $"The quotient of {a} and {b} is {a / b}";
     }
 }
 ```
@@ -96,12 +72,6 @@ The server project includes these NuGet packages:
 ## Current Tools and Resources
 
 The server now implements a comprehensive set of tools across multiple domains:
-
-### Mathematical Tools
-1. **add** - Adds two numbers and returns the sum
-2. **subtract** - Subtracts the second number from the first number
-3. **multiply** - Multiplies two numbers and returns the product
-4. **divide** - Divides the first number by the second number (with division by zero handling)
 
 ### File Operations Tools
 1. **read_file** - Read the contents of a file

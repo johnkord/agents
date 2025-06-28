@@ -14,9 +14,6 @@ AgentAlpha combines OpenAI's reasoning capabilities with a rich set of tools to 
 
 ## Available Tools
 
-### Mathematical Operations
-- **add, subtract, multiply, divide** - Basic arithmetic operations
-
 ### File Operations  
 - **read_file** - Read file contents
 - **write_file** - Write text to files
@@ -216,7 +213,7 @@ This agent demonstrates how to integrate:
 - **MCP Client** for tool discovery and execution  
 - **MCP Server** for providing available tools
 - **Dynamic Tool Discovery** for flexible parameter handling
-- **Multi-domain Tools** spanning math, files, text, and system operations
+- **Multi-domain Tools** spanning files, text, system operations, GitHub, and Azure DevOps
 - **Conversational AI** patterns with enhanced tool use
 
 ## Getting Started

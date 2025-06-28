@@ -69,7 +69,6 @@ namespace MCPServer
                 .WithTools<AzureDevOpsTools>()
                 .WithTools<OpenAIVectorStoreTools>()
                 .WithTools<CodeReviewTools>()
-                .WithTools<MathTools>()
                 //.WithTools<FileTools>()
                 //.WithTools<TextTools>()
                 //.WithTools<SystemTools>()
@@ -101,7 +100,6 @@ namespace MCPServer
                 .WithTools<AzureDevOpsTools>()
                 .WithTools<OpenAIVectorStoreTools>()
                 .WithTools<CodeReviewTools>()
-                .WithTools<MathTools>()
                 //.WithTools<FileTools>()
                 //.WithTools<TextTools>()
                 //.WithTools<SystemTools>();

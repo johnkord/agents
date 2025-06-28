@@ -19,11 +19,11 @@ public class ResponseOutputItemHandlingTests
 
         // Test whitelist only
         var whitelistConfig = new ToolFilterConfig();
-        whitelistConfig.Whitelist.Add("add");
-        whitelistConfig.Whitelist.Add("subtract");
-        Assert.True(whitelistConfig.ShouldIncludeTool("add"));
-        Assert.True(whitelistConfig.ShouldIncludeTool("subtract"));
-        Assert.False(whitelistConfig.ShouldIncludeTool("multiply"));
+        whitelistConfig.Whitelist.Add("read_file");
+        whitelistConfig.Whitelist.Add("write_file");
+        Assert.True(whitelistConfig.ShouldIncludeTool("read_file"));
+        Assert.True(whitelistConfig.ShouldIncludeTool("write_file"));
+        Assert.False(whitelistConfig.ShouldIncludeTool("list_directory"));
 
         // Test blacklist only
         var blacklistConfig = new ToolFilterConfig();
@@ -48,13 +48,13 @@ public class ResponseOutputItemHandlingTests
         try
         {
             // Test whitelist parsing
-            Environment.SetEnvironmentVariable("MCP_TOOL_WHITELIST", "add,subtract, multiply ");
+            Environment.SetEnvironmentVariable("MCP_TOOL_WHITELIST", "read_file,write_file, list_directory ");
             Environment.SetEnvironmentVariable("MCP_TOOL_BLACKLIST", null);
             
             var config = ToolFilterConfig.FromEnvironment();
-            Assert.Contains("add", config.Whitelist);
-            Assert.Contains("subtract", config.Whitelist);
-            Assert.Contains("multiply", config.Whitelist);
+            Assert.Contains("read_file", config.Whitelist);
+            Assert.Contains("write_file", config.Whitelist);
+            Assert.Contains("list_directory", config.Whitelist);
             Assert.Empty(config.Blacklist);
 
             // Test blacklist parsing

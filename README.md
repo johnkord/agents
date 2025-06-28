@@ -109,7 +109,7 @@ agents/
 ## Features
 
 ### Current Implementation
-- ✅ MCP Server with mathematical tools (add, subtract, multiply, divide)
+- ✅ MCP Server with comprehensive tools (Shell, GitHub, Azure DevOps, File operations, etc.)
 - ✅ Interactive MCP Client with command-line interface
 - ✅ AgentAlpha: AI agent with MCP Client integration and OpenAI API
 - ✅ **Intelligent Tool Selection**: Reduces OpenAI context costs by selecting only relevant tools

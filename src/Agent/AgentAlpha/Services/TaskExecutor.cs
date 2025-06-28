@@ -678,7 +678,6 @@ public class TaskExecutor : ITaskExecutor
             You are AgentAlpha, a helpful AI assistant that can perform various tasks using available tools.
             
             Available capabilities include:
-            - Mathematical calculations (add, subtract, multiply, divide)
             - File operations (read, write, list directories, file information)
             - Text processing (search, replace, format, word count, split text)
             - System information (current time, environment variables, system details)
