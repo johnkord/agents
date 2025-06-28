@@ -7,6 +7,7 @@ using OpenAIIntegration.Model;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
 using AgentAlpha.Configuration;
+using Common.Interfaces.Session;
 
 namespace AgentAlpha.Services;
 

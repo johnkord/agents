@@ -7,6 +7,7 @@ using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
 using AgentAlpha.Configuration;
 using Common.Models.Session;
+using Common.Interfaces.Session;
 
 namespace AgentAlpha.Services;
 
@@ -103,7 +104,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
 
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-4.1-nano", // Consider upgrading to gpt-4 for more sophisticated analysis
+                Model = _config.Model, // Use configured model for planning
                 Input = new[]
                 {
                     new { role = "user", content = prompt }
@@ -232,7 +233,7 @@ Create a logical, state-aware execution plan using the create_execution_plan too
 
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-4.1-nano",
+                Model = _config.Model,
                 Input = new[]
                 {
                     new { role = "user", content = prompt }

@@ -6,6 +6,7 @@ using OpenAIIntegration.Model;
 using SessionService.Services;
 using Common.Models.Session;
 using System.Threading;
+using System.Text.Json;
 
 namespace AgentAlpha.Tests;
 
@@ -139,6 +140,7 @@ public class SessionAwareOpenAIServiceTests
         
         // Assert
         Assert.NotNull(response);
+        Assert.NotNull(response.Output);
         Assert.Single(response.Output);
     }
 }
@@ -171,7 +173,7 @@ public class MockOpenAIResponsesService : IOpenAIResponsesService
                 new OutputMessage
                 {
                     Role = "assistant",
-                    Content = "Test response from mock service"
+                    Content = JsonDocument.Parse("\"Test response from mock service\"").RootElement
                 }
             },
             Usage = new ResponseUsage

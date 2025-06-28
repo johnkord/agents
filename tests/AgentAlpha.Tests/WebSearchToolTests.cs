@@ -71,7 +71,7 @@ public class WebSearchToolTests
     public void ToolSelector_ShouldIncludeWebSearch_CorrectlyIdentifiesWebSearchTasks(string task, bool expected)
     {
         // Arrange
-        var mockOpenAI = new Mock<IOpenAIResponsesService>();
+        var mockOpenAI = new Mock<ISessionAwareOpenAIService>();
         var mockToolManager = new Mock<IToolManager>();
         var mockLogger = new Mock<ILogger<ToolSelector>>();
         var agentConfig = new AgentConfiguration();
@@ -95,7 +95,7 @@ public class WebSearchToolTests
     public async Task ToolSelector_SelectToolsForTaskAsync_IncludesWebSearchForRelevantTasks()
     {
         // Arrange
-        var mockOpenAI = new Mock<IOpenAIResponsesService>();
+        var mockOpenAI = new Mock<ISessionAwareOpenAIService>();
         var mockToolManager = new Mock<IToolManager>();
         var mockLogger = new Mock<ILogger<ToolSelector>>();
         var agentConfig = new AgentConfiguration
@@ -127,7 +127,7 @@ public class WebSearchToolTests
     public async Task ToolSelector_SelectToolsForTaskAsync_DoesNotIncludeWebSearchForNonWebTasks()
     {
         // Arrange
-        var mockOpenAI = new Mock<IOpenAIResponsesService>();
+        var mockOpenAI = new Mock<ISessionAwareOpenAIService>();
         var mockToolManager = new Mock<IToolManager>();
         var mockLogger = new Mock<ILogger<ToolSelector>>();
         var agentConfig = new AgentConfiguration

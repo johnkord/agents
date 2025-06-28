@@ -5,6 +5,7 @@ using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
 using Common.Models.Session;
+using Common.Interfaces.Session;
 using OpenAIIntegration.Model;
 using System.Text.Json;   // new
 

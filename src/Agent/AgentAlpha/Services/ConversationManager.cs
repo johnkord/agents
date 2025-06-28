@@ -6,6 +6,7 @@ using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
 using Common.Models.Session;
+using Common.Interfaces.Session;
 
 namespace AgentAlpha.Services;
 

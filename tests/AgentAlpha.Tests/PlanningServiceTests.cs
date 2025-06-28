@@ -6,6 +6,7 @@ using AgentAlpha.Configuration;
 using ModelContextProtocol.Client;
 using OpenAIIntegration;
 using Common.Models.Session;
+using Common.Interfaces.Session;
 using System.Text.Json;
 
 namespace AgentAlpha.Tests;
@@ -309,8 +310,13 @@ public class PlanningServiceTests
     }
 
     // Mock OpenAI service for testing
-    private class MockOpenAIService : IOpenAIResponsesService
+    private class MockOpenAIService : ISessionAwareOpenAIService
     {
+        public void SetActivityLogger(ISessionActivityLogger? activityLogger)
+        {
+            // No-op for testing
+        }
+
         public Task<OpenAIIntegration.Model.ResponsesCreateResponse> CreateResponseAsync(
             OpenAIIntegration.Model.ResponsesCreateRequest request, 
             CancellationToken cancellationToken = default)

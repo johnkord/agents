@@ -1,3 +1,4 @@
+using Common.Interfaces.Session;
 using ModelContextProtocol.Client;
 using OpenAIIntegration.Model;
 using AgentAlpha.Models;

@@ -1,4 +1,5 @@
 using AgentAlpha.Models;
+using Common.Interfaces.Session;
 using Common.Models.Session;
 using ModelContextProtocol.Client;
 

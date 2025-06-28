@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenAIIntegration.Model;
 using Common.Models.Session;
-using AgentAlpha.Interfaces;
+using Common.Interfaces.Session;
 
 namespace OpenAIIntegration;
 
@@ -53,7 +53,7 @@ public class SessionAwareOpenAIService : ISessionAwareOpenAIService, IDisposable
             var requestData = new 
             { 
                 Model = request.Model,
-                InputCount = request.Input?.Length ?? 0,
+                InputCount = GetInputCount(request.Input),
                 ToolCount = request.Tools?.Length ?? 0,
                 ToolNames = request.Tools?.Select(t => t.Name).ToArray(),
                 ToolChoice = request.ToolChoice,
@@ -120,6 +120,17 @@ public class SessionAwareOpenAIService : ISessionAwareOpenAIService, IDisposable
             throw;
         }
     }
+
+    /// <summary>
+    /// Safely determine how many input items were provided in the request.
+    /// </summary>
+    private static int GetInputCount(object? input) =>
+        input switch
+        {
+            null => 0,
+            IEnumerable<object> enumerable => enumerable.Count(),
+            _ => 1 // treat single primitive/object as one item
+        };
 
     public void Dispose()
     {
