@@ -19,33 +19,19 @@ public class WebSearchTool
 
     /// <summary>
     /// Converts this web search tool to a ToolDefinition for use in OpenAI API requests
+    /// According to OpenAI docs, built-in tools like web_search_preview should only have
+    /// type and configuration parameters at the root level, not name/description/parameters like function tools
     /// </summary>
     public ToolDefinition ToToolDefinition()
     {
         var toolDef = new ToolDefinition
         {
             Type = Type,
-            Name = "web_search_preview",
-            Description = "Search the web for current information and real-time data"
+            // For built-in tools, set the configuration properties directly
+            UserLocation = UserLocation,
+            SearchContextSize = SearchContextSize
+            // Name and Description are left null/empty so they won't be serialized due to JsonIgnore conditions
         };
-
-        // Build the tool parameters based on configuration
-        var parameters = new Dictionary<string, object>();
-        
-        if (UserLocation != null)
-        {
-            parameters["user_location"] = UserLocation;
-        }
-        
-        if (!string.IsNullOrEmpty(SearchContextSize))
-        {
-            parameters["search_context_size"] = SearchContextSize;
-        }
-
-        if (parameters.Count > 0)
-        {
-            toolDef.Parameters = parameters;
-        }
 
         return toolDef;
     }
@@ -66,8 +52,10 @@ public class WebSearchUserLocation
     public string? City { get; set; }
 
     [JsonPropertyName("region")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Region { get; set; }
 
     [JsonPropertyName("timezone")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Timezone { get; set; }
 }
