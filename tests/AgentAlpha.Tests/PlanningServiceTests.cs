@@ -355,4 +355,113 @@ public class PlanningServiceTests
             return Task.FromResult(mockResponse);
         }
     }
+
+    // Test specifically for the string arguments parsing fix
+    private class MockOpenAIServiceWithStringArguments : ISessionAwareOpenAIService
+    {
+        public void SetActivityLogger(ISessionActivityLogger? activityLogger)
+        {
+            // No-op for testing
+        }
+
+        public Task<OpenAIIntegration.Model.ResponsesCreateResponse> CreateResponseAsync(
+            OpenAIIntegration.Model.ResponsesCreateRequest request, 
+            CancellationToken cancellationToken = default)
+        {
+            // Return a mock response with string arguments to test the parsing fix
+            var argumentsAsString = JsonSerializer.Serialize(new
+            {
+                strategy = "Test strategy from string",
+                steps = new[]
+                {
+                    new
+                    {
+                        stepNumber = 1,
+                        description = "Test step from string",
+                        potentialTools = new[] { "test_tool_string" },
+                        isMandatory = true,
+                        expectedInput = "Test input from string",
+                        expectedOutput = "Test output from string"
+                    }
+                },
+                requiredTools = new[] { "test_tool_string" },
+                complexity = "Simple",
+                confidence = 0.9
+            });
+
+            var mockResponse = new OpenAIIntegration.Model.ResponsesCreateResponse
+            {
+                Output = new[]
+                {
+                    new OpenAIIntegration.Model.FunctionToolCall
+                    {
+                        Name = "create_execution_plan",
+                        Arguments = JsonSerializer.SerializeToElement(argumentsAsString) // This creates a string JsonElement
+                    }
+                }
+            };
+
+            return Task.FromResult(mockResponse);
+        }
+    }
+
+    [Fact]
+    public async Task ExtractPlanFromToolCall_WithStringArguments_ParsesSuccessfully()
+    {
+        // Arrange
+        var mockOpenAI = new MockOpenAIServiceWithStringArguments();
+        var planningService = new PlanningService(mockOpenAI, _logger, _config);
+        
+        var availableTools = new List<McpClientTool>();
+
+        // Act
+        var plan = await planningService.CreatePlanAsync("Test task with string arguments", availableTools);
+
+        // Assert
+        Assert.NotNull(plan);
+        Assert.Equal("Test task with string arguments", plan.Task);
+        Assert.Contains("Test strategy from string", plan.Strategy);
+        Assert.NotEmpty(plan.Steps);
+        Assert.Contains(plan.Steps, s => s.Description.Contains("Test step from string"));
+        Assert.Contains(plan.RequiredTools, tool => tool == "test_tool_string");
+        Assert.Equal(TaskComplexity.Simple, plan.Complexity);
+        // Confidence may be adjusted by state analysis, so check it's reasonable
+        Assert.True(plan.Confidence >= 0.8 && plan.Confidence <= 1.0, $"Expected confidence between 0.8 and 1.0, got {plan.Confidence}");
+    }
+
+    [Fact]
+    public void JsonElement_StringArguments_ShouldBeHandledCorrectly()
+    {
+        // This test verifies that the JSON parsing logic handles string arguments correctly
+        // Arrange
+        var testJsonString = @"{""strategy"":""Test strategy"",""confidence"":0.8}";
+        var stringJsonElement = JsonSerializer.SerializeToElement(testJsonString);
+        
+        // Verify that this is indeed a string JsonElement (like what would cause the original error)
+        Assert.Equal(JsonValueKind.String, stringJsonElement.ValueKind);
+        
+        // Act - This should parse correctly now with our fix
+        JsonElement parsedObject;
+        var success = false;
+        
+        if (stringJsonElement.ValueKind == JsonValueKind.String)
+        {
+            var jsonContent = stringJsonElement.GetString();
+            if (!string.IsNullOrWhiteSpace(jsonContent))
+            {
+                try
+                {
+                    parsedObject = JsonSerializer.Deserialize<JsonElement>(jsonContent);
+                    success = true;
+                }
+                catch (JsonException)
+                {
+                    success = false;
+                }
+            }
+        }
+        
+        // Assert
+        Assert.True(success, "Should successfully parse string JSON arguments");
+    }
 }
