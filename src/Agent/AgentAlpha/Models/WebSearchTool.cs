@@ -15,7 +15,7 @@ public class WebSearchTool
     public WebSearchUserLocation? UserLocation { get; set; }
 
     [JsonPropertyName("search_context_size")]
-    public string? SearchContextSize { get; set; }
+    public string? SearchContextSize { get; set; } = "medium"; // default to OpenAI-recommended size
 
     /// <summary>
     /// Converts this web search tool to a ToolDefinition for use in OpenAI API requests
