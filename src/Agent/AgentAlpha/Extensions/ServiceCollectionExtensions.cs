@@ -45,6 +45,7 @@ public static class ServiceCollectionExtensions
         });
         
         services.AddSingleton<ISessionActivityLogger, SessionActivityLogger>();
+        services.AddSingleton<ITaskStateManager, TaskStateManager>();
         services.AddSingleton<IBuiltInToolRegistry, BuiltInToolRegistry>();
         services.AddSingleton<IToolManager, ToolManager>();
         services.AddSingleton<IPlanningService, PlanningService>();
