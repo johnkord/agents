@@ -203,6 +203,36 @@
             display: flex;
             gap: 10px;
         }
+        .copy-btn {
+            background-color: #17a2b8;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 15px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .copy-btn:hover {
+            background-color: #138496;
+        }
+        .copy-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .copy-success {
+            color: #28a745;
+            font-size: 0.9em;
+            margin-left: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .copy-success.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -342,7 +372,17 @@
                 return;
             }
             
-            let activitiesHtml = '<h3>Activity Log:</h3>';
+            let activitiesHtml = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">Activity Log:</h3>
+                    <div>
+                        <button class="copy-btn" onclick="copySessionDetails('${sessionId}')">
+                            📋 Copy Session Details
+                        </button>
+                        <span class="copy-success" id="copy-success-${sessionId}">✓ Copied!</span>
+                    </div>
+                </div>
+            `;
             
             sessionDetails.activities.forEach(activity => {
                 const timestamp = new Date(activity.timestamp).toLocaleString();
@@ -439,6 +479,133 @@
                 
             } catch (error) {
                 alert(`Failed to delete session: ${error.message}`);
+            }
+        }
+        
+        async function copySessionDetails(sessionId) {
+            const sessionData = loadedSessions[sessionId];
+            if (!sessionData) {
+                alert('Session data not loaded. Please expand the session first.');
+                return;
+            }
+            
+            // Find session metadata from the original session list
+            let sessionMetadata = null;
+            try {
+                const container = document.getElementById('sessions-container');
+                const sessionElements = container.querySelectorAll('.session');
+                for (let element of sessionElements) {
+                    const sessionIdSpan = element.querySelector('.session-id');
+                    if (sessionIdSpan && sessionIdSpan.textContent.includes(sessionId)) {
+                        const sessionName = element.querySelector('.session-name').textContent;
+                        const sessionMetadataDiv = element.querySelector('.session-metadata');
+                        const metadataItems = sessionMetadataDiv.querySelectorAll('.metadata-item');
+                        const status = metadataItems[0].textContent.replace('Status:', '').trim();
+                        const created = metadataItems[1].textContent.replace('Created:', '').trim();
+                        const lastUpdated = metadataItems[2].textContent.replace('Last Updated:', '').trim();
+                        const activityCount = metadataItems[3].textContent.replace(' activities', '').trim();
+                        
+                        sessionMetadata = {
+                            name: sessionName,
+                            status: status,
+                            created: created,
+                            lastUpdated: lastUpdated,
+                            activityCount: activityCount
+                        };
+                        break;
+                    }
+                }
+            } catch (error) {
+                console.error('Error extracting session metadata:', error);
+            }
+            
+            // Format the session details for copying
+            let copyText = `SESSION ANALYSIS REPORT\n`;
+            copyText += `=======================\n\n`;
+            
+            if (sessionMetadata) {
+                copyText += `SESSION METADATA:\n`;
+                copyText += `-----------------\n`;
+                copyText += `Name: ${sessionMetadata.name}\n`;
+                copyText += `Session ID: ${sessionId}\n`;
+                copyText += `Status: ${sessionMetadata.status}\n`;
+                copyText += `Created: ${sessionMetadata.created}\n`;
+                copyText += `Last Updated: ${sessionMetadata.lastUpdated}\n`;
+                copyText += `Total Activities: ${sessionMetadata.activityCount}\n\n`;
+            } else {
+                copyText += `SESSION ID: ${sessionId}\n\n`;
+            }
+            
+            if (sessionData.activities && sessionData.activities.length > 0) {
+                copyText += `ACTIVITY LOG DETAILS:\n`;
+                copyText += `--------------------\n\n`;
+                
+                sessionData.activities.forEach((activity, index) => {
+                    const timestamp = new Date(activity.timestamp).toLocaleString();
+                    const status = activity.success ? 'SUCCESS' : 'ERROR';
+                    
+                    copyText += `Activity ${index + 1}:\n`;
+                    copyText += `  Type: ${activity.activityType}\n`;
+                    copyText += `  Status: ${status}\n`;
+                    copyText += `  Timestamp: ${timestamp}\n`;
+                    copyText += `  Description: ${activity.description}\n`;
+                    
+                    if (activity.durationMs) {
+                        copyText += `  Duration: ${activity.durationMs}ms\n`;
+                    }
+                    
+                    if (activity.errorMessage) {
+                        copyText += `  Error: ${activity.errorMessage}\n`;
+                    }
+                    
+                    if (activity.data) {
+                        copyText += `  Data: \n`;
+                        try {
+                            const parsedData = JSON.parse(activity.data);
+                            copyText += `${JSON.stringify(parsedData, null, 4).split('\n').map(line => `    ${line}`).join('\n')}\n`;
+                        } catch {
+                            copyText += `    ${activity.data}\n`;
+                        }
+                    }
+                    
+                    copyText += `\n`;
+                });
+            } else {
+                copyText += `No activities found in this session.\n`;
+            }
+            
+            copyText += `\nReport generated: ${new Date().toLocaleString()}\n`;
+            
+            // Copy to clipboard
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(copyText);
+                } else {
+                    // Fallback for non-secure contexts or older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = copyText;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    document.execCommand('copy');
+                    textArea.remove();
+                }
+                
+                // Show success message
+                const successElement = document.getElementById(`copy-success-${sessionId}`);
+                if (successElement) {
+                    successElement.classList.add('show');
+                    setTimeout(() => {
+                        successElement.classList.remove('show');
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Failed to copy to clipboard:', error);
+                alert('Failed to copy to clipboard. Please try again or copy manually from the console.');
+                console.log('Session details to copy:', copyText);
             }
         }
         
