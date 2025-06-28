@@ -20,7 +20,7 @@ A comprehensive request object that encapsulates all parameters needed for task 
 public class TaskExecutionRequest
 {
     public string Task { get; set; }                    // The task description
-    public string? Model { get; set; }                  // OpenAI model (e.g., "gpt-4o", "gpt-3.5-turbo")
+    public string? Model { get; set; }                  // OpenAI model (e.g., "gpt-4o", "gpt-4.1-nano")
     public double? Temperature { get; set; }            // OpenAI temperature (0.0-1.0)
     public int? MaxIterations { get; set; }             // Max conversation iterations
     public string? SystemPrompt { get; set; }           // Custom system prompt
@@ -52,7 +52,7 @@ New command-line options allow users to specify parameters directly:
 dotnet run "Calculate 25 + 17"
 
 # With model specification
-dotnet run --model "gpt-3.5-turbo" "Calculate 25 + 17"
+dotnet run --model "gpt-4.1-nano" "Calculate 25 + 17"
 
 # With temperature control
 dotnet run --model "gpt-4o" --temperature 0.7 "Write a creative story"
@@ -74,7 +74,7 @@ dotnet run --system-prompt "You are a math tutor" "Help me learn algebra"
 
 ### OpenAI Model Selection
 - **Purpose**: Allow per-task model selection instead of relying only on environment variables
-- **Examples**: "gpt-4o", "gpt-3.5-turbo", "gpt-4-turbo"
+- **Examples**: "gpt-4o", "gpt-4.1-nano", "gpt-4-turbo"
 - **Fallback**: Uses AgentConfiguration.Model if not specified
 
 ### Temperature Control
@@ -152,7 +152,7 @@ dotnet run --model "gpt-4o" --temperature 0.8 --system-prompt "You are a creativ
 
 ### Quick Analysis Task  
 ```bash
-dotnet run --model "gpt-3.5-turbo" --temperature 0.2 --max-iterations 3 "Analyze this data quickly"
+dotnet run --model "gpt-4.1-nano" --temperature 0.2 --max-iterations 3 "Analyze this data quickly"
 ```
 
 ### High-Priority Urgent Task
