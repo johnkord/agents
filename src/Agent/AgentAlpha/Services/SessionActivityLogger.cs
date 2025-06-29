@@ -30,6 +30,11 @@ public class SessionActivityLogger : ISessionActivityLogger
         _logger.LogDebug("Set current session for activity logging: {SessionId}", session.SessionId);
     }
 
+    public AgentSession? GetCurrentSession()
+    {
+        return _currentSession;
+    }
+
     public async Task LogActivityAsync(string activityType, string description, object? data = null)
     {
         if (_currentSession == null)

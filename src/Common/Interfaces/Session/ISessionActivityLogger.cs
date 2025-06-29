@@ -16,5 +16,6 @@ public interface ISessionActivityLogger
     Task FailActivityAsync(string activityId, string errorMessage, object? additionalData = null);
 
     void SetCurrentSession(AgentSession session);
+    AgentSession? GetCurrentSession();
     Task<List<SessionActivity>> GetSessionActivitiesAsync();
 }

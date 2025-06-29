@@ -58,6 +58,12 @@ public class AgentSession
     public string ActivityLog { get; set; } = string.Empty;
     
     /// <summary>
+    /// Markdown document containing current task state and summarized context, 
+    /// managed by the LLM for dynamic planning
+    /// </summary>
+    public string TaskStateMarkdown { get; set; } = string.Empty;
+    
+    /// <summary>
     /// Create a new session with a generated ID
     /// </summary>
     public static AgentSession CreateNew(string name = "")

@@ -12,11 +12,13 @@ public class TaskStateManager : ITaskStateManager
 {
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<TaskStateManager> _logger;
+    private readonly IMarkdownTaskStateManager? _markdownTaskStateManager;
     
-    public TaskStateManager(ISessionManager sessionManager, ILogger<TaskStateManager> logger)
+    public TaskStateManager(ISessionManager sessionManager, ILogger<TaskStateManager> logger, IMarkdownTaskStateManager? markdownTaskStateManager = null)
     {
         _sessionManager = sessionManager;
         _logger = logger;
+        _markdownTaskStateManager = markdownTaskStateManager;
     }
     
     public TaskState CreateTaskState(TaskPlan taskPlan)
@@ -105,6 +107,50 @@ public class TaskStateManager : ITaskStateManager
         
         // Re-summarize the markdown document with current task state and new observations
         await RegenerateTaskMarkdownAsync(sessionId, taskState, completionSummary);
+        
+        // Also update the markdown-based state if available, and provide iterative planning feedback
+        if (_markdownTaskStateManager != null)
+        {
+            try
+            {
+                var subtaskDescription = taskState.Subtasks.FirstOrDefault(s => s.StepNumber == stepNumber)?.Description ?? $"Step {stepNumber}";
+                await _markdownTaskStateManager.CompleteSubtaskInMarkdownAsync(sessionId, subtaskDescription, completionSummary);
+                
+                // Check if we should provide iterative planning feedback
+                var completedCount = taskState.GetCompletedCount();
+                var totalCount = taskState.Subtasks.Count;
+                
+                // Provide iterative feedback every few subtasks or when we're more than halfway through
+                if (completedCount > 1 && (completedCount % 3 == 0 || completedCount > totalCount / 2))
+                {
+                    var iterativeFeedback = $"Completed subtask {stepNumber}: {completionSummary}. " +
+                                          $"Progress: {completedCount}/{totalCount} subtasks completed. ";
+                    
+                    if (evidence != null)
+                    {
+                        iterativeFeedback += $"Evidence: {evidence}. ";
+                    }
+                    
+                    if (context != null && context.Any())
+                    {
+                        iterativeFeedback += $"Context gained: {string.Join(", ", context.Select(kvp => $"{kvp.Key}: {kvp.Value}").Take(3))}";
+                    }
+                    
+                    // Perform iterative planning update
+                    await _markdownTaskStateManager.UpdatePlanIterativelyAsync(
+                        sessionId, 
+                        iterativeFeedback, 
+                        $"Currently executing: {taskState.Task}. Strategy: {taskState.Strategy}");
+                    
+                    _logger.LogInformation("Performed iterative plan update for session {SessionId} after completing subtask {StepNumber}", 
+                        sessionId, stepNumber);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to update markdown task state for completed subtask {StepNumber} in session {SessionId}", stepNumber, sessionId);
+            }
+        }
         
         await SaveTaskStateAsync(sessionId, taskState);
         
@@ -206,10 +252,28 @@ public class TaskStateManager : ITaskStateManager
         {
             var taskState = TaskState.FromTaskPlan(taskPlan);
             
-            // Generate initial markdown and store it
-            await RegenerateTaskMarkdownAsync(sessionId, taskState);
+            // Use markdown task state manager if available
+            if (_markdownTaskStateManager != null)
+            {
+                try
+                {
+                    await _markdownTaskStateManager.InitializeTaskMarkdownFromPlanAsync(sessionId, taskPlan);
+                    _logger.LogInformation("Initialized markdown-based task state for session {SessionId}", sessionId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to initialize markdown task state, falling back to traditional state for session {SessionId}", sessionId);
+                    // Fall back to generating markdown from TaskState
+                    await RegenerateTaskMarkdownAsync(sessionId, taskState);
+                }
+            }
+            else
+            {
+                // Generate initial markdown and store it
+                await RegenerateTaskMarkdownAsync(sessionId, taskState);
+            }
             
-            // Save the task state
+            // Save the task state in metadata for backward compatibility
             await SaveTaskStateAsync(sessionId, taskState);
             
             _logger.LogInformation("Initialized task state for session {SessionId}: {Task} with {StepCount} steps", 
@@ -249,9 +313,9 @@ public class TaskStateManager : ITaskStateManager
                 markdown += $"- *Updated at: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}*\n";
             }
             
-            // Store the regenerated markdown in the session's CurrentPlan field
-            // This makes the markdown accessible and shows the current task state
-            session.CurrentPlan = markdown;
+            // Store the regenerated markdown in the session's TaskStateMarkdown field
+            // This consolidates plan and state management into a single markdown document
+            session.TaskStateMarkdown = markdown;
             session.LastUpdatedAt = DateTime.UtcNow;
             
             await _sessionManager.SaveSessionAsync(session);
