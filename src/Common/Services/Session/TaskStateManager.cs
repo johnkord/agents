@@ -12,11 +12,13 @@ public class TaskStateManager : ITaskStateManager
 {
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<TaskStateManager> _logger;
+    private readonly IMarkdownTaskStateManager? _markdownTaskStateManager;
     
-    public TaskStateManager(ISessionManager sessionManager, ILogger<TaskStateManager> logger)
+    public TaskStateManager(ISessionManager sessionManager, ILogger<TaskStateManager> logger, IMarkdownTaskStateManager? markdownTaskStateManager = null)
     {
         _sessionManager = sessionManager;
         _logger = logger;
+        _markdownTaskStateManager = markdownTaskStateManager;
     }
     
     public TaskState CreateTaskState(TaskPlan taskPlan)
@@ -105,6 +107,20 @@ public class TaskStateManager : ITaskStateManager
         
         // Re-summarize the markdown document with current task state and new observations
         await RegenerateTaskMarkdownAsync(sessionId, taskState, completionSummary);
+        
+        // Also update the markdown-based state if available
+        if (_markdownTaskStateManager != null)
+        {
+            try
+            {
+                var subtaskDescription = taskState.Subtasks.FirstOrDefault(s => s.StepNumber == stepNumber)?.Description ?? $"Step {stepNumber}";
+                await _markdownTaskStateManager.CompleteSubtaskInMarkdownAsync(sessionId, subtaskDescription, completionSummary);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to update markdown task state for completed subtask {StepNumber} in session {SessionId}", stepNumber, sessionId);
+            }
+        }
         
         await SaveTaskStateAsync(sessionId, taskState);
         
@@ -208,6 +224,19 @@ public class TaskStateManager : ITaskStateManager
             
             // Generate initial markdown and store it
             await RegenerateTaskMarkdownAsync(sessionId, taskState);
+            
+            // Also initialize the markdown-based state if available
+            if (_markdownTaskStateManager != null)
+            {
+                try
+                {
+                    await _markdownTaskStateManager.InitializeTaskMarkdownAsync(sessionId, taskPlan.Task);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to initialize markdown task state for session {SessionId}", sessionId);
+                }
+            }
             
             // Save the task state
             await SaveTaskStateAsync(sessionId, taskState);

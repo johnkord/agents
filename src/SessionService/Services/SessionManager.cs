@@ -57,7 +57,8 @@ public class SessionManager : ISessionManager
                 Metadata         TEXT NOT NULL DEFAULT '',
                 Status           INTEGER NOT NULL DEFAULT 0,
                 CurrentPlan      TEXT NOT NULL DEFAULT '',
-                ActivityLog      TEXT NOT NULL DEFAULT ''
+                ActivityLog      TEXT NOT NULL DEFAULT '',
+                TaskStateMarkdown TEXT NOT NULL DEFAULT ''
             );
             
             CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON AgentSessions(CreatedAt);
@@ -70,6 +71,7 @@ public class SessionManager : ISessionManager
         using var reader = cmd.ExecuteReader();
         bool hasCurrentPlanColumn = false;
         bool hasActivityLogColumn = false;
+        bool hasTaskStateMarkdownColumn = false;
         while (reader.Read())
         {
             var columnName = reader.GetString(1);
@@ -77,6 +79,8 @@ public class SessionManager : ISessionManager
                 hasCurrentPlanColumn = true;
             if (columnName == "ActivityLog")
                 hasActivityLogColumn = true;
+            if (columnName == "TaskStateMarkdown")
+                hasTaskStateMarkdownColumn = true;
         }
         reader.Close();
         
@@ -89,6 +93,12 @@ public class SessionManager : ISessionManager
         if (!hasActivityLogColumn)
         {
             cmd.CommandText = "ALTER TABLE AgentSessions ADD COLUMN ActivityLog TEXT NOT NULL DEFAULT ''";
+            cmd.ExecuteNonQuery();
+        }
+        
+        if (!hasTaskStateMarkdownColumn)
+        {
+            cmd.CommandText = "ALTER TABLE AgentSessions ADD COLUMN TaskStateMarkdown TEXT NOT NULL DEFAULT ''";
             cmd.ExecuteNonQuery();
         }
     }
@@ -110,7 +120,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog, TaskStateMarkdown
             FROM AgentSessions 
             WHERE SessionId = $sessionId
             """;
@@ -130,7 +140,8 @@ public class SessionManager : ISessionManager
                 Metadata = reader.GetString(6),
                 Status = (SessionStatus)reader.GetInt32(7),
                 CurrentPlan = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
-                ActivityLog = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
+                ActivityLog = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+                TaskStateMarkdown = reader.IsDBNull(10) ? string.Empty : reader.GetString(10)
             };
         }
 
@@ -145,7 +156,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog, TaskStateMarkdown
             FROM AgentSessions 
             WHERE Name = $name
             ORDER BY LastUpdatedAt DESC
@@ -167,7 +178,8 @@ public class SessionManager : ISessionManager
                 Metadata = reader.GetString(6),
                 Status = (SessionStatus)reader.GetInt32(7),
                 CurrentPlan = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
-                ActivityLog = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
+                ActivityLog = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+                TaskStateMarkdown = reader.IsDBNull(10) ? string.Empty : reader.GetString(10)
             };
         }
 
@@ -182,8 +194,8 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             INSERT OR REPLACE INTO AgentSessions 
-            (SessionId, Name, CreatedAt, LastUpdatedAt, ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog)
-            VALUES ($sessionId, $name, $createdAt, $lastUpdatedAt, $conversationState, $configSnapshot, $metadata, $status, $currentPlan, $activityLog)
+            (SessionId, Name, CreatedAt, LastUpdatedAt, ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog, TaskStateMarkdown)
+            VALUES ($sessionId, $name, $createdAt, $lastUpdatedAt, $conversationState, $configSnapshot, $metadata, $status, $currentPlan, $activityLog, $taskStateMarkdown)
             """;
             
         cmd.Parameters.AddWithValue("$sessionId", session.SessionId);
@@ -196,6 +208,7 @@ public class SessionManager : ISessionManager
         cmd.Parameters.AddWithValue("$status", (int)session.Status);
         cmd.Parameters.AddWithValue("$currentPlan", session.CurrentPlan);
         cmd.Parameters.AddWithValue("$activityLog", session.ActivityLog);
+        cmd.Parameters.AddWithValue("$taskStateMarkdown", session.TaskStateMarkdown);
 
         await cmd.ExecuteNonQueryAsync();
         
@@ -212,7 +225,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog, TaskStateMarkdown
             FROM AgentSessions 
             ORDER BY LastUpdatedAt DESC
             """;
@@ -231,7 +244,8 @@ public class SessionManager : ISessionManager
                 Metadata = reader.GetString(6),
                 Status = (SessionStatus)reader.GetInt32(7),
                 CurrentPlan = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
-                ActivityLog = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
+                ActivityLog = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+                TaskStateMarkdown = reader.IsDBNull(10) ? string.Empty : reader.GetString(10)
             });
         }
 
