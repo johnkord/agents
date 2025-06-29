@@ -75,9 +75,7 @@ public class TaskStateManager : ITaskStateManager
             });
             
             session.Metadata = taskStateJson;
-            
-            // Update task progress information
-            UpdateSessionTaskProgress(session, taskState);
+            session.LastUpdatedAt = DateTime.UtcNow;
             
             await _sessionManager.SaveSessionAsync(session);
             
@@ -102,7 +100,12 @@ public class TaskStateManager : ITaskStateManager
         _logger.LogInformation("Completing subtask {StepNumber} for session {SessionId}: {Summary}", 
             stepNumber, sessionId, completionSummary);
         
+        // Complete the subtask
         taskState.CompleteSubtask(stepNumber, completionSummary, evidence, context);
+        
+        // Re-summarize the markdown document with current task state and new observations
+        await RegenerateTaskMarkdownAsync(sessionId, taskState, completionSummary);
+        
         await SaveTaskStateAsync(sessionId, taskState);
         
         return taskState;
@@ -119,6 +122,10 @@ public class TaskStateManager : ITaskStateManager
         _logger.LogInformation("Starting subtask {StepNumber} for session {SessionId}", stepNumber, sessionId);
         
         taskState.StartSubtask(stepNumber);
+        
+        // Regenerate markdown to reflect the subtask being started
+        await RegenerateTaskMarkdownAsync(sessionId, taskState, $"Started working on Step {stepNumber}");
+        
         await SaveTaskStateAsync(sessionId, taskState);
         
         return taskState;
@@ -146,6 +153,13 @@ public class TaskStateManager : ITaskStateManager
             }
             
             taskState.LastUpdatedAt = DateTime.UtcNow;
+            
+            // Regenerate markdown to reflect the updated notes
+            var updateDescription = !string.IsNullOrEmpty(progressUpdate) 
+                ? $"Progress update for Step {stepNumber}: {progressUpdate}"
+                : $"Updated notes for Step {stepNumber}";
+            await RegenerateTaskMarkdownAsync(sessionId, taskState, updateDescription);
+            
             await SaveTaskStateAsync(sessionId, taskState);
             
             _logger.LogDebug("Updated notes for subtask {StepNumber} in session {SessionId}", stepNumber, sessionId);
@@ -184,101 +198,70 @@ public class TaskStateManager : ITaskStateManager
     }
     
     /// <summary>
-    /// Update session task progress fields based on task state
-    /// </summary>
-    private void UpdateSessionTaskProgress(AgentSession session, TaskState taskState)
-    {
-        // Update basic task information
-        session.TaskTitle = taskState.Task;
-        session.TotalSteps = taskState.Subtasks.Count;
-        session.CompletedSteps = taskState.GetCompletedCount();
-        
-        // Update task status
-        session.TaskStatus = taskState.Status switch
-        {
-            TaskCompletionStatus.InProgress => TaskExecutionStatus.InProgress,
-            TaskCompletionStatus.Completed => TaskExecutionStatus.Completed,
-            TaskCompletionStatus.Failed => TaskExecutionStatus.Failed,
-            TaskCompletionStatus.Cancelled => TaskExecutionStatus.Cancelled,
-            _ => TaskExecutionStatus.InProgress
-        };
-        
-        // Update current step
-        var currentSubtask = taskState.GetCurrentSubtask();
-        session.CurrentStep = currentSubtask?.StepNumber ?? 0;
-        
-        // If no current subtask but there are completed subtasks, we're done
-        if (currentSubtask == null && taskState.GetCompletedCount() > 0)
-        {
-            session.CurrentStep = session.TotalSteps;
-        }
-        
-        // Update progress percentage
-        if (session.TotalSteps > 0)
-        {
-            session.ProgressPercentage = Math.Round((double)session.CompletedSteps / session.TotalSteps, 3);
-        }
-        
-        // Set task start time if not already set and we have subtasks
-        if (!session.TaskStartedAt.HasValue && session.TotalSteps > 0)
-        {
-            session.TaskStartedAt = taskState.CreatedAt;
-            session.TaskStatus = TaskExecutionStatus.InProgress;
-        }
-        
-        // Set task completion time if completed
-        if (session.TaskStatus == TaskExecutionStatus.Completed && !session.TaskCompletedAt.HasValue)
-        {
-            session.TaskCompletedAt = DateTime.UtcNow;
-            session.ProgressPercentage = 1.0;
-            
-            // Calculate actual duration
-            if (session.TaskStartedAt.HasValue)
-            {
-                session.ActualDuration = (int)(DateTime.UtcNow - session.TaskStartedAt.Value).TotalMinutes;
-            }
-        }
-        
-        // Update task category based on subtask count
-        if (string.IsNullOrEmpty(session.TaskCategory))
-        {
-            session.TaskCategory = session.TotalSteps switch
-            {
-                <= 3 => "Simple",
-                <= 7 => "Medium", 
-                <= 15 => "Complex",
-                _ => "VeryComplex"
-            };
-        }
-        
-        session.LastUpdatedAt = DateTime.UtcNow;
-    }
-    
-    /// <summary>
-    /// Initialize task state from a task plan and update session accordingly
+    /// Initialize task state from a task plan and create the initial markdown representation
     /// </summary>
     public async Task<TaskState> InitializeTaskStateAsync(string sessionId, TaskPlan taskPlan)
     {
-        var taskState = CreateTaskState(taskPlan);
-        
-        var session = await _sessionManager.GetSessionAsync(sessionId);
-        if (session != null)
+        try
         {
-            // Update session with task information
-            session.UpdateTaskInfo(taskPlan);
-            UpdateSessionTaskProgress(session, taskState);
+            var taskState = TaskState.FromTaskPlan(taskPlan);
             
-            // Store the task plan in CurrentPlan
-            session.SetCurrentPlan(taskPlan);
+            // Generate initial markdown and store it
+            await RegenerateTaskMarkdownAsync(sessionId, taskState);
+            
+            // Save the task state
+            await SaveTaskStateAsync(sessionId, taskState);
+            
+            _logger.LogInformation("Initialized task state for session {SessionId}: {Task} with {StepCount} steps", 
+                sessionId, taskPlan.Task, taskPlan.Steps.Count);
+            
+            return taskState;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize task state for session {SessionId}", sessionId);
+            throw;
+        }
+    }
+    
+    /// <summary>
+    /// Regenerate and update the task markdown document with current state and new observations
+    /// </summary>
+    private async Task RegenerateTaskMarkdownAsync(string sessionId, TaskState taskState, string? latestObservation = null)
+    {
+        try
+        {
+            var session = await _sessionManager.GetSessionAsync(sessionId);
+            if (session == null)
+            {
+                _logger.LogError("Cannot regenerate task markdown - session {SessionId} not found", sessionId);
+                return;
+            }
+            
+            // Generate the updated markdown representation
+            var markdown = taskState.ToMarkdown();
+            
+            // Add latest observation/completion summary to the markdown
+            if (!string.IsNullOrEmpty(latestObservation))
+            {
+                markdown += "\n## Latest Update\n\n";
+                markdown += $"- {latestObservation}\n";
+                markdown += $"- *Updated at: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}*\n";
+            }
+            
+            // Store the regenerated markdown in the session's CurrentPlan field
+            // This makes the markdown accessible and shows the current task state
+            session.CurrentPlan = markdown;
+            session.LastUpdatedAt = DateTime.UtcNow;
             
             await _sessionManager.SaveSessionAsync(session);
+            
+            _logger.LogDebug("Regenerated task markdown for session {SessionId} with {CompletedCount}/{TotalCount} subtasks completed",
+                sessionId, taskState.GetCompletedCount(), taskState.Subtasks.Count);
         }
-        
-        await SaveTaskStateAsync(sessionId, taskState);
-        
-        _logger.LogInformation("Initialized task state for session {SessionId}: {TaskTitle} with {StepCount} steps", 
-            sessionId, taskPlan.Task, taskPlan.Steps.Count);
-        
-        return taskState;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to regenerate task markdown for session {SessionId}", sessionId);
+        }
     }
 }
