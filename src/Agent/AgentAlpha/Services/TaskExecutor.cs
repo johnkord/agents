@@ -257,12 +257,6 @@ public class TaskExecutor : ITaskExecutor
             availableTools,
             state);
 
-        // Persist the freshly generated markdown plan to the activity log
-        await _activityLogger.LogActivityAsync(
-            ActivityTypes.TaskMarkdownUpdate,
-            "Initial markdown task plan (executor)",
-            markdownPlan);
-
         return markdownPlan;
     }
 
