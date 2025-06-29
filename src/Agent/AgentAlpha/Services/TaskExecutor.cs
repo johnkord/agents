@@ -197,7 +197,12 @@ public class TaskExecutor : ITaskExecutor
             // Step 4: Execute using markdown-based task management
             if (!string.IsNullOrEmpty(taskMarkdown) && !string.IsNullOrEmpty(request.SessionId))
             {
-                await ExecuteMarkdownBasedTaskAsync(taskMarkdown, request, effectiveConfig, currentSession!);
+                await ExecuteMarkdownBasedTaskAsync(
+                    taskMarkdown,
+                    request,
+                    effectiveConfig,
+                    currentSession!,
+                    isResumingSession);           // pass resume flag
             }
             else
             {
@@ -274,15 +279,19 @@ public class TaskExecutor : ITaskExecutor
         Console.WriteLine("=".PadRight(80, '=') + "\n");
     }
 
-    private async Task ExecuteMarkdownBasedTaskAsync(string taskMarkdown, TaskExecutionRequest request, AgentConfiguration config, AgentSession session)
+    private async Task ExecuteMarkdownBasedTaskAsync(
+        string taskMarkdown,
+        TaskExecutionRequest request,
+        AgentConfiguration config,
+        AgentSession session,
+        bool isResumingSession)
     {
         try
         {
             _logger.LogInformation("Starting markdown-based task execution for session {SessionId}", session.SessionId);
 
-            // Discover available tools for execution
-            var availableTools = await DiscoverAvailableToolsAsync();
-            var toolDefinitions = availableTools.Select(t => t.ToToolDefinition()).ToArray();
+            // Select ONLY the relevant tools (includes required tools from planning)
+            var toolDefinitions = await DiscoverAndSelectToolsAsync(request, isResumingSession);
 
             // Start the conversation-based execution loop
             await ExecuteConversationLoopAsync(toolDefinitions, config, session.SessionId);
@@ -300,9 +309,8 @@ public class TaskExecutor : ITaskExecutor
         {
             _logger.LogInformation("Starting conversation-based execution (no session/plan)");
 
-            // Discover available tools for execution
-            var availableTools = await DiscoverAvailableToolsAsync();
-            var toolDefinitions = availableTools.Select(t => t.ToToolDefinition()).ToArray();
+            // Even without a structured plan, respect intelligent selection
+            var toolDefinitions = await DiscoverAndSelectToolsAsync(request);
 
             // Start the conversation-based execution loop without session
             await ExecuteConversationLoopAsync(toolDefinitions, config, null);

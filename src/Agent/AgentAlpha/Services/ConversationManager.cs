@@ -19,22 +19,31 @@ public class ConversationManager : IConversationManager
     private readonly ILogger<ConversationManager> _logger;
     private readonly AgentConfiguration _config;
     private readonly ISessionActivityLogger? _activityLogger;
+    private readonly IToolScopeManager? _toolScope;        // NEW
     private readonly List<object> _messages;
-    private readonly List<string> _recentAssistantResponses; // Track recent responses to detect repetition
+    private readonly List<string> _recentAssistantResponses;
+    private string? _sessionId;                            // NEW
 
-    public ConversationManager(IOpenAIResponsesService openAi, ILogger<ConversationManager> logger, AgentConfiguration config, ISessionActivityLogger? activityLogger = null)
+    public ConversationManager(
+        IOpenAIResponsesService openAi,
+        ILogger<ConversationManager> logger,
+        AgentConfiguration config,
+        ISessionActivityLogger? activityLogger = null,
+        IToolScopeManager? toolScope = null)               // NEW optional arg
     {
-        _openAi = openAi;
-        _logger = logger;
-        _config = config;
+        _openAi      = openAi;
+        _logger      = logger;
+        _config      = config;
         _activityLogger = activityLogger;
-        _messages = new List<object>();
+        _toolScope   = toolScope;                          // NEW
+        _messages    = new List<object>();
         _recentAssistantResponses = new List<string>();
     }
 
     public void InitializeConversation(string systemPrompt, string userTask)
     {
         _messages.Clear();
+        _sessionId = null;                                 // NEW: no scoped tools yet
         _messages.Add(new { role = "system", content = systemPrompt });
         _messages.Add(new { role = "user", content = userTask });
         
@@ -44,6 +53,7 @@ public class ConversationManager : IConversationManager
     public void InitializeFromSession(AgentSession session, string newUserTask)
     {
         _messages.Clear();
+        _sessionId = session.SessionId;                    // NEW: remember session
         
         // Load existing conversation messages from session
         var existingMessages = session.GetConversationMessages();
@@ -64,13 +74,34 @@ public class ConversationManager : IConversationManager
         return _messages.ToList(); // Return a copy to avoid external modification
     }
 
-    public async Task<ConversationResponse> ProcessIterationAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools)
+    public async Task<ConversationResponse> ProcessIterationAsync(
+        OpenAIIntegration.Model.ToolDefinition[] availableTools)
     {
+        var toolList = (availableTools ?? Array.Empty<ToolDefinition>()).ToList();
+
+        if (_sessionId != null && _toolScope != null)
+        {
+            foreach (var req in _toolScope.GetRequiredTools(_sessionId))
+            {
+                if (!toolList.Any(t => string.Equals(t.Name, req, StringComparison.OrdinalIgnoreCase)
+                                     || string.Equals(t.Type, req, StringComparison.OrdinalIgnoreCase)))
+                {
+                    // Minimal placeholder definition – LLM knows the signature
+                    toolList.Add(new ToolDefinition
+                    {
+                        Name = req,            // function-style tools
+                        Type = "function"
+                    });
+                }
+            }
+        }
+        // ------------------------------------------------------------------
+
         var request = new ResponsesCreateRequest
         {
             Model = _config.Model,
             Input = _messages.ToArray(),
-            Tools = availableTools,
+            Tools = toolList.ToArray(),                    // UPDATED
             ToolChoice = "auto"
         };
 
@@ -84,15 +115,15 @@ public class ConversationManager : IConversationManager
                 { 
                     Model = request.Model,
                     MessageCount = _messages.Count,
-                    ToolCount = availableTools?.Length ?? 0,
-                    ToolNames = availableTools?.Select(t => t.Name).ToArray(),
+                    ToolCount = toolList.Count,
+                    ToolNames = toolList.Select(t => t.Name).ToArray(),
                     ToolChoice = request.ToolChoice,
                     // Include full request details for comprehensive audit trail
                     FullRequest = new
                     {
                         Model = request.Model,
                         Messages = _messages.Take(_config.ActivityLogging.MaxMessagesInLog).ToArray(),
-                        Tools = availableTools?.Select(t => new { t.Name, t.Description, ParameterCount = t.Parameters?.ToString()?.Length ?? 0 }).ToArray(),
+                        Tools = toolList.Select(t => new { t.Name, t.Description, ParameterCount = t.Parameters?.ToString()?.Length ?? 0 }).ToArray(),
                         ToolChoice = request.ToolChoice
                     }
                 };
@@ -112,8 +143,8 @@ public class ConversationManager : IConversationManager
                     { 
                         Model = request.Model,
                         MessageCount = _messages.Count,
-                        ToolCount = availableTools?.Length ?? 0,
-                        ToolNames = availableTools?.Select(t => t.Name).ToArray()
+                        ToolCount = toolList.Count,
+                        ToolNames = toolList.Select(t => t.Name).ToArray()
                     });
             }
         }

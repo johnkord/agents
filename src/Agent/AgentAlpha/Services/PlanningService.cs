@@ -245,7 +245,7 @@ public class PlanningService : IPlanningService
         prompt.Add("1. Task Overview - Brief summary of what needs to be accomplished");
         prompt.Add("2. Strategy - High-level approach to complete the task");
         prompt.Add("3. Execution Steps - Numbered checklist with specific, actionable items");
-        prompt.Add("4. Required Tools - List of tools needed for execution");
+        prompt.Add("4. Required Tools - Full list of tools needed for execution");
         prompt.Add("5. Success Criteria - How to determine if the task is complete");
         prompt.Add("");
         prompt.Add("Format the execution steps as a numbered checklist using markdown checkboxes:");
