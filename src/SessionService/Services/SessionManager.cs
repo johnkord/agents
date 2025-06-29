@@ -211,50 +211,132 @@ public class SessionManager : ISessionManager
         using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
         using var cmd = conn.CreateCommand();
+
+        // Up-sert by SessionId
         cmd.CommandText = @"
-            INSERT OR REPLACE INTO AgentSessions 
-            (SessionId, Name, CreatedAt, LastUpdatedAt, ConversationState, ConfigurationSnapshot, Metadata, Status, TaskStateMarkdown)
-            VALUES ($sessionId, $name, $createdAt, $lastUpdatedAt, $conversationState, $configSnapshot, $metadata, $status, $taskStateMarkdown)
-        ";
-        cmd.Parameters.AddWithValue("$sessionId", session.SessionId);
-        cmd.Parameters.AddWithValue("$name", session.Name);
-        cmd.Parameters.AddWithValue("$createdAt", session.CreatedAt.ToString("O"));
-        cmd.Parameters.AddWithValue("$lastUpdatedAt", session.LastUpdatedAt.ToString("O"));
-        cmd.Parameters.AddWithValue("$conversationState", session.ConversationState);
-        cmd.Parameters.AddWithValue("$configSnapshot", session.ConfigurationSnapshot);
-        cmd.Parameters.AddWithValue("$metadata", session.Metadata);
-        cmd.Parameters.AddWithValue("$status", (int)session.Status);
-        cmd.Parameters.AddWithValue("$taskStateMarkdown", session.TaskStateMarkdown);
+            INSERT INTO AgentSessions (
+                SessionId, Name, CreatedAt, LastUpdatedAt,
+                ConversationState, ConfigurationSnapshot, Metadata, Status, TaskStateMarkdown
+            )
+            VALUES (
+                $id, $name, $created, $updated,
+                $conv, $config, $meta, $status, $markdown
+            )
+            ON CONFLICT(SessionId) DO UPDATE SET
+                Name                  = excluded.Name,
+                LastUpdatedAt         = excluded.LastUpdatedAt,
+                ConversationState     = excluded.ConversationState,
+                ConfigurationSnapshot = excluded.ConfigurationSnapshot,
+                Metadata              = excluded.Metadata,
+                Status                = excluded.Status,
+                TaskStateMarkdown     = excluded.TaskStateMarkdown
+            ";
+        cmd.Parameters.AddWithValue("$id",       session.SessionId);
+        cmd.Parameters.AddWithValue("$name",     session.Name);
+        cmd.Parameters.AddWithValue("$created",  session.CreatedAt.ToString("O"));
+        cmd.Parameters.AddWithValue("$updated",  session.LastUpdatedAt.ToString("O"));
+        cmd.Parameters.AddWithValue("$conv",     session.ConversationState);
+        cmd.Parameters.AddWithValue("$config",   session.ConfigurationSnapshot);
+        cmd.Parameters.AddWithValue("$meta",     session.Metadata);
+        cmd.Parameters.AddWithValue("$status",   (int)session.Status);
+        cmd.Parameters.AddWithValue("$markdown", session.TaskStateMarkdown);
+
         await cmd.ExecuteNonQueryAsync();
-        _logger.LogInformation("Saved session: {SessionJson}",
-            JsonSerializer.Serialize(LoggableAgentSession.FromAgentSession(session), _jsonOptions));
+        _logger.LogDebug("Saved session {SessionId}", session.SessionId);
     }
 
-    public async Task<IReadOnlyList<AgentSession>> ListSessionsAsync()
+    // --------------------------------------------------------------------
+    // New methods — store activities in the SessionActivities table
+    // --------------------------------------------------------------------
+    public async Task AddSessionActivityAsync(string sessionId, SessionActivity activity)
     {
-        var sessions = new List<AgentSession>();
-        
         using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
         using var cmd = conn.CreateCommand();
-        
-        cmd.CommandText = """
-            SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status, TaskStateMarkdown
-            FROM AgentSessions 
-            ORDER BY LastUpdatedAt DESC
-            """;
+
+        cmd.CommandText = @"
+            INSERT INTO SessionActivities (
+                ActivityId, SessionId, Timestamp,
+                ActivityType, Description, Data,
+                DurationMs, Success, ErrorMessage
+            )
+            VALUES (
+                $id, $sessionId, $timestamp,
+                $type, $desc, $data,
+                $duration, $success, $error
+            )";
+        cmd.Parameters.AddWithValue("$id",        activity.ActivityId);
+        cmd.Parameters.AddWithValue("$sessionId", sessionId);
+        cmd.Parameters.AddWithValue("$timestamp", activity.Timestamp.ToString("O"));
+        cmd.Parameters.AddWithValue("$type",      activity.ActivityType);
+        cmd.Parameters.AddWithValue("$desc",      activity.Description);
+        cmd.Parameters.AddWithValue("$data",      activity.Data ?? string.Empty);
+        cmd.Parameters.AddWithValue("$duration",  (object?)activity.DurationMs ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$success",   activity.Success ? 1 : 0);
+        cmd.Parameters.AddWithValue("$error",     (object?)activity.ErrorMessage ?? DBNull.Value);
+
+        await cmd.ExecuteNonQueryAsync();
+        _logger.LogTrace("Added activity {ActivityId} to session {SessionId}", activity.ActivityId, sessionId);
+    }
+
+    public async Task<List<SessionActivity>> GetSessionActivitiesAsync(string sessionId)
+    {
+        var list = new List<SessionActivity>();
+
+        using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        using var cmd = conn.CreateCommand();
+
+        cmd.CommandText = @"
+            SELECT ActivityId, Timestamp, ActivityType, Description, Data,
+                   DurationMs, Success, ErrorMessage
+            FROM SessionActivities
+            WHERE SessionId = $sessionId
+            ORDER BY Timestamp ASC
+        ";
+        cmd.Parameters.AddWithValue("$sessionId", sessionId);
 
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            sessions.Add(ReadAgentSession(reader));
+            list.Add(new SessionActivity
+            {
+                ActivityId   = reader.GetString(0),
+                Timestamp    = DateTime.Parse(reader.GetString(1), null, System.Globalization.DateTimeStyles.RoundtripKind),
+                ActivityType = reader.GetString(2),
+                Description  = reader.GetString(3),
+                Data         = reader.GetString(4),
+                DurationMs   = reader.IsDBNull(5) ? null : reader.GetInt64(5),
+                Success      = reader.GetInt32(6) == 1,
+                ErrorMessage = reader.IsDBNull(7) ? null : reader.GetString(7),
+                SessionId    = sessionId
+            });
         }
+        return list;
+    }
 
-        _logger.LogInformation("Listed {Count} sessions: {SessionsJson}", 
-            sessions.Count,
-            JsonSerializer.Serialize(sessions.Select(s => LoggableAgentSession.FromAgentSession(s)), _jsonOptions));
-        return sessions;
+    // --------------------------------------------------------------------
+    // Utility queries needed by API controllers / client
+    // --------------------------------------------------------------------
+    public async Task<IReadOnlyList<AgentSession>> ListSessionsAsync()
+    {
+        var list = new List<AgentSession>();
+
+        using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, TaskStateMarkdown
+            FROM AgentSessions
+            ORDER BY LastUpdatedAt DESC
+        """;
+
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            list.Add(ReadAgentSession(reader));
+
+        return list;
     }
 
     public async Task<bool> DeleteSessionAsync(string sessionId)
@@ -262,19 +344,11 @@ public class SessionManager : ISessionManager
         using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
         using var cmd = conn.CreateCommand();
-        
-        cmd.CommandText = "DELETE FROM AgentSessions WHERE SessionId = $sessionId";
-        cmd.Parameters.AddWithValue("$sessionId", sessionId);
+        cmd.CommandText = "DELETE FROM AgentSessions WHERE SessionId = $id";
+        cmd.Parameters.AddWithValue("$id", sessionId);
 
-        var rowsAffected = await cmd.ExecuteNonQueryAsync();
-        var deleted = rowsAffected > 0;
-        
-        if (deleted)
-        {
-            _logger.LogInformation("Deleted session: {SessionId}", sessionId);
-        }
-        
-        return deleted;
+        var rows = await cmd.ExecuteNonQueryAsync();
+        return rows > 0;
     }
 
     public async Task<bool> ArchiveSessionAsync(string sessionId)
@@ -282,79 +356,16 @@ public class SessionManager : ISessionManager
         using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
         using var cmd = conn.CreateCommand();
-        
-        cmd.CommandText = """
-            UPDATE AgentSessions 
-            SET Status = $status, LastUpdatedAt = $lastUpdatedAt
-            WHERE SessionId = $sessionId
-            """;
+        cmd.CommandText = @"
+            UPDATE AgentSessions
+            SET Status = $status, LastUpdatedAt = $ts
+            WHERE SessionId = $id
+        ";
         cmd.Parameters.AddWithValue("$status", (int)SessionStatus.Archived);
-        cmd.Parameters.AddWithValue("$lastUpdatedAt", DateTime.UtcNow.ToString("O"));
-        cmd.Parameters.AddWithValue("$sessionId", sessionId);
+        cmd.Parameters.AddWithValue("$ts",     DateTime.UtcNow.ToString("O"));
+        cmd.Parameters.AddWithValue("$id",     sessionId);
 
-        var rowsAffected = await cmd.ExecuteNonQueryAsync();
-        var archived = rowsAffected > 0;
-        
-        if (archived)
-        {
-            _logger.LogInformation("Archived session: {SessionId}", sessionId);
-        }
-        
-        return archived;
-    }
-
-    // New: Add activity to SessionActivities table
-    public async Task AddSessionActivityAsync(string sessionId, SessionActivity activity)
-    {
-        using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            INSERT INTO SessionActivities 
-            (ActivityId, SessionId, Timestamp, ActivityType, Description, Data, DurationMs, Success, ErrorMessage)
-            VALUES ($activityId, $sessionId, $timestamp, $activityType, $description, $data, $durationMs, $success, $errorMessage)
-        ";
-        cmd.Parameters.AddWithValue("$activityId", activity.ActivityId);
-        cmd.Parameters.AddWithValue("$sessionId", sessionId);
-        cmd.Parameters.AddWithValue("$timestamp", activity.Timestamp.ToString("O"));
-        cmd.Parameters.AddWithValue("$activityType", activity.ActivityType);
-        cmd.Parameters.AddWithValue("$description", activity.Description);
-        cmd.Parameters.AddWithValue("$data", activity.Data ?? string.Empty);
-        cmd.Parameters.AddWithValue("$durationMs", (object?)activity.DurationMs ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$success", activity.Success ? 1 : 0);
-        cmd.Parameters.AddWithValue("$errorMessage", (object?)activity.ErrorMessage ?? DBNull.Value);
-        await cmd.ExecuteNonQueryAsync();
-    }
-
-    // New: Get activities for a session
-    public async Task<List<SessionActivity>> GetSessionActivitiesAsync(string sessionId)
-    {
-        var activities = new List<SessionActivity>();
-        using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            SELECT ActivityId, Timestamp, ActivityType, Description, Data, DurationMs, Success, ErrorMessage
-            FROM SessionActivities
-            WHERE SessionId = $sessionId
-            ORDER BY Timestamp ASC
-        ";
-        cmd.Parameters.AddWithValue("$sessionId", sessionId);
-        using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            activities.Add(new SessionActivity
-            {
-                ActivityId = reader.GetString(0),
-                Timestamp = DateTime.Parse(reader.GetString(1), null, System.Globalization.DateTimeStyles.RoundtripKind),
-                ActivityType = reader.GetString(2),
-                Description = reader.GetString(3),
-                Data = reader.GetString(4),
-                DurationMs = reader.IsDBNull(5) ? null : reader.GetInt64(5),
-                Success = reader.GetInt32(6) != 0,
-                ErrorMessage = reader.IsDBNull(7) ? null : reader.GetString(7)
-            });
-        }
-        return activities;
+        var rows = await cmd.ExecuteNonQueryAsync();
+        return rows > 0;
     }
 }

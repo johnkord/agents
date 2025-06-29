@@ -30,7 +30,7 @@ public class TaskExecutorMarkdownIntegrationTest
     public async Task TaskExecutor_WithMarkdownTaskStateManager_ShouldUseConsistentWorkflow()
     {
         // Arrange: Create a realistic setup with TaskExecutor and MarkdownTaskStateManager
-        using var loggerFactory = LoggerFactory.Create(builder => 
+        using var loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConsole();
             builder.SetMinimumLevel(LogLevel.Debug); // Capture all logs to verify no warnings

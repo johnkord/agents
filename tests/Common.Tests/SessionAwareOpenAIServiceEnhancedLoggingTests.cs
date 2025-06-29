@@ -5,6 +5,8 @@ using OpenAIIntegration.Model;
 using Common.Models.Session;
 using Common.Interfaces.Session;
 using System.Text.Json;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Common.Tests;
 
@@ -195,68 +197,55 @@ public class SessionAwareOpenAIServiceEnhancedLoggingTests
         Assert.True(responseData.TryGetProperty("Usage", out _));
         Assert.False(responseData.TryGetProperty("FullResponse", out _));
     }
-}
+    
+    // -----------------------------------------------------------------
+    // Minimal stub – captures activities so the tests can assert on them
+    // -----------------------------------------------------------------
+    private class MockSessionActivityLogger : ISessionActivityLogger
+    {
+        private readonly List<SessionActivity> _activities = new();
+        private AgentSession? _session;
 
-/// <summary>
-/// Mock activity logger for testing
-/// </summary>
-public class MockSessionActivityLogger : ISessionActivityLogger
-{
-    private readonly List<SessionActivity> _activities = new();
-    
-    public void SetCurrentSession(AgentSession session) { }
-    
-    public string StartActivity(string activityType, string description, object? data = null)
-    {
-        var activity = SessionActivity.Create(activityType, description, data);
-        _activities.Add(activity);
-        return activity.ActivityId;
-    }
-    
-    public Task LogActivityAsync(string activityType, string description, object? data = null)
-    {
-        StartActivity(activityType, description, data);
-        return Task.CompletedTask;
-    }
-    
-    public Task LogTimedActivityAsync(string activityType, string description, long durationMs, object? data = null)
-    {
-        var activity = SessionActivity.Create(activityType, description, data);
-        activity.DurationMs = durationMs;
-        _activities.Add(activity);
-        return Task.CompletedTask;
-    }
-    
-    public Task LogFailedActivityAsync(string activityType, string description, string errorMessage, object? data = null)
-    {
-        var activity = SessionActivity.Create(activityType, description, data);
-        activity.Fail(errorMessage);
-        _activities.Add(activity);
-        return Task.CompletedTask;
-    }
-    
-    public Task CompleteActivityAsync(string activityId, object? additionalData = null)
-    {
-        var activity = _activities.FirstOrDefault(a => a.ActivityId == activityId);
-        activity?.Complete();
-        return Task.CompletedTask;
-    }
-    
-    public Task FailActivityAsync(string activityId, string errorMessage, object? additionalData = null)
-    {
-        var activity = _activities.FirstOrDefault(a => a.ActivityId == activityId);
-        activity?.Fail(errorMessage);
-        return Task.CompletedTask;
-    }
-    
-    public Task<List<SessionActivity>> GetSessionActivitiesAsync()
-    {
-        return Task.FromResult(_activities.ToList());
-    }
-    
-    public IEnumerable<SessionActivity> GetActivitiesByType(string activityType)
-    {
-        return _activities.Where(a => a.ActivityType == activityType);
+        public void SetCurrentSession(AgentSession s) => _session = s;
+        public AgentSession? GetCurrentSession()      => _session;
+
+        public string StartActivity(string t, string d, object? data = null)
+        {
+            var act = SessionActivity.Create(t, d, data);
+            _activities.Add(act);
+            return act.ActivityId;
+        }
+
+        public Task LogActivityAsync(string t, string d, object? data = null)
+        {
+            _activities.Add(SessionActivity.Create(t, d, data));
+            return Task.CompletedTask;
+        }
+
+        public Task LogTimedActivityAsync(string t, string d, long ms, object? data = null)
+        {
+            var act = SessionActivity.Create(t, d, data);
+            act.Complete(ms);
+            _activities.Add(act);
+            return Task.CompletedTask;
+        }
+
+        public Task LogFailedActivityAsync(string t, string d, string err, object? data = null)
+        {
+            var act = SessionActivity.Create(t, d, data);
+            act.Fail(err);
+            _activities.Add(act);
+            return Task.CompletedTask;
+        }
+
+        public Task CompleteActivityAsync(string id, object? add = null) => Task.CompletedTask;
+        public Task FailActivityAsync(string id, string err, object? add = null) => Task.CompletedTask;
+        public Task<List<SessionActivity>> GetSessionActivitiesAsync() =>
+            Task.FromResult(_activities.ToList());
+
+        // Helper used by the tests
+        public IEnumerable<SessionActivity> GetActivitiesByType(string type) =>
+            _activities.Where(a => a.ActivityType == type);
     }
 }
 

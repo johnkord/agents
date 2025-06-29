@@ -12,6 +12,7 @@ using OpenAIIntegration.Model;
 using System.Reflection;
 using AgentAlpha.Interfaces;
 using OpenAIIntegration;
+using System.Threading;               // for CancellationToken
 
 namespace AgentAlpha.Tests
 {
@@ -240,8 +241,13 @@ namespace AgentAlpha.Tests
     public class MockSessionAwareOpenAIServiceForBugFix : OpenAIIntegration.ISessionAwareOpenAIService
     {
         public void SetActivityLogger(Common.Interfaces.Session.ISessionActivityLogger? activityLogger) { }
-        public Task<ResponsesCreateResponse> CreateResponseAsync(ResponsesCreateRequest request, System.Threading.CancellationToken cancellationToken = default) => 
-            Task.FromResult(new ResponsesCreateResponse());
+
+        // --- added: fully implement interface --------------------------------
+        public Task<OpenAIIntegration.Model.ResponsesCreateResponse> CreateResponseAsync(
+            OpenAIIntegration.Model.ResponsesCreateRequest request,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new OpenAIIntegration.Model.ResponsesCreateResponse());
+        // ----------------------------------------------------------------------
     }
 
     public class MockToolManagerForBugFix : AgentAlpha.Interfaces.IToolManager

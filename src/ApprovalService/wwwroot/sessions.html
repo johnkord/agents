@@ -392,7 +392,15 @@
                 `;
             });
             
-            detailsDiv.innerHTML = activitiesHtml;
+            let markdownHtml = '';          // +NEW
+            if (sessionDetails.taskStateMarkdown && sessionDetails.taskStateMarkdown.trim() !== '') {
+                markdownHtml = `
+                    <h3 style="margin-top:25px;">Task State Markdown:</h3>
+                    <div class="markdown-doc">${marked.parse(sessionDetails.taskStateMarkdown)}</div>
+                `;
+            }
+
+            detailsDiv.innerHTML = activitiesHtml + markdownHtml;
         }
         
         async function copySessionDetails(sessionId) {
@@ -485,6 +493,13 @@
                 });
             } else {
                 copyText += `No activities found in this session.\n`;
+            }
+            
+            /* +NEW – include markdown when copying */
+            if (sessionData.taskStateMarkdown && sessionData.taskStateMarkdown.trim() !== '') {
+                copyText += `TASK STATE MARKDOWN:\n`;
+                copyText += `--------------------\n`;
+                copyText += `${sessionData.taskStateMarkdown}\n\n`;
             }
             
             copyText += `\nReport generated: ${new Date().toLocaleString()}\n`;

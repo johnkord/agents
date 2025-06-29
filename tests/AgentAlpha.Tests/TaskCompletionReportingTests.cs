@@ -74,8 +74,9 @@ public class TaskCompletionReportingTests
     [Fact]
     public async Task TaskCompletionReporting_GeneratesComprehensiveActivityLog()
     {
-        // Arrange
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+
+        // Arrange
         var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
         var activityLogger = new SessionActivityLogger(sessionManager, loggerFactory.CreateLogger<SessionActivityLogger>());
         

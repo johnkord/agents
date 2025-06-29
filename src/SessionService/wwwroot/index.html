@@ -233,6 +233,15 @@
         .copy-success.show {
             opacity: 1;
         }
+        .markdown-doc {
+            white-space: pre-wrap;
+            font-family: monospace;
+            background:#fffaf0;
+            padding:10px;
+            border-radius:4px;
+            overflow-x:auto;
+            margin-top:20px;
+        }
     </style>
 </head>
 <body>
@@ -260,6 +269,9 @@
         <div id="loading" class="loading">Loading sessions...</div>
         <div id="sessions-container"></div>
     </div>
+
+    <!-- +NEW – markdown parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <script>
         let loadedSessions = {};
@@ -399,7 +411,16 @@
                 `;
             });
             
-            detailsDiv.innerHTML = activitiesHtml;
+            /* +NEW – render TaskStateMarkdown if present */
+            let markdownHtml = '';
+            if (sessionDetails.taskStateMarkdown && sessionDetails.taskStateMarkdown.trim() !== '') {
+                markdownHtml = `
+                    <h3 style="margin-top:25px;">Task State Markdown:</h3>
+                    <div class="markdown-doc">${marked.parse(sessionDetails.taskStateMarkdown)}</div>
+                `;
+            }
+
+            detailsDiv.innerHTML = activitiesHtml + markdownHtml;
         }
 
         function toggleNewSessionForm() {
@@ -574,6 +595,13 @@
                 copyText += `No activities found in this session.\n`;
             }
             
+            /* +NEW – append markdown */
+            if (sessionData.taskStateMarkdown && sessionData.taskStateMarkdown.trim() !== '') {
+                copyText += `TASK STATE MARKDOWN:\n`;
+                copyText += `--------------------\n`;
+                copyText += `${sessionData.taskStateMarkdown}\n\n`;
+            }
+
             copyText += `\nReport generated: ${new Date().toLocaleString()}\n`;
             
             // Copy to clipboard
