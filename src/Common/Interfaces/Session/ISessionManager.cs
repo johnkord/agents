@@ -41,4 +41,39 @@ public interface ISessionManager
     /// Archive a session (mark as completed/archived)
     /// </summary>
     Task<bool> ArchiveSessionAsync(string sessionId);
+    
+    /// <summary>
+    /// Get sessions by task status
+    /// </summary>
+    Task<IReadOnlyList<AgentSession>> GetSessionsByTaskStatusAsync(TaskExecutionStatus taskStatus);
+    
+    /// <summary>
+    /// Get sessions by category
+    /// </summary>
+    Task<IReadOnlyList<AgentSession>> GetSessionsByCategoryAsync(string category);
+    
+    /// <summary>
+    /// Get sessions by priority level
+    /// </summary>
+    Task<IReadOnlyList<AgentSession>> GetSessionsByPriorityAsync(int priority);
+    
+    /// <summary>
+    /// Get sessions with progress in a specified range
+    /// </summary>
+    Task<IReadOnlyList<AgentSession>> GetSessionsByProgressRangeAsync(double minProgress, double maxProgress);
+    
+    /// <summary>
+    /// Get active tasks (in progress)
+    /// </summary>
+    Task<IReadOnlyList<AgentSession>> GetActiveTasksAsync();
+    
+    /// <summary>
+    /// Get completed tasks
+    /// </summary>
+    Task<IReadOnlyList<AgentSession>> GetCompletedTasksAsync();
+    
+    /// <summary>
+    /// Get sessions by tags (contains any of the specified tags)
+    /// </summary>
+    Task<IReadOnlyList<AgentSession>> GetSessionsByTagsAsync(params string[] tags);
 }

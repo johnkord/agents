@@ -57,32 +57,15 @@ public class SessionManager : ISessionManager
                 Metadata         TEXT NOT NULL DEFAULT '',
                 Status           INTEGER NOT NULL DEFAULT 0,
                 CurrentPlan      TEXT NOT NULL DEFAULT '',
-                ActivityLog      TEXT NOT NULL DEFAULT '',
-                TaskTitle        TEXT NOT NULL DEFAULT '',
-                TaskStatus       INTEGER NOT NULL DEFAULT 0,
-                CurrentStep      INTEGER NOT NULL DEFAULT 0,
-                TotalSteps       INTEGER NOT NULL DEFAULT 0,
-                CompletedSteps   INTEGER NOT NULL DEFAULT 0,
-                ProgressPercentage REAL NOT NULL DEFAULT 0.0,
-                TaskStartedAt    TEXT,
-                TaskCompletedAt  TEXT,
-                TaskCategory     TEXT NOT NULL DEFAULT '',
-                TaskPriority     INTEGER NOT NULL DEFAULT 2,
-                TaskTags         TEXT NOT NULL DEFAULT '',
-                EstimatedDuration INTEGER,
-                ActualDuration   INTEGER
+                ActivityLog      TEXT NOT NULL DEFAULT ''
             );
             
             CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON AgentSessions(CreatedAt);
             CREATE INDEX IF NOT EXISTS idx_sessions_status ON AgentSessions(Status);
-            CREATE INDEX IF NOT EXISTS idx_sessions_task_status ON AgentSessions(TaskStatus);
-            CREATE INDEX IF NOT EXISTS idx_sessions_task_category ON AgentSessions(TaskCategory);
-            CREATE INDEX IF NOT EXISTS idx_sessions_task_priority ON AgentSessions(TaskPriority);
-            CREATE INDEX IF NOT EXISTS idx_sessions_progress ON AgentSessions(ProgressPercentage);
             """;
         cmd.ExecuteNonQuery();
         
-        // Migrate existing schema to add new columns
+        // Migrate existing schema to add new columns and create additional indexes
         MigrateSchema(conn);
     }
     

@@ -221,4 +221,180 @@ public class SessionServiceClient : ISessionServiceClient
             throw;
         }
     }
+    
+    public async Task<IReadOnlyList<AgentSession>> GetSessionsByTaskStatusAsync(TaskExecutionStatus taskStatus)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/sessions/by-task-status/{taskStatus}");
+            response.EnsureSuccessStatusCode();
+            
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var sessionsData = JsonSerializer.Deserialize<JsonElement[]>(responseJson);
+            
+            return ParseSessionsList(sessionsData);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to get sessions by task status {TaskStatus} via HTTP", taskStatus);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<AgentSession>> GetSessionsByCategoryAsync(string category)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/sessions/by-category/{Uri.EscapeDataString(category)}");
+            response.EnsureSuccessStatusCode();
+            
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var sessionsData = JsonSerializer.Deserialize<JsonElement[]>(responseJson);
+            
+            return ParseSessionsList(sessionsData);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to get sessions by category {Category} via HTTP", category);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<AgentSession>> GetSessionsByPriorityAsync(int priority)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/sessions/by-priority/{priority}");
+            response.EnsureSuccessStatusCode();
+            
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var sessionsData = JsonSerializer.Deserialize<JsonElement[]>(responseJson);
+            
+            return ParseSessionsList(sessionsData);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to get sessions by priority {Priority} via HTTP", priority);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<AgentSession>> GetSessionsByProgressRangeAsync(double minProgress, double maxProgress)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/sessions/by-progress?minProgress={minProgress}&maxProgress={maxProgress}");
+            response.EnsureSuccessStatusCode();
+            
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var sessionsData = JsonSerializer.Deserialize<JsonElement[]>(responseJson);
+            
+            return ParseSessionsList(sessionsData);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to get sessions by progress range via HTTP");
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<AgentSession>> GetActiveTasksAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/sessions/active");
+            response.EnsureSuccessStatusCode();
+            
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var sessionsData = JsonSerializer.Deserialize<JsonElement[]>(responseJson);
+            
+            return ParseSessionsList(sessionsData);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to get active tasks via HTTP");
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<AgentSession>> GetCompletedTasksAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/sessions/completed");
+            response.EnsureSuccessStatusCode();
+            
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var sessionsData = JsonSerializer.Deserialize<JsonElement[]>(responseJson);
+            
+            return ParseSessionsList(sessionsData);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to get completed tasks via HTTP");
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<AgentSession>> GetSessionsByTagsAsync(params string[] tags)
+    {
+        try
+        {
+            var tagsQuery = string.Join(",", tags);
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/sessions/by-tags?tags={Uri.EscapeDataString(tagsQuery)}");
+            response.EnsureSuccessStatusCode();
+            
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var sessionsData = JsonSerializer.Deserialize<JsonElement[]>(responseJson);
+            
+            return ParseSessionsList(sessionsData);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to get sessions by tags via HTTP");
+            throw;
+        }
+    }
+    
+    private List<AgentSession> ParseSessionsList(JsonElement[]? sessionsData)
+    {
+        var sessions = new List<AgentSession>();
+        if (sessionsData != null)
+        {
+            foreach (var sessionData in sessionsData)
+            {
+                var session = new AgentSession
+                {
+                    SessionId = sessionData.GetProperty("sessionId").GetString() ?? string.Empty,
+                    Name = sessionData.GetProperty("name").GetString() ?? string.Empty,
+                    CreatedAt = sessionData.GetProperty("createdAt").GetDateTime(),
+                    LastUpdatedAt = sessionData.GetProperty("lastUpdatedAt").GetDateTime(),
+                    Status = Enum.Parse<SessionStatus>(sessionData.GetProperty("status").GetString() ?? "Active")
+                };
+                
+                // Parse task-related fields if available
+                if (sessionData.TryGetProperty("taskTitle", out var taskTitle))
+                    session.TaskTitle = taskTitle.GetString() ?? string.Empty;
+                
+                if (sessionData.TryGetProperty("taskStatus", out var taskStatus))
+                    session.TaskStatus = Enum.Parse<TaskExecutionStatus>(taskStatus.GetString() ?? "NotStarted");
+                
+                if (sessionData.TryGetProperty("currentStep", out var currentStep))
+                    session.CurrentStep = currentStep.GetInt32();
+                
+                if (sessionData.TryGetProperty("totalSteps", out var totalSteps))
+                    session.TotalSteps = totalSteps.GetInt32();
+                
+                if (sessionData.TryGetProperty("completedSteps", out var completedSteps))
+                    session.CompletedSteps = completedSteps.GetInt32();
+                
+                if (sessionData.TryGetProperty("progressPercentage", out var progressPercentage))
+                    session.ProgressPercentage = progressPercentage.GetDouble();
+                
+                sessions.Add(session);
+            }
+        }
+        
+        return sessions;
+    }
 }
