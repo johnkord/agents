@@ -56,7 +56,6 @@ public class SessionManager : ISessionManager
                 ConfigurationSnapshot TEXT NOT NULL DEFAULT '',
                 Metadata         TEXT NOT NULL DEFAULT '',
                 Status           INTEGER NOT NULL DEFAULT 0,
-                CurrentPlan      TEXT NOT NULL DEFAULT '',
                 ActivityLog      TEXT NOT NULL DEFAULT '',
                 TaskStateMarkdown TEXT NOT NULL DEFAULT ''
             );
@@ -66,29 +65,20 @@ public class SessionManager : ISessionManager
             """;
         cmd.ExecuteNonQuery();
         
-        // Check if CurrentPlan column exists and add it if it doesn't
+        // Check if new columns exist and add them if they don't
         cmd.CommandText = "PRAGMA table_info(AgentSessions)";
         using var reader = cmd.ExecuteReader();
-        bool hasCurrentPlanColumn = false;
         bool hasActivityLogColumn = false;
         bool hasTaskStateMarkdownColumn = false;
         while (reader.Read())
         {
             var columnName = reader.GetString(1);
-            if (columnName == "CurrentPlan")
-                hasCurrentPlanColumn = true;
             if (columnName == "ActivityLog")
                 hasActivityLogColumn = true;
             if (columnName == "TaskStateMarkdown")
                 hasTaskStateMarkdownColumn = true;
         }
         reader.Close();
-        
-        if (!hasCurrentPlanColumn)
-        {
-            cmd.CommandText = "ALTER TABLE AgentSessions ADD COLUMN CurrentPlan TEXT NOT NULL DEFAULT ''";
-            cmd.ExecuteNonQuery();
-        }
         
         if (!hasActivityLogColumn)
         {
@@ -120,7 +110,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog, TaskStateMarkdown
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, ActivityLog, TaskStateMarkdown
             FROM AgentSessions 
             WHERE SessionId = $sessionId
             """;
@@ -139,9 +129,8 @@ public class SessionManager : ISessionManager
                 ConfigurationSnapshot = reader.GetString(5),
                 Metadata = reader.GetString(6),
                 Status = (SessionStatus)reader.GetInt32(7),
-                CurrentPlan = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
-                ActivityLog = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
-                TaskStateMarkdown = reader.IsDBNull(10) ? string.Empty : reader.GetString(10)
+                ActivityLog = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                TaskStateMarkdown = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
             };
         }
 
@@ -156,7 +145,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog, TaskStateMarkdown
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, ActivityLog, TaskStateMarkdown
             FROM AgentSessions 
             WHERE Name = $name
             ORDER BY LastUpdatedAt DESC
@@ -177,9 +166,8 @@ public class SessionManager : ISessionManager
                 ConfigurationSnapshot = reader.GetString(5),
                 Metadata = reader.GetString(6),
                 Status = (SessionStatus)reader.GetInt32(7),
-                CurrentPlan = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
-                ActivityLog = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
-                TaskStateMarkdown = reader.IsDBNull(10) ? string.Empty : reader.GetString(10)
+                ActivityLog = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                TaskStateMarkdown = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
             };
         }
 
@@ -194,8 +182,8 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             INSERT OR REPLACE INTO AgentSessions 
-            (SessionId, Name, CreatedAt, LastUpdatedAt, ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog, TaskStateMarkdown)
-            VALUES ($sessionId, $name, $createdAt, $lastUpdatedAt, $conversationState, $configSnapshot, $metadata, $status, $currentPlan, $activityLog, $taskStateMarkdown)
+            (SessionId, Name, CreatedAt, LastUpdatedAt, ConversationState, ConfigurationSnapshot, Metadata, Status, ActivityLog, TaskStateMarkdown)
+            VALUES ($sessionId, $name, $createdAt, $lastUpdatedAt, $conversationState, $configSnapshot, $metadata, $status, $activityLog, $taskStateMarkdown)
             """;
             
         cmd.Parameters.AddWithValue("$sessionId", session.SessionId);
@@ -206,7 +194,6 @@ public class SessionManager : ISessionManager
         cmd.Parameters.AddWithValue("$configSnapshot", session.ConfigurationSnapshot);
         cmd.Parameters.AddWithValue("$metadata", session.Metadata);
         cmd.Parameters.AddWithValue("$status", (int)session.Status);
-        cmd.Parameters.AddWithValue("$currentPlan", session.CurrentPlan);
         cmd.Parameters.AddWithValue("$activityLog", session.ActivityLog);
         cmd.Parameters.AddWithValue("$taskStateMarkdown", session.TaskStateMarkdown);
 
@@ -225,7 +212,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status, CurrentPlan, ActivityLog, TaskStateMarkdown
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, ActivityLog, TaskStateMarkdown
             FROM AgentSessions 
             ORDER BY LastUpdatedAt DESC
             """;
@@ -242,10 +229,8 @@ public class SessionManager : ISessionManager
                 ConversationState = reader.GetString(4),
                 ConfigurationSnapshot = reader.GetString(5),
                 Metadata = reader.GetString(6),
-                Status = (SessionStatus)reader.GetInt32(7),
-                CurrentPlan = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
-                ActivityLog = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
-                TaskStateMarkdown = reader.IsDBNull(10) ? string.Empty : reader.GetString(10)
+                ActivityLog = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                TaskStateMarkdown = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
             });
         }
 

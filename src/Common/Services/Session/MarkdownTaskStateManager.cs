@@ -119,54 +119,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
         }
     }
     
-    public async Task<string> InitializeTaskMarkdownFromPlanAsync(string sessionId, TaskPlan taskPlan)
-    {
-        try
-        {
-            _logger.LogInformation("Initializing task markdown from plan for session {SessionId}: {Task}", sessionId, taskPlan.Task);
-            
-            // Create markdown representation of the task plan
-            var markdown = $"""
-                # Task: {taskPlan.Task}
-                
-                **Strategy:** {taskPlan.Strategy}
-                
-                **Status:** In Progress
-                
-                **Complexity:** {taskPlan.Complexity}
-                
-                **Confidence:** {taskPlan.Confidence:P0}
-                
-                **Required Tools:** {string.Join(", ", taskPlan.RequiredTools)}
-                
-                ## Subtasks
-                
-                {string.Join("\n", taskPlan.Steps.Select(step => 
-                    $"- [ ] **Step {step.StepNumber}:** {step.Description}" +
-                    (step.PotentialTools.Any() ? $"\n  - *Tools:* {string.Join(", ", step.PotentialTools)}" : "") +
-                    (!string.IsNullOrEmpty(step.ExpectedOutput) ? $"\n  - *Expected Output:* {step.ExpectedOutput}" : "")
-                ))}
-                
-                ## Progress Notes
-                
-                *Task plan initialized on {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC*
-                
-                ## Context
-                
-                Created from execution plan with {taskPlan.Steps.Count} steps.
-                """;
-            
-            // Save to session
-            await SaveTaskMarkdownToSessionAsync(sessionId, markdown);
-            
-            return markdown;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to initialize task markdown from plan for session {SessionId}", sessionId);
-            throw;
-        }
-    }
+
     
     public async Task<string> UpdateTaskMarkdownAsync(string sessionId, string actionDescription, string actionResult, string? observations = null)
     {

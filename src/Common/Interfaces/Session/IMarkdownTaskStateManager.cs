@@ -12,10 +12,7 @@ public interface IMarkdownTaskStateManager
     /// </summary>
     Task<string> InitializeTaskMarkdownAsync(string sessionId, string taskDescription);
     
-    /// <summary>
-    /// Initialize a task state markdown document from a complete TaskPlan
-    /// </summary>
-    Task<string> InitializeTaskMarkdownFromPlanAsync(string sessionId, TaskPlan taskPlan);
+
     
     /// <summary>
     /// Update the task markdown document based on action results using LLM

@@ -79,7 +79,6 @@ public class SessionServiceClient : ISessionServiceClient
                 ConversationState = sessionData.GetProperty("conversationState").GetString() ?? string.Empty,
                 ConfigurationSnapshot = sessionData.GetProperty("configurationSnapshot").GetString() ?? string.Empty,
                 Metadata = sessionData.GetProperty("metadata").GetString() ?? string.Empty,
-                CurrentPlan = sessionData.GetProperty("currentPlan").GetString() ?? string.Empty,
                 ActivityLog = JsonSerializer.Serialize(sessionData.GetProperty("activities"))
             };
         }
@@ -112,8 +111,7 @@ public class SessionServiceClient : ISessionServiceClient
                 Status = Enum.Parse<SessionStatus>(sessionData.GetProperty("status").GetString() ?? "Active"),
                 ConversationState = sessionData.GetProperty("conversationState").GetString() ?? string.Empty,
                 ConfigurationSnapshot = sessionData.GetProperty("configurationSnapshot").GetString() ?? string.Empty,
-                Metadata = sessionData.GetProperty("metadata").GetString() ?? string.Empty,
-                CurrentPlan = sessionData.GetProperty("currentPlan").GetString() ?? string.Empty
+                Metadata = sessionData.GetProperty("metadata").GetString() ?? string.Empty
             };
         }
         catch (Exception ex)
@@ -134,7 +132,6 @@ public class SessionServiceClient : ISessionServiceClient
                 configurationSnapshot = session.ConfigurationSnapshot,
                 metadata = session.Metadata,
                 status = session.Status,
-                currentPlan = session.GetCurrentPlan(),
                 activities = session.GetActivityLog()
             };
             
