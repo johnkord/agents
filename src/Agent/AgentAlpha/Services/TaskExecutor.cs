@@ -240,46 +240,30 @@ public class TaskExecutor : ITaskExecutor
 
     private async Task<string> InitializeMarkdownPlanAsync(TaskExecutionRequest request)
     {
-        try
+        _logger.LogInformation("Initializing markdown-based plan for task: {Task}", request.Task);
+
+        var availableTools = await DiscoverAvailableToolsAsync();
+
+        // Build minimal state – session already contains context
+        var state = new CurrentState
         {
-            _logger.LogInformation("Initializing markdown-based plan for task: {Task}", request.Task);
+            CapturedAt = DateTime.UtcNow
+        };
 
-            if (_markdownTaskStateManager == null)
-            {
-                throw new InvalidOperationException("Markdown task state manager is not available");
-            }
+        // --- call signature changed (no context arg) ---
+        var markdownPlan = await _planningService.InitializeTaskPlanningWithStateAsync(
+            request.SessionId ?? Guid.NewGuid().ToString(),
+            request.Task,
+            availableTools,
+            state);
 
-            // Use planning service to create initial markdown plan
-            var availableTools = await DiscoverAvailableToolsAsync();
-            string taskMarkdown;
+        // Persist the freshly generated markdown plan to the activity log
+        await _activityLogger.LogActivityAsync(
+            ActivityTypes.TaskMarkdownUpdate,
+            "Initial markdown task plan (executor)",
+            markdownPlan);
 
-            if (_planningService != null)
-            {
-                taskMarkdown = await _planningService.InitializeTaskPlanningAsync(
-                    request.SessionId ?? Guid.NewGuid().ToString(),
-                    request.Task,
-                    availableTools);
-            }
-            else
-            {
-                // Fallback: create basic markdown structure
-                taskMarkdown = await _markdownTaskStateManager.InitializeTaskMarkdownAsync(
-                    request.SessionId ?? Guid.NewGuid().ToString(),
-                    request.Task);
-            }
-
-            await _activityLogger.LogActivityAsync(
-                ActivityTypes.TaskMarkdownUpdate,                // NEW
-                "Initial markdown task plan (executor)",
-                taskMarkdown);                                   // raw markdown
-
-            return taskMarkdown;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to initialize markdown plan for task: {Task}", request.Task);
-            throw;
-        }
+        return markdownPlan;
     }
 
     private void DisplayMarkdownPlan(string taskMarkdown)

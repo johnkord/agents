@@ -16,9 +16,8 @@ public interface IPlanningService
     /// <param name="sessionId">The session identifier</param>
     /// <param name="task">The task to plan for</param>
     /// <param name="availableTools">Tools available to the agent</param>
-    /// <param name="context">Optional context from previous conversations or sessions</param>
     /// <returns>The initialized markdown task document</returns>
-    Task<string> InitializeTaskPlanningAsync(string sessionId, string task, IList<IUnifiedTool> availableTools, string? context = null);
+    Task<string> InitializeTaskPlanningAsync(string sessionId, string task, IList<IUnifiedTool> availableTools);
     
     /// <summary>
     /// Initialize task planning with current state analysis directly into markdown format
@@ -27,9 +26,8 @@ public interface IPlanningService
     /// <param name="task">The task to plan for</param>
     /// <param name="availableTools">Tools available to the agent</param>
     /// <param name="currentState">Current state of the environment and context</param>
-    /// <param name="context">Optional additional context</param>
     /// <returns>The initialized markdown task document</returns>
-    Task<string> InitializeTaskPlanningWithStateAsync(string sessionId, string task, IList<IUnifiedTool> availableTools, CurrentState currentState, string? context = null);
+    Task<string> InitializeTaskPlanningWithStateAsync(string sessionId, string task, IList<IUnifiedTool> availableTools, CurrentState currentState);
     
     /// <summary>
     /// Set the session activity logger for automatic OpenAI request logging

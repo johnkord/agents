@@ -46,7 +46,10 @@ public class PlanningService : IPlanningService
     /// <summary>
     /// Initialize task planning directly into markdown format
     /// </summary>
-    public async Task<string> InitializeTaskPlanningAsync(string sessionId, string task, IList<IUnifiedTool> availableTools, string? context = null)
+    public async Task<string> InitializeTaskPlanningAsync(
+        string sessionId,
+        string task,
+        IList<IUnifiedTool> availableTools)
     {
         _logger.LogInformation("Initializing task planning in markdown format for session {SessionId}: {Task}", sessionId, task);
 
@@ -55,11 +58,14 @@ public class PlanningService : IPlanningService
             // Create a basic current state if none provided
             var basicState = new CurrentState
             {
-                SessionContext = context,
                 CapturedAt = DateTime.UtcNow
             };
 
-            return await InitializeTaskPlanningWithStateAsync(sessionId, task, availableTools, basicState, context);
+            return await InitializeTaskPlanningWithStateAsync(
+                sessionId,
+                task,
+                availableTools,
+                basicState);
         }
         catch (Exception ex)
         {
@@ -71,14 +77,21 @@ public class PlanningService : IPlanningService
     /// <summary>
     /// Initialize task planning with current state analysis directly into markdown format
     /// </summary>
-    public async Task<string> InitializeTaskPlanningWithStateAsync(string sessionId, string task, IList<IUnifiedTool> availableTools, CurrentState currentState, string? context = null)
+    public async Task<string> InitializeTaskPlanningWithStateAsync(
+        string sessionId,
+        string task,
+        IList<IUnifiedTool> availableTools,
+        CurrentState currentState)
     {
         _logger.LogInformation("Initializing state-aware task planning in markdown format for session {SessionId}: {Task}", sessionId, task);
 
         try
         {
             // Create markdown-based planning prompt
-            var markdownPlanPrompt = CreateMarkdownPlanningPrompt(task, availableTools, currentState, context);
+            var markdownPlanPrompt = CreateMarkdownPlanningPrompt(
+                task,
+                availableTools,
+                currentState);
             
             var request = new ResponsesCreateRequest
             {
@@ -154,17 +167,16 @@ public class PlanningService : IPlanningService
     /// <summary>
     /// Creates a markdown planning prompt for LLM task planning
     /// </summary>
-    private string CreateMarkdownPlanningPrompt(string task, IList<IUnifiedTool> availableTools, CurrentState currentState, string? context)
+    private string CreateMarkdownPlanningPrompt(
+        string task,
+        IList<IUnifiedTool> availableTools,
+        CurrentState currentState)
     {
-        var prompt = new List<string>();
-        
-        prompt.Add("Create a comprehensive markdown-based execution plan for the following task:");
-        prompt.Add($"\n**TASK:** {task}\n");
-        
-        if (!string.IsNullOrEmpty(context))
+        var prompt = new List<string>
         {
-            prompt.Add($"**ADDITIONAL CONTEXT:** {context}\n");
-        }
+            "Create a comprehensive markdown-based execution plan for the following task:",
+            $"\n**TASK:** {task}\n"
+        };
         
         // Add state analysis
         var stateAnalysis = AnalyzeCurrentState(currentState, availableTools);
