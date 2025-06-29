@@ -66,7 +66,6 @@ public class SessionsController : ControllerBase
                 conversationState = session.ConversationState,
                 configurationSnapshot = session.ConfigurationSnapshot,
                 metadata = session.Metadata,
-                currentPlan = session.CurrentPlan,
                 activities = activities.Select(a => new 
                 {
                     activityId = a.ActivityId,
@@ -140,9 +139,6 @@ public class SessionsController : ControllerBase
             
             if (request.Status.HasValue)
                 session.Status = request.Status.Value;
-            
-            if (request.CurrentPlan != null)
-                session.SetCurrentPlan(request.CurrentPlan);
             
             if (request.Activities != null)
                 session.SetActivityLog(request.Activities);
@@ -219,8 +215,7 @@ public class SessionsController : ControllerBase
                 status = session.Status.ToString(),
                 conversationState = session.ConversationState,
                 configurationSnapshot = session.ConfigurationSnapshot,
-                metadata = session.Metadata,
-                currentPlan = session.CurrentPlan
+                metadata = session.Metadata
             };
 
             return Ok(result);

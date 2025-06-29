@@ -824,7 +824,9 @@ public class TaskExecutor : ITaskExecutor
 
     /// <summary>
     /// Generates a comprehensive task completion report with reasoning and evidence
+    /// TODO: Remove this method - it uses TaskPlan which has been removed
     /// </summary>
+    /*
     private async Task GenerateTaskCompletionReportAsync(ToolCall completeTaskCall, string toolResult, TaskPlan? taskPlan, HashSet<int> completedSteps)
     {
         try
@@ -968,10 +970,13 @@ public class TaskExecutor : ITaskExecutor
 
         return evidenceSummary;
     }
+    */
 
     /// <summary>
     /// Analyzes task plan completion status
+    /// TODO: Remove this method - it uses TaskPlan which has been removed
     /// </summary>
+    /*
     private object AnalyzeTaskPlanCompletion(TaskPlan? taskPlan, HashSet<int> completedSteps)
     {
         if (taskPlan == null)
