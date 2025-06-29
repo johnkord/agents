@@ -80,7 +80,7 @@ dotnet run "Calculate 25 + 17"
 **With specific OpenAI model:**
 ```bash
 dotnet run --model "gpt-4.1-nano" "Calculate 25 + 17"
-dotnet run -m "gpt-4o" "Write a creative story"
+dotnet run -m "gpt-4.1" "Write a creative story"
 ```
 
 **With temperature control (0.0-1.0):**
@@ -119,14 +119,14 @@ dotnet run --system-prompt "You are a math tutor" "Help me understand calculus"
 
 **Combined parameters:**
 ```bash
-dotnet run --model "gpt-4o" --temperature 0.7 --priority High --verbose "Creative writing task with detailed logging"
+dotnet run --model "gpt-4.1" --temperature 0.7 --priority High --verbose "Creative writing task with detailed logging"
 ```
 
 ### Parameter Reference
 
 | Parameter | Short | Description | Example |
 |-----------|-------|-------------|---------|
-| `--model` | `-m` | OpenAI model to use | `gpt-4o`, `gpt-4.1-nano` |
+| `--model` | `-m` | OpenAI model to use | `gpt-4.1`, `gpt-4.1-nano` |
 | `--temperature` | `-t` | Response creativity (0.0-1.0) | `0.2` (precise), `0.8` (creative) |
 | `--max-iterations` | `--iterations` | Max conversation loops | `5`, `15` |
 | `--priority` | | Task priority level | `Low`, `Normal`, `High` |

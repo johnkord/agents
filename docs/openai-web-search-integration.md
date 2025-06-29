@@ -85,7 +85,7 @@ The web search tool integrates seamlessly with OpenAI's Responses API:
 
 ```json
 {
-  "model": "gpt-4o",
+  "model": "gpt-4.1",
   "tools": [
     {
       "type": "web_search_preview",
@@ -177,7 +177,7 @@ Agent: [Retrieves real-time stock market information]
 The web search tool works with OpenAI models that support the Responses API:
 - `gpt-4.1` (recommended)
 - `o4-mini`
-- `gpt-4o` (limited support)
+- `gpt-4.1` (limited support)
 
 ### Limitations
 - Web search is not supported in `gpt-4.1-nano`

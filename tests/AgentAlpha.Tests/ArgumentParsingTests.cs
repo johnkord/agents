@@ -26,7 +26,7 @@ public class ArgumentParsingTests
     }
 
     [Theory]
-    [InlineData("gpt-4o")]
+    [InlineData("gpt-4.1")]
     [InlineData("gpt-4.1-nano")]
     [InlineData("gpt-4-turbo")]
     public void TaskExecutionRequest_SupportsModelParameter(string modelValue)
@@ -96,7 +96,7 @@ public class ArgumentParsingTests
     {
         // Test the static factory method with model
         const string testTask = "Test task";
-        const string testModel = "gpt-4o";
+        const string testModel = "gpt-4.1";
         
         var request = TaskExecutionRequest.FromTaskAndModel(testTask, testModel);
         

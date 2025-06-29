@@ -16,7 +16,7 @@ public class ConversationOptimizationTests
         var nullLogger = NullLogger<ConversationManager>.Instance;
         var config = new AgentConfiguration 
         { 
-            Model = "gpt-4o",
+            Model = "gpt-4.1",
             MaxConversationMessages = 5 // Small limit for testing
         };
         
@@ -47,7 +47,7 @@ public class ConversationOptimizationTests
         var nullLogger = NullLogger<ConversationManager>.Instance;
         var config = new AgentConfiguration 
         { 
-            Model = "gpt-4o",
+            Model = "gpt-4.1",
             MaxConversationMessages = 0 // No limit
         };
         
@@ -74,7 +74,7 @@ public class ConversationOptimizationTests
         // Arrange
         var nullOpenAI = new NullOpenAIResponsesService();
         var nullLogger = NullLogger<ConversationManager>.Instance;
-        var config = new AgentConfiguration { Model = "gpt-4o" };
+        var config = new AgentConfiguration { Model = "gpt-4.1" };
         
         var conversationManager = new ConversationManager(nullOpenAI, nullLogger, config);
         
@@ -98,7 +98,7 @@ public class ConversationOptimizationTests
         // Arrange
         var nullOpenAI = new NullOpenAIResponsesService();
         var nullLogger = NullLogger<ConversationManager>.Instance;
-        var config = new AgentConfiguration { Model = "gpt-4o" };
+        var config = new AgentConfiguration { Model = "gpt-4.1" };
         
         var conversationManager = new ConversationManager(nullOpenAI, nullLogger, config);
         conversationManager.InitializeConversation("System prompt", "User task");

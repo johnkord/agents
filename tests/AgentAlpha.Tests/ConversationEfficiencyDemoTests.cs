@@ -24,11 +24,11 @@ public class ConversationEfficiencyDemoTests
         var nullLogger = NullLogger<ConversationManager>.Instance;
         
         // Test without optimization (unlimited messages)
-        var unlimitedConfig = new AgentConfiguration { Model = "gpt-4o", MaxConversationMessages = 0 };
+        var unlimitedConfig = new AgentConfiguration { Model = "gpt-4.1", MaxConversationMessages = 0 };
         var unlimitedManager = new ConversationManager(nullOpenAI, nullLogger, unlimitedConfig);
         
         // Test with optimization (limit to 8 messages)
-        var optimizedConfig = new AgentConfiguration { Model = "gpt-4o", MaxConversationMessages = 8 };
+        var optimizedConfig = new AgentConfiguration { Model = "gpt-4.1", MaxConversationMessages = 8 };
         var optimizedManager = new ConversationManager(nullOpenAI, nullLogger, optimizedConfig);
 
         // Simulate the same conversation in both managers
@@ -84,7 +84,7 @@ public class ConversationEfficiencyDemoTests
         // Arrange
         var nullOpenAI = new NullOpenAIResponsesService();
         var nullLogger = NullLogger<ConversationManager>.Instance;
-        var config = new AgentConfiguration { Model = "gpt-4o" };
+        var config = new AgentConfiguration { Model = "gpt-4.1" };
         var manager = new ConversationManager(nullOpenAI, nullLogger, config);
 
         // Act

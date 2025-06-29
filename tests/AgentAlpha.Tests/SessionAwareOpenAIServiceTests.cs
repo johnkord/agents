@@ -23,12 +23,12 @@ public class SessionAwareOpenAIServiceTests
         activityLogger.SetCurrentSession(session);
         
         // Stub config kept only to satisfy compiler; no real service instance needed
-        var _ = new OpenAIIntegration.OpenAIConfig { ApiKey = "test-key", Model = "gpt-4o" };
+        var _ = new OpenAIIntegration.OpenAIConfig { ApiKey = "test-key", Model = "gpt-4.1" };
         
         // Create a mock response that the service would return
         var mockRequest = new CompletionRequest
         {
-            Model = "gpt-4o",
+            Model = "gpt-4.1",
             Messages = new[]
             {
                 new Message { Role = "user", Content = "Hello, world!" }
@@ -52,7 +52,7 @@ public class SessionAwareOpenAIServiceTests
         var mockResponse = new CompletionResponse
         {
             Id = "test-response-id",
-            Model = "gpt-4o",
+            Model = "gpt-4.1",
             Choices = new[]
             {
                 new Choice
@@ -82,6 +82,6 @@ public class SessionAwareOpenAIServiceTests
         Assert.True(openAiActivity.Success);
         Assert.True(openAiActivity.DurationMs.HasValue);
         Assert.Contains("CompletionRequest", openAiActivity.Data);
-        Assert.Contains("gpt-4o", openAiActivity.Data);
+        Assert.Contains("gpt-4.1", openAiActivity.Data);
     }
 }

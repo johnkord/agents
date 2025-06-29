@@ -72,7 +72,7 @@ public interface ITaskExecutor
 public class AgentConfiguration
 {
     public string OpenAiApiKey { get; set; } = "";
-    public string Model { get; set; } = "gpt-4o";
+    public string Model { get; set; } = "gpt-4.1";
     public int MaxIterations { get; set; } = 10;
     public McpTransportType Transport { get; set; } = McpTransportType.Stdio;
     public string? ServerUrl { get; set; }

@@ -75,7 +75,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-4o",
+                Model = "gpt-4.1",
                 Input = prompt,
                 Instructions = "You are a task planning assistant. Create clear, actionable markdown documents for task execution.",
                 MaxOutputTokens = 1000
@@ -246,7 +246,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
 
             var request = new ResponsesCreateRequest
             {
-                Model          = "gpt-4o",
+                Model          = "gpt-4.1",
                 Input          = new[] { new { role = "user", content = prompt } },
                 Tools          = new[] { SaveMarkdownPlanTool },
                 ToolChoice     = "auto",
@@ -402,7 +402,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-4o",
+                Model = "gpt-4.1",
                 Input = prompt,
                 Instructions = "You are a task planning assistant. Update markdown documents to accurately reflect completed subtasks.",
                 MaxOutputTokens = 1500
@@ -458,7 +458,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-4o",
+                Model = "gpt-4.1",
                 Input = prompt,
                 Instructions = "You are a task planning assistant. Add relevant subtasks to markdown documents based on evolving requirements.",
                 MaxOutputTokens = 1500
@@ -517,7 +517,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-4o",
+                Model = "gpt-4.1",
                 Input = prompt,
                 Instructions = "You are an iterative planning assistant. Refine task plans based on execution feedback to improve effectiveness.",
                 MaxOutputTokens = 2000

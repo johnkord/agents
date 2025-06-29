@@ -7,7 +7,7 @@ namespace OpenAIIntegration.Model;
 public sealed class ResponsesCreateRequest
 {
     [JsonPropertyName("model")]
-    public string Model { get; set; } = "gpt-4o";
+    public string Model { get; set; } = "gpt-4.1";
 
     /* union: string | array<any> */
     [JsonPropertyName("input")]

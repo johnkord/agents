@@ -144,7 +144,7 @@ agentAlpha:
     schedule: "0 */6 * * *"  # Every 6 hours
   task: "Monitor system health and report status"
   parameters:
-    model: "gpt-4o"
+    model: "gpt-4.1"
     temperature: 0.7
     maxIterations: 15
     verboseLogging: true
@@ -277,7 +277,7 @@ spec:
         command: ["dotnet", "AgentAlpha.dll"]
         args:
           - "--model"
-          - "gpt-4o"
+          - "gpt-4.1"
           - "--temperature"
           - "0.7"
           - "--max-iterations"
@@ -330,7 +330,7 @@ helm upgrade agents ./helm/agents \
   --reuse-values \
   --set agentAlpha.type=job \
   --set agentAlpha.task="Analyze application logs and summarize findings" \
-  --set agentAlpha.parameters.model="gpt-4o" \
+  --set agentAlpha.parameters.model="gpt-4.1" \
   --set agentAlpha.parameters.maxIterations=20 \
   --set agentAlpha.parameters.verboseLogging=true \
   --namespace $NAMESPACE

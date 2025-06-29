@@ -77,7 +77,7 @@ public class WebSearchBuiltInTool : BuiltInOpenAITool
             metadata: new Dictionary<string, object?>
             {
                 ["webSearchConfig"] = webSearchConfig,
-                ["supportedModels"] = new[] { "gpt-4.1", "o4-mini", "gpt-4o" },
+                ["supportedModels"] = new[] { "gpt-4.1", "o4-mini", "gpt-4.1" },
                 ["requiresLocation"] = webSearchConfig.UserLocation != null
             })
     {

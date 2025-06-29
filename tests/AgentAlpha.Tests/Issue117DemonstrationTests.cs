@@ -60,7 +60,7 @@ namespace AgentAlpha.Tests
             var builtInDescriptions = GetBuiltInToolDescriptionsViaReflection(toolSelector, task, new List<ToolDefinition>());
             
             // Should include web search for this type of query about current information
-            Assert.Contains("- web_search: Search the web for current information and real-time data", builtInDescriptions);
+            Assert.Contains("- web_search_preview: Search the web for current information and real-time data", builtInDescriptions);
             
             // Verify we can get the tool definition
             var webSearchDef = GetBuiltInToolDefinitionViaReflection(toolSelector, "web_search_preview");

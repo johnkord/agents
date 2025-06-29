@@ -43,7 +43,7 @@ public class TaskExecutionRequestTests
     {
         // Arrange
         const string task = "Write a story";
-        const string model = "gpt-4o";
+        const string model = "gpt-4.1";
 
         // Act
         var request = TaskExecutionRequest.FromTaskAndModel(task, model);
@@ -77,7 +77,7 @@ public class TaskExecutionRequestTests
         var request = new TaskExecutionRequest
         {
             Task = "Test task",
-            Model = "gpt-4o",
+            Model = "gpt-4.1",
             Temperature = 0.7,
             MaxIterations = 5,
             SystemPrompt = "Custom prompt",
@@ -88,7 +88,7 @@ public class TaskExecutionRequestTests
 
         // Assert
         Assert.Equal("Test task", request.Task);
-        Assert.Equal("gpt-4o", request.Model);
+        Assert.Equal("gpt-4.1", request.Model);
         Assert.Equal(0.7, request.Temperature);
         Assert.Equal(5, request.MaxIterations);
         Assert.Equal("Custom prompt", request.SystemPrompt);

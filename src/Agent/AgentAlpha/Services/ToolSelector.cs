@@ -900,7 +900,7 @@ public class ToolSelector : IToolSelector
         // Add web search tool if it's not already selected and could be relevant
         if (!alreadySelectedNames.Contains("web_search_preview") && ShouldIncludeWebSearch(task) && _agentConfig.WebSearch != null)
         {
-            descriptions.Add("- web_search: Search the web for current information and real-time data");
+            descriptions.Add("- web_search_preview: Search the web for current information and real-time data");
         }
 
         // Add other built-in tools as they become available

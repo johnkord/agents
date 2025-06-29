@@ -48,7 +48,7 @@ public class AgentConfiguration
     /// <summary>
     /// OpenAI model to use
     /// </summary>
-    public string Model { get; set; } = "gpt-4o";
+    public string Model { get; set; } = "gpt-4.1";
     
     /// <summary>
     /// Maximum number of conversation iterations
@@ -181,7 +181,7 @@ public class AgentConfiguration
     /// <exception cref="InvalidOperationException">Thrown when model name is invalid</exception>
     private static string ValidateModel(string model)
     {
-        var validModels = new[] { "gpt-4o", "gpt-4", "gpt-4-turbo", "gpt-4.1-nano", "gpt-4o-mini" };
+        var validModels = new[] { "gpt-4.1", "gpt-4", "gpt-4-turbo", "gpt-4.1-nano", "gpt-4.1-mini" };
         
         if (validModels.Contains(model, StringComparer.OrdinalIgnoreCase))
         {

@@ -7,10 +7,10 @@ spec:
     spec:
       containers:
       - name: agent-alpha
-        args: ["--model", "gpt-4o", "--temperature", "0.8", "--priority", "High", "--verbose", "Analyze this AKS deployment and provide optimization recommendations"]
+        args: ["--model", "gpt-4.1", "--temperature", "0.8", "--priority", "High", "--verbose", "Analyze this AKS deployment and provide optimization recommendations"]
         env:
         - name: AGENT_MODEL
-          value: "gpt-4o"
+          value: "gpt-4.1"
         - name: AGENT_TEMPERATURE
           value: "0.8"
         - name: AGENT_MAX_ITERATIONS

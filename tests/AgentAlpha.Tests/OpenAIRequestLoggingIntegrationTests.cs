@@ -25,7 +25,7 @@ public class OpenAIRequestLoggingIntegrationTests
 
         // Act – simulate a single OpenAI request / response pair
         var id = activityLogger.StartActivity(ActivityTypes.OpenAIRequest, "Synthetic OpenAI request",
-                                              new { Model = "gpt-4o", Prompt = "hello" });
+                                              new { Model = "gpt-4.1", Prompt = "hello" });
         await Task.Delay(5);
         await activityLogger.CompleteActivityAsync(id, new { TokensUsed = 42 });
 

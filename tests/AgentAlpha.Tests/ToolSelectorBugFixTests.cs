@@ -125,7 +125,7 @@ namespace AgentAlpha.Tests
                 "which models are available through openai", new List<ToolDefinition>());
             
             // Should include web search for this type of query
-            Assert.Contains("- web_search: Search the web for current information and real-time data", builtInDescriptions);
+            Assert.Contains("- web_search_preview: Search the web for current information and real-time data", builtInDescriptions);
             
             // Test getting tool definition for web_search
             var webSearchDef = GetBuiltInToolDefinitionHelper("web_search_preview");

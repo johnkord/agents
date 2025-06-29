@@ -132,7 +132,7 @@ components:
           $ref: '#/components/schemas/Metadata'
         model:
           type: string
-          description: Model ID to use (e.g. `gpt-4o`, `o3`).
+          description: Model ID to use (e.g. `gpt-4.1`, `o3`).
         parallel_tool_calls:
           type: boolean
           nullable: true

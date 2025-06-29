@@ -214,7 +214,7 @@ agentAlpha:
   # Task and parameters
   task: "Monitor cluster health and report status"
   parameters:
-    model: "gpt-4o"           # OpenAI model
+    model: "gpt-4.1"           # OpenAI model
     temperature: 0.7          # Response creativity (0.0-1.0)
     maxIterations: 15         # Conversation iterations
     priority: "High"          # Task priority
@@ -228,7 +228,7 @@ agentAlpha:
 ```bash
 # Deploy with GPT-4 and high creativity
 helm install agents ./helm/agents \
-  --set agentAlpha.parameters.model="gpt-4o" \
+  --set agentAlpha.parameters.model="gpt-4.1" \
   --set agentAlpha.parameters.temperature=0.9
 
 # Deploy with custom system prompt
@@ -254,7 +254,7 @@ spec:
     spec:
       containers:
       - name: agent-alpha
-        args: ["--model", "gpt-4o", "--temperature", "0.8", "--priority", "High", "--verbose", "Environment-specific task"]
+        args: ["--model", "gpt-4.1", "--temperature", "0.8", "--priority", "High", "--verbose", "Environment-specific task"]
 ```
 
 ## Troubleshooting

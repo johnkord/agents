@@ -40,7 +40,7 @@ public class EndToEndOpenAILoggingTests
             await Task.Delay(10); // Simulate processing
             await activityLogger.CompleteActivityAsync(activityId, new
             {
-                Model = "gpt-4o",
+                Model = "gpt-4.1",
                 Type = type,
                 TokensUsed = Random.Shared.Next(50, 200)
             });
@@ -58,7 +58,7 @@ public class EndToEndOpenAILoggingTests
         {
             Assert.True(activity.Success);
             Assert.True(activity.DurationMs.HasValue);
-            Assert.Contains("gpt-4o", activity.Data);
+            Assert.Contains("gpt-4.1", activity.Data);
             Assert.Contains("TokensUsed", activity.Data);
         }
         

@@ -34,7 +34,7 @@ public class SessionAwareOpenAIServiceEnhancedLoggingTests
         
         var request = new ResponsesCreateRequest
         {
-            Model = "gpt-4o",
+            Model = "gpt-4.1",
             Input = new object[]
             {
                 new { role = "system", content = "You are a helpful assistant." },
@@ -63,7 +63,7 @@ public class SessionAwareOpenAIServiceEnhancedLoggingTests
         var requestData = JsonSerializer.Deserialize<JsonElement>(requestActivity.Data);
         
         // Verify basic data is logged
-        Assert.Equal("gpt-4o", requestData.GetProperty("Model").GetString());
+        Assert.Equal("gpt-4.1", requestData.GetProperty("Model").GetString());
         Assert.Equal(2, requestData.GetProperty("InputCount").GetInt32());
         Assert.Equal(1, requestData.GetProperty("ToolCount").GetInt32());
         
@@ -107,7 +107,7 @@ public class SessionAwareOpenAIServiceEnhancedLoggingTests
         
         var request = new ResponsesCreateRequest
         {
-            Model = "gpt-4o",
+            Model = "gpt-4.1",
             Input = new[] { new { role = "user", content = "Hello" } },
             Tools = new ToolDefinition[0]
         };
@@ -159,7 +159,7 @@ public class SessionAwareOpenAIServiceEnhancedLoggingTests
         
         var request = new ResponsesCreateRequest
         {
-            Model = "gpt-4o",
+            Model = "gpt-4.1",
             Input = new[] { new { role = "user", content = "Hello" } },
             Tools = new ToolDefinition[]
             {
@@ -178,7 +178,7 @@ public class SessionAwareOpenAIServiceEnhancedLoggingTests
         var requestData = JsonSerializer.Deserialize<JsonElement>(requestActivity.Data);
         
         // Verify basic data is logged
-        Assert.Equal("gpt-4o", requestData.GetProperty("Model").GetString());
+        Assert.Equal("gpt-4.1", requestData.GetProperty("Model").GetString());
         Assert.Equal(1, requestData.GetProperty("InputCount").GetInt32());
         Assert.Equal(1, requestData.GetProperty("ToolCount").GetInt32());
         

@@ -53,7 +53,7 @@ public class TaskExecutorEnhancedTests
     }
 
     [Theory]
-    [InlineData("gpt-4o")]
+    [InlineData("gpt-4.1")]
     [InlineData("gpt-4.1-nano")]
     [InlineData("gpt-4-turbo")]
     public void TaskExecutionRequest_AcceptsValidModelNames(string model)

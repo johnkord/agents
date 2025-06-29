@@ -20,7 +20,7 @@ A comprehensive request object that encapsulates all parameters needed for task 
 public class TaskExecutionRequest
 {
     public string Task { get; set; }                    // The task description
-    public string? Model { get; set; }                  // OpenAI model (e.g., "gpt-4o", "gpt-4.1-nano")
+    public string? Model { get; set; }                  // OpenAI model (e.g., "gpt-4.1", "gpt-4.1-nano")
     public double? Temperature { get; set; }            // OpenAI temperature (0.0-1.0)
     public int? MaxIterations { get; set; }             // Max conversation iterations
     public string? SystemPrompt { get; set; }           // Custom system prompt
@@ -55,7 +55,7 @@ dotnet run "Calculate 25 + 17"
 dotnet run --model "gpt-4.1-nano" "Calculate 25 + 17"
 
 # With temperature control
-dotnet run --model "gpt-4o" --temperature 0.7 "Write a creative story"
+dotnet run --model "gpt-4.1" --temperature 0.7 "Write a creative story"
 
 # With iteration limit
 dotnet run --max-iterations 5 "Analyze this complex problem"
@@ -74,7 +74,7 @@ dotnet run --system-prompt "You are a helpful assistant" "Help me organize my pr
 
 ### OpenAI Model Selection
 - **Purpose**: Allow per-task model selection instead of relying only on environment variables
-- **Examples**: "gpt-4o", "gpt-4.1-nano", "gpt-4-turbo"
+- **Examples**: "gpt-4.1", "gpt-4.1-nano", "gpt-4-turbo"
 - **Fallback**: Uses AgentConfiguration.Model if not specified
 
 ### Temperature Control
@@ -147,7 +147,7 @@ dotnet run "What time is it?"
 
 ### Creative Writing Task
 ```bash
-dotnet run --model "gpt-4o" --temperature 0.8 --system-prompt "You are a creative writer" "Write a short story about AI"
+dotnet run --model "gpt-4.1" --temperature 0.8 --system-prompt "You are a creative writer" "Write a short story about AI"
 ```
 
 ### Quick Analysis Task  

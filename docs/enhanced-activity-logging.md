@@ -13,7 +13,7 @@ The enhanced activity logging system captures detailed information about every s
 **Before (Basic Logging):**
 ```json
 {
-  "Model": "gpt-4o",
+  "Model": "gpt-4.1",
   "MessageCount": 3,
   "ToolCount": 10,
   "ToolNames": ["github_get_pull_request_diff", "github_get_pull_request_files", ...]
@@ -23,13 +23,13 @@ The enhanced activity logging system captures detailed information about every s
 **After (Enhanced Logging):**
 ```json
 {
-  "Model": "gpt-4o",
+  "Model": "gpt-4.1",
   "MessageCount": 3,
   "ToolCount": 10,
   "ToolNames": ["github_get_pull_request_diff", "github_get_pull_request_files", ...],
   "ToolChoice": "auto",
   "FullRequest": {
-    "Model": "gpt-4o",
+    "Model": "gpt-4.1",
     "Messages": [
       {"role": "system", "content": "You are a helpful assistant..."},
       {"role": "user", "content": "Please review this PR..."},
@@ -231,11 +231,11 @@ A typical enhanced activity log for a PR review task now includes:
     "ActivityType": "OpenAI_Request",
     "Description": "Sending request to OpenAI API",
     "Data": {
-      "Model": "gpt-4o",
+      "Model": "gpt-4.1",
       "MessageCount": 3,
       "ToolCount": 10,
       "FullRequest": {
-        "Model": "gpt-4o",
+        "Model": "gpt-4.1",
         "Messages": [...],
         "Tools": [...],
         "ToolChoice": "auto"
@@ -246,7 +246,7 @@ A typical enhanced activity log for a PR review task now includes:
     "ActivityType": "OpenAI_Response", 
     "Description": "Received response from OpenAI API",
     "Data": {
-      "Model": "gpt-4o",
+      "Model": "gpt-4.1",
       "OutputItemCount": 2,
       "HasToolCalls": true,
       "FullResponse": {

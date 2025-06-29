@@ -17,7 +17,7 @@ public class TaskExecutorComprehensiveTests
         var request = new TaskExecutionRequest
         {
             Task = "Comprehensive test task",
-            Model = "gpt-4o",
+            Model = "gpt-4.1",
             Temperature = 0.8,
             MaxIterations = 10,
             SystemPrompt = "You are a helpful assistant",
@@ -30,7 +30,7 @@ public class TaskExecutorComprehensiveTests
 
         // Assert
         Assert.Equal("Comprehensive test task", request.Task);
-        Assert.Equal("gpt-4o", request.Model);
+        Assert.Equal("gpt-4.1", request.Model);
         Assert.Equal(0.8, request.Temperature);
         Assert.Equal(10, request.MaxIterations);
         Assert.Equal("You are a helpful assistant", request.SystemPrompt);
@@ -97,7 +97,7 @@ public class TaskExecutorComprehensiveTests
     }
 
     [Theory]
-    [InlineData("gpt-4o")]
+    [InlineData("gpt-4.1")]
     [InlineData("gpt-4-turbo")]
     [InlineData("gpt-4.1-nano")]
     [InlineData(null)]

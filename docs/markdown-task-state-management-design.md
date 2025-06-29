@@ -35,7 +35,7 @@ public interface IMarkdownTaskStateManager
 ```
 
 #### 3. MarkdownTaskStateManager Implementation
-- **LLM Integration**: Uses OpenAI GPT-4o for intelligent markdown generation and updates
+- **LLM Integration**: Uses OpenAI gpt-4.1 for intelligent markdown generation and updates
 - **Dynamic Planning**: Can add, modify, or remove subtasks based on execution results
 - **Context Awareness**: Maintains rich context information in the markdown document
 - **Human Readable**: Task state is stored as clean, formatted markdown
@@ -123,7 +123,7 @@ services.AddScoped<IMarkdownTaskStateManager, MarkdownTaskStateManager>();
 
 ### OpenAI Integration
 - Uses the new Responses API format (`ResponsesCreateRequest`)
-- Configured with GPT-4o model for high-quality text generation
+- Configured with gpt-4.1 model for high-quality text generation
 - Includes proper error handling and fallback mechanisms
 
 ## Migration Strategy

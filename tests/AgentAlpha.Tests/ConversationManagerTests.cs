@@ -26,7 +26,7 @@ public class ConversationManagerTests
         // Use a null implementation for the dependencies we don't need for these tests
         var nullOpenAI = new NullOpenAIResponsesService();
         var nullLogger = NullLogger<ConversationManager>.Instance;
-        var config = new AgentConfiguration { Model = "gpt-4o" };
+        var config = new AgentConfiguration { Model = "gpt-4.1" };
         
         _conversationManager = new ConversationManager(nullOpenAI, nullLogger, config);
     }
