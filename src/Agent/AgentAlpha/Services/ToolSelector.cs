@@ -1074,53 +1074,107 @@ public class ToolSelector : IToolSelector
         return _agentConfig.WebSearch.ToToolDefinition();
     }
 
+    // NEW – tool definition the LLM must call when recommending extras
+    private static readonly ToolDefinition RecommendMissingToolsTool = new()
+    {
+        Type        = "function",
+        Name        = "recommend_missing_tools",
+        Description = "Return an array of additional tool definitions that would help with the task.",
+        Parameters  = new
+        {
+            type       = "object",
+            properties = new
+            {
+                tools = new
+                {
+                    type  = "array",
+                    description = "List of tool suggestions.",
+                    items = new
+                    {
+                        type       = "object",
+                        properties = new
+                        {
+                            name        = new { type = "string", description = "The desired tool name." },
+                            description = new { type = "string", description = "What input it takes, what it does, and what output it returns." }
+                        },
+                        required = new[] { "name", "description" }
+                    }
+                }
+            },
+            required = new[] { "tools" }
+        }
+    };
+
     public async Task<string[]> RecommendMissingToolsAsync(string task, IList<IUnifiedTool> availableTools)
     {
-        // Build a simple list of names so the prompt stays compact
+        // Build a compact inventory of the tools the agent already has
         var toolNames = availableTools.Select(t => t.Name).ToArray();
 
         var prompt = $"""
-            Given the task below and the list of currently available tools,
-            name any other potential tools that would be *useful* but are
-            not in the list, along with a description of why they would be useful.
-            If no additional tools are needed, respond with an empty JSON array.
+            Given the task below and the list of *currently available* tools,
+            think about whether **additional tools** (that do not yet exist) would be
+            useful.  
+            – If no extra tools are needed, call the tool {RecommendMissingToolsTool.Name}  
+              with `tools` set to an empty array.  
+            – Otherwise, call the tool with an array in which each element contains:
+              • `name`        – the tool name you wish existed  
+              • `description` – what the tool takes as input, what it does, and what it returns.
 
             TASK:
             {task}
 
             CURRENTLY AVAILABLE TOOLS:
             {string.Join(", ", toolNames)}
-
-            Respond with a JSON array like ["tool_a","tool_b"] or [].
             """;
+
+        var request = new ResponsesCreateRequest
+        {
+            Model       = _config.SelectionModel,
+            Input       = new[] { new { role = "user", content = prompt } },
+            Tools       = new[] { RecommendMissingToolsTool },
+            ToolChoice  = "required",       // force the model to call our tool
+            MaxOutputTokens = 1000
+        };
 
         try
         {
-            var request = new ResponsesCreateRequest
-            {
-                Model = _config.SelectionModel,
-                Input = new[] { new { role = "user", content = prompt } },
-                ToolChoice = "none",
-                MaxOutputTokens = 2000
-            };
-
             var response = await _openAi.CreateResponseAsync(request);
-            var assistantText = ExtractTextFromContent(
-                                    response.Output?
-                                            .OfType<OutputMessage>()
-                                            .FirstOrDefault(m => m.Role == "assistant")
-                                            ?.Content)
-                                .Trim();
 
-            var extras = JsonSerializer.Deserialize<string[]>(assistantText) ?? Array.Empty<string>();
+            // Find our function-call
+            var fnCall = response.Output?
+                             .OfType<FunctionToolCall>()
+                             .FirstOrDefault(fc => fc.Name == RecommendMissingToolsTool.Name);
 
-            // NEW – log the recommendations for later analysis
+            if (fnCall == null || !fnCall.Arguments.HasValue)
+                return Array.Empty<string>();
+
+            var root = fnCall.Arguments!.Value;   // guaranteed ValueKind == Object|String
+
+            // Handle SDKs that return the arguments as a raw string
+            if (root.ValueKind == JsonValueKind.String)
+            {
+                using var doc = JsonDocument.Parse(root.GetString() ?? "{}");
+                root = doc.RootElement.Clone();
+            }
+
+            if (!root.TryGetProperty("tools", out var toolsEl) || toolsEl.ValueKind != JsonValueKind.Array)
+                return Array.Empty<string>();
+
+            var extras = toolsEl.EnumerateArray()
+                                .Where(e => e.ValueKind == JsonValueKind.Object
+                                         && e.TryGetProperty("name", out _))
+                                .Select(e => e.GetProperty("name").GetString() ?? "")
+                                .Where(n => !string.IsNullOrWhiteSpace(n))
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .ToArray();
+
+            // Optional: log the full suggestion payload
             if (_activityLogger != null && extras.Length > 0)
             {
                 await _activityLogger.LogActivityAsync(
                     ActivityTypes.ToolSelection,
                     "LLM recommended missing tools",
-                    new { Task = task, SuggestedTools = extras });
+                    new { Task = task, SuggestedTools = extras, FullPayload = root });
             }
 
             return extras;

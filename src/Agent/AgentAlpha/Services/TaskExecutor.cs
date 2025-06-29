@@ -447,12 +447,6 @@ public class TaskExecutor : ITaskExecutor
             if (desiredExtras.Length > 0)
             {
                 Console.WriteLine($"💡 LLM suggested missing tools: {string.Join(", ", desiredExtras)}");
-
-                // NEW – emit an activity log instead of updating markdown
-                await _activityLogger.LogActivityAsync(
-                    ActivityTypes.ToolSelection,
-                    "LLM recommended missing tools",
-                    new { Task = request.Task, SuggestedTools = desiredExtras });
             }
             // ----------------------------------------------------------------
 
