@@ -42,6 +42,93 @@ public class PlanningService : IPlanningService
             activityLogger != null ? "set" : "cleared");
     }
 
+    /// <summary>
+    /// Initialize task planning directly into markdown format
+    /// </summary>
+    public async Task<string> InitializeTaskPlanningAsync(string sessionId, string task, IList<IUnifiedTool> availableTools, string? context = null)
+    {
+        _logger.LogInformation("Initializing task planning in markdown format for session {SessionId}: {Task}", sessionId, task);
+
+        try
+        {
+            // Create a basic current state if none provided
+            var basicState = new CurrentState
+            {
+                SessionContext = context,
+                CapturedAt = DateTime.UtcNow
+            };
+
+            return await InitializeTaskPlanningWithStateAsync(sessionId, task, availableTools, basicState, context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize task planning for session {SessionId}", sessionId);
+            return CreateFallbackMarkdownPlan(task, availableTools);
+        }
+    }
+
+    /// <summary>
+    /// Initialize task planning with current state analysis directly into markdown format
+    /// </summary>
+    public async Task<string> InitializeTaskPlanningWithStateAsync(string sessionId, string task, IList<IUnifiedTool> availableTools, CurrentState currentState, string? context = null)
+    {
+        _logger.LogInformation("Initializing state-aware task planning in markdown format for session {SessionId}: {Task}", sessionId, task);
+
+        try
+        {
+            // Create markdown-based planning prompt
+            var markdownPlanPrompt = CreateMarkdownPlanningPrompt(task, availableTools, currentState, context);
+            
+            var request = new RequestsCreateRequest
+            {
+                Model = _config.ModelId,
+                Messages = new[]
+                {
+                    new Message 
+                    { 
+                        Role = MessageRole.System, 
+                        Content = "You are an expert task planning assistant. Create comprehensive markdown-based task plans with clear checklist items for execution tracking." 
+                    },
+                    new Message 
+                    { 
+                        Role = MessageRole.User, 
+                        Content = markdownPlanPrompt 
+                    }
+                },
+                MaxTokens = 2000
+            };
+
+            // Log the planning activity
+            if (_activityLogger != null)
+            {
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.TaskPlanning,
+                    $"Creating markdown task plan for: {task}",
+                    new { SessionId = sessionId, Task = task, AvailableToolsCount = availableTools.Count }
+                );
+            }
+
+            var response = await _openAi.CreateRequestsAsync(request);
+
+            if (response?.Choices?.FirstOrDefault()?.Message?.Content != null)
+            {
+                var markdownPlan = response.Choices.First().Message.Content;
+                _logger.LogInformation("Successfully created markdown task plan for session {SessionId}", sessionId);
+                return markdownPlan;
+            }
+            else
+            {
+                _logger.LogWarning("Failed to get valid markdown plan response for session {SessionId}", sessionId);
+                return CreateFallbackMarkdownPlan(task, availableTools);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize state-aware task planning for session {SessionId}", sessionId);
+            return CreateFallbackMarkdownPlan(task, availableTools);
+        }
+    }
+
     public async Task<TaskPlan> CreatePlanAsync(string task, IList<IUnifiedTool> availableTools, string? context = null)
     {
         _logger.LogInformation("Creating execution plan for task: {Task}", task);
@@ -272,74 +359,6 @@ Create a logical, state-aware execution plan using the create_execution_plan too
             _logger.LogError(ex, "Failed to refine plan with state analysis, returning original");
             return existingPlan;
         }
-    }
-
-    public Task<PlanValidationResult> ValidatePlanAsync(TaskPlan plan, IList<IUnifiedTool> availableTools)
-    {
-        _logger.LogDebug("Validating plan for task: {Task}", plan.Task);
-
-        var result = new PlanValidationResult();
-        var availableToolNames = availableTools.Select(t => t.Name).ToHashSet();
-
-        // Check for missing tools
-        foreach (var requiredTool in plan.RequiredTools)
-        {
-            if (!availableToolNames.Contains(requiredTool))
-            {
-                result.MissingTools.Add(requiredTool);
-                result.Issues.Add($"Required tool '{requiredTool}' is not available");
-            }
-        }
-
-        // Check step tool requirements
-        foreach (var step in plan.Steps)
-        {
-            foreach (var tool in step.PotentialTools)
-            {
-                if (!availableToolNames.Contains(tool))
-                {
-                    result.Issues.Add($"Step {step.StepNumber} requires unavailable tool '{tool}'");
-                }
-            }
-        }
-
-        // Validate plan structure
-        if (plan.Steps.Count == 0)
-        {
-            result.Issues.Add("Plan has no execution steps");
-        }
-
-        if (string.IsNullOrEmpty(plan.Strategy))
-        {
-            result.Issues.Add("Plan lacks a clear strategy");
-        }
-
-        // Check for step sequence issues
-        var stepNumbers = plan.Steps.Select(s => s.StepNumber).ToList();
-        if (stepNumbers.Count != stepNumbers.Distinct().Count())
-        {
-            result.Issues.Add("Plan has duplicate step numbers");
-        }
-
-        // Calculate overall validity
-        result.IsValid = result.Issues.Count == 0;
-        result.Confidence = result.IsValid ? 0.9 : Math.Max(0.1, 0.9 - (result.Issues.Count * 0.2));
-
-        // Generate suggestions
-        if (result.MissingTools.Count > 0)
-        {
-            result.Suggestions.Add($"Consider alternative approaches that don't require: {string.Join(", ", result.MissingTools)}");
-        }
-
-        if (plan.Steps.Count > 10)
-        {
-            result.Suggestions.Add("Consider simplifying the plan by combining related steps");
-        }
-
-        _logger.LogDebug("Plan validation completed. Valid: {IsValid}, Issues: {IssueCount}", 
-            result.IsValid, result.Issues.Count);
-
-        return Task.FromResult(result);
     }
 
     private TaskPlan CreateFallbackPlan(string task, IList<IUnifiedTool> availableTools)
@@ -909,5 +928,96 @@ Create a logical, state-aware execution plan using the create_execution_plan too
                 }
             });
         }
+    }
+
+    /// <summary>
+    /// Creates a markdown planning prompt for LLM task planning
+    /// </summary>
+    private string CreateMarkdownPlanningPrompt(string task, IList<IUnifiedTool> availableTools, CurrentState currentState, string? context)
+    {
+        var prompt = new List<string>();
+        
+        prompt.Add("Create a comprehensive markdown-based execution plan for the following task:");
+        prompt.Add($"\n**TASK:** {task}\n");
+        
+        if (!string.IsNullOrEmpty(context))
+        {
+            prompt.Add($"**ADDITIONAL CONTEXT:** {context}\n");
+        }
+        
+        // Add state analysis
+        var stateAnalysis = AnalyzeCurrentState(currentState, availableTools);
+        if (!string.IsNullOrEmpty(stateAnalysis))
+        {
+            prompt.Add("**CURRENT STATE ANALYSIS:**");
+            prompt.Add(stateAnalysis);
+            prompt.Add("");
+        }
+        
+        // Add available tools
+        prompt.Add("**AVAILABLE TOOLS:**");
+        foreach (var tool in availableTools)
+        {
+            prompt.Add($"- {tool.Name}: {tool.Description}");
+        }
+        prompt.Add("");
+        
+        prompt.Add("**INSTRUCTIONS:**");
+        prompt.Add("Create a markdown document with the following structure:");
+        prompt.Add("1. Task Overview - Brief summary of what needs to be accomplished");
+        prompt.Add("2. Strategy - High-level approach to complete the task");
+        prompt.Add("3. Execution Steps - Numbered checklist with specific, actionable items");
+        prompt.Add("4. Required Tools - List of tools needed for execution");
+        prompt.Add("5. Success Criteria - How to determine if the task is complete");
+        prompt.Add("");
+        prompt.Add("Format the execution steps as a numbered checklist using markdown checkboxes:");
+        prompt.Add("- [ ] Step description");
+        prompt.Add("");
+        prompt.Add("Each step should be:");
+        prompt.Add("- Specific and actionable");
+        prompt.Add("- Include the tool to use if applicable");
+        prompt.Add("- Have clear success criteria");
+        prompt.Add("- Be granular enough to track progress");
+        
+        return string.Join("\n", prompt);
+    }
+
+    /// <summary>
+    /// Creates a fallback markdown plan when LLM planning fails
+    /// </summary>
+    private string CreateFallbackMarkdownPlan(string task, IList<IUnifiedTool> availableTools)
+    {
+        var plan = new List<string>();
+        
+        plan.Add("# Task Execution Plan");
+        plan.Add("");
+        plan.Add("## Task Overview");
+        plan.Add($"{task}");
+        plan.Add("");
+        plan.Add("## Strategy");
+        plan.Add("Execute the task using available tools in a systematic approach.");
+        plan.Add("");
+        plan.Add("## Execution Steps");
+        plan.Add("- [ ] Analyze the task requirements");
+        plan.Add("- [ ] Identify necessary tools and resources");
+        plan.Add("- [ ] Execute the task using appropriate tools");
+        plan.Add("- [ ] Verify the results");
+        plan.Add("- [ ] Complete the task");
+        plan.Add("");
+        plan.Add("## Required Tools");
+        
+        foreach (var tool in availableTools.Take(5)) // Limit to first 5 tools for fallback
+        {
+            plan.Add($"- {tool.Name}");
+        }
+        
+        plan.Add("");
+        plan.Add("## Success Criteria");
+        plan.Add("- Task completed successfully");
+        plan.Add("- All requirements met");
+        plan.Add("- Results verified");
+        
+        _logger.LogInformation("Created fallback markdown plan for task: {Task}", task);
+        return string.Join("\n", plan);
     }
 }
