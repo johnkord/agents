@@ -1,3 +1,4 @@
+using MCPServer.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text;
@@ -25,8 +26,7 @@ public class AzureDevOpsTools
         string repository,
         int pullRequestId)
     {
-
-
+        ToolLogger.LogStart("azdo_get_pull_request");
         try
         {
             var token = ApiCredentialsManager.Instance.GetAzureDevOpsToken();
@@ -74,7 +74,12 @@ public class AzureDevOpsTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("azdo_get_pull_request", ex);
             return $"Error getting pull request: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("azdo_get_pull_request");
         }
     }
 
@@ -86,8 +91,7 @@ public class AzureDevOpsTools
         int pullRequestId,
         string token)
     {
-
-
+        ToolLogger.LogStart("azdo_get_pull_request_commits");
         try
         {
             var url = $"https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repository}/pullrequests/{pullRequestId}/commits?api-version=7.0";
@@ -128,7 +132,12 @@ public class AzureDevOpsTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("azdo_get_pull_request_commits", ex);
             return $"Error getting pull request commits: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("azdo_get_pull_request_commits");
         }
     }
 
@@ -140,8 +149,7 @@ public class AzureDevOpsTools
         int pullRequestId,
         string token)
     {
-
-
+        ToolLogger.LogStart("azdo_get_pull_request_changes");
         try
         {
             // First get the last merge source commit
@@ -198,7 +206,12 @@ public class AzureDevOpsTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("azdo_get_pull_request_changes", ex);
             return $"Error getting pull request changes: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("azdo_get_pull_request_changes");
         }
     }
 
@@ -210,8 +223,7 @@ public class AzureDevOpsTools
         int pullRequestId,
         string token)
     {
-
-
+        ToolLogger.LogStart("azdo_get_pull_request_threads");
         try
         {
             var url = $"https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repository}/pullrequests/{pullRequestId}/threads?api-version=7.0";
@@ -276,7 +288,12 @@ public class AzureDevOpsTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("azdo_get_pull_request_threads", ex);
             return $"Error getting pull request threads: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("azdo_get_pull_request_threads");
         }
     }
 
@@ -289,8 +306,7 @@ public class AzureDevOpsTools
         int top = 10,
         string token = "")
     {
-
-
+        ToolLogger.LogStart("azdo_list_pull_requests");
         try
         {
             var url = $"https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repository}/pullrequests?searchCriteria.status={status}&$top={top}&api-version=7.0";
@@ -334,7 +350,12 @@ public class AzureDevOpsTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("azdo_list_pull_requests", ex);
             return $"Error listing pull requests: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("azdo_list_pull_requests");
         }
     }
 
@@ -349,8 +370,7 @@ public class AzureDevOpsTools
         string? filePath = null,
         int? line = null)
     {
-
-
+        ToolLogger.LogStart("azdo_post_pull_request_comment");
         try
         {
             var url = $"https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repository}/pullrequests/{pullRequestId}/threads?api-version=7.0";
@@ -412,7 +432,12 @@ public class AzureDevOpsTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("azdo_post_pull_request_comment", ex);
             return $"Error posting pull request comment: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("azdo_post_pull_request_comment");
         }
     }
 }

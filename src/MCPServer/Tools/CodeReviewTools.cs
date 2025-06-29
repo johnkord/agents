@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using MCPServer.ToolApproval;
+using MCPServer.Logging;                       // +++
 
 namespace MCPServer.Tools;
 
@@ -18,6 +19,7 @@ public class CodeReviewTools
         int pullRequestId,
         string? vectorStoreId = null)
     {
+        ToolLogger.LogStart("analyze_pull_request_for_review");
         try
         {
             var result = new StringBuilder();
@@ -120,7 +122,12 @@ Provide specific, actionable feedback focusing on:
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("analyze_pull_request_for_review", ex);
             return $"Error analyzing pull request: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("analyze_pull_request_for_review");
         }
     }
 
@@ -185,6 +192,7 @@ Provide specific, actionable feedback focusing on:
     [McpServerTool(Name = "extract_code_patterns"), Description("Extract and analyze code patterns from pull request changes for review insights.")]
     public static string ExtractCodePatterns(string prFilesContent)
     {
+        ToolLogger.LogStart("extract_code_patterns");
         try
         {
             var result = new StringBuilder();
@@ -260,6 +268,10 @@ Provide specific, actionable feedback focusing on:
         catch (Exception ex)
         {
             return $"Error extracting code patterns: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("extract_code_patterns");
         }
     }
 

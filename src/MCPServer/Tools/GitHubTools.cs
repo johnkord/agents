@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using MCPServer.ToolApproval;
+using MCPServer.Logging;                       // +++
 
 namespace MCPServer.Tools;
 
@@ -26,6 +27,7 @@ public class GitHubTools
         string repo,
         int pullNumber)
     {
+        ToolLogger.LogStart("github_get_pull_request");
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -72,7 +74,12 @@ public class GitHubTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("github_get_pull_request", ex);
             return $"Error getting pull request: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("github_get_pull_request");
         }
     }
 
@@ -82,6 +89,7 @@ public class GitHubTools
         string repo,
         int pullNumber)
     {
+        ToolLogger.LogStart("github_get_pull_request_files");
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -134,7 +142,12 @@ public class GitHubTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("github_get_pull_request_files", ex);
             return $"Error getting pull request files: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("github_get_pull_request_files");
         }
     }
 
@@ -144,6 +157,7 @@ public class GitHubTools
         string repo,
         int pullNumber)
     {
+        ToolLogger.LogStart("github_get_pull_request_diff");
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -168,7 +182,12 @@ public class GitHubTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("github_get_pull_request_diff", ex);
             return $"Error getting pull request diff: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("github_get_pull_request_diff");
         }
     }
 
@@ -178,6 +197,7 @@ public class GitHubTools
         string repo,
         int pullNumber)
     {
+        ToolLogger.LogStart("github_get_pull_request_comments");
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -228,7 +248,12 @@ public class GitHubTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("github_get_pull_request_comments", ex);
             return $"Error getting pull request comments: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("github_get_pull_request_comments");
         }
     }
 
@@ -240,6 +265,7 @@ public class GitHubTools
         int page = 1,
         int perPage = 10)
     {
+        ToolLogger.LogStart("github_list_pull_requests");
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -289,7 +315,12 @@ public class GitHubTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("github_list_pull_requests", ex);
             return $"Error listing pull requests: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("github_list_pull_requests");
         }
     }
 
@@ -304,6 +335,7 @@ public class GitHubTools
         int? line = null,
         string? side = "RIGHT")
     {
+        ToolLogger.LogStart("github_post_pull_request_comment");
         try
         {
             var token = ApiCredentialsManager.Instance.GetGitHubToken();
@@ -350,7 +382,12 @@ public class GitHubTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("github_post_pull_request_comment", ex);
             return $"Error posting pull request comment: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("github_post_pull_request_comment");
         }
     }
 }

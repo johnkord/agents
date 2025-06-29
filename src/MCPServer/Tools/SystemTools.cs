@@ -2,6 +2,7 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using MCPServer.ToolApproval;
+using MCPServer.Logging;                       // +++
 
 namespace MCPServer.Tools;
 
@@ -12,6 +13,7 @@ public class SystemTools
     [RequiresApproval(false)]
     public static string GetCurrentTime()
     {
+        ToolLogger.LogStart("get_current_time");
         try
         {
             var now = DateTime.Now;
@@ -23,7 +25,12 @@ public class SystemTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("get_current_time", ex);
             return $"Error getting current time: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("get_current_time");
         }
     }
 
@@ -31,6 +38,7 @@ public class SystemTools
     [RequiresApproval(false)]
     public static string GetSystemInfo()
     {
+        ToolLogger.LogStart("get_system_info");
         try
         {
             var info = new
@@ -55,7 +63,12 @@ public class SystemTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("get_system_info", ex);
             return $"Error getting system info: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("get_system_info");
         }
     }
 
@@ -63,6 +76,7 @@ public class SystemTools
     [RequiresApproval(false)]
     public static string GetEnvironmentVariable(string variableName)
     {
+        ToolLogger.LogStart("get_environment_variable");
         try
         {
             var value = Environment.GetEnvironmentVariable(variableName);
@@ -74,7 +88,12 @@ public class SystemTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("get_environment_variable", ex);
             return $"Error getting environment variable '{variableName}': {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("get_environment_variable");
         }
     }
 
@@ -82,6 +101,7 @@ public class SystemTools
     [RequiresApproval(false)]
     public static string ListEnvironmentVariables(string pattern = "")
     {
+        ToolLogger.LogStart("list_environment_variables");
         try
         {
             var variables = Environment.GetEnvironmentVariables();
@@ -116,7 +136,12 @@ public class SystemTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("list_environment_variables", ex);
             return $"Error listing environment variables: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("list_environment_variables");
         }
     }
 
@@ -124,6 +149,7 @@ public class SystemTools
     [RequiresApproval(false)]
     public static string GetCurrentDirectory()
     {
+        ToolLogger.LogStart("get_current_directory");
         try
         {
             var currentDir = Environment.CurrentDirectory;
@@ -131,7 +157,12 @@ public class SystemTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("get_current_directory", ex);
             return $"Error getting current directory: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("get_current_directory");
         }
     }
 
@@ -139,6 +170,7 @@ public class SystemTools
     [RequiresApproval(false)]
     public static string GenerateUuid()
     {
+        ToolLogger.LogStart("generate_uuid");
         try
         {
             var uuid = Guid.NewGuid();
@@ -146,7 +178,12 @@ public class SystemTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("generate_uuid", ex);
             return $"Error generating UUID: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("generate_uuid");
         }
     }
 }

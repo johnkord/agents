@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using MCPServer.ToolApproval;
+using MCPServer.Logging;                       // +++
 
 namespace MCPServer.Tools;
 
@@ -15,6 +16,7 @@ public class ShellTools
         string script,
         int timeoutSeconds = 30)
     {
+        ToolLogger.LogStart("run_command");
         try
         {
             // Always execute through shell to support full bash functionality including pipes, redirections, etc.
@@ -65,7 +67,12 @@ public class ShellTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("run_command", ex);
             return $"Error executing command: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("run_command");
         }
     }
 }

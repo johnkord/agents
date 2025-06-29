@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Net.Http.Headers;
 using System.Text;
 using MCPServer.ToolApproval;
+using MCPServer.Logging;                       // +++
 
 namespace MCPServer.Tools;
 
@@ -22,6 +23,7 @@ public static class HttpTools
         string body            = "",
         string headersCsv       = "" /* key:value,key:value */ )
     {
+        ToolLogger.LogStart("http_request");
         try
         {
             using var requestMessage = new HttpRequestMessage(new HttpMethod(method.ToUpperInvariant()), url);
@@ -65,7 +67,12 @@ public static class HttpTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("http_request", ex);
             return $"Error performing HTTP request: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("http_request");
         }
     }
 }

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using ModelContextProtocol.Server;
 using ModelContextProtocol.Protocol;
 using System.Text.Json;
+using MCPServer.Logging;                       // +++
 
 [McpServerToolType]
 public class TaskCompletionTool
@@ -14,25 +15,38 @@ public class TaskCompletionTool
         string? deliverables = null,
         string? keyActions = null)
     {
-        var completionData = new
+        ToolLogger.LogStart("complete_task");
+        try
         {
-            Summary = summary ?? "Task completed",
-            Reasoning = reasoning ?? "Task completion criteria have been met",
-            Evidence = evidence ?? "Based on execution results",
-            Deliverables = deliverables,
-            KeyActions = keyActions,
-            CompletedAt = DateTime.UtcNow,
-            Status = "COMPLETED"
-        };
+            var completionData = new
+            {
+                Summary = summary ?? "Task completed",
+                Reasoning = reasoning ?? "Task completion criteria have been met",
+                Evidence = evidence ?? "Based on execution results",
+                Deliverables = deliverables,
+                KeyActions = keyActions,
+                CompletedAt = DateTime.UtcNow,
+                Status = "COMPLETED"
+            };
 
-        var jsonReport = JsonSerializer.Serialize(completionData, new JsonSerializerOptions 
-        { 
-            WriteIndented = true 
-        });
+            var jsonReport = JsonSerializer.Serialize(completionData, new JsonSerializerOptions 
+            { 
+                WriteIndented = true 
+            });
 
-        // Return both human-readable and structured data
-        var result = $"TASK COMPLETED: {summary ?? "Successfully completed"}\n\nCOMPLETION REPORT:\n{jsonReport}";
-        
-        return result;
+            // Return both human-readable and structured data
+            var result = $"TASK COMPLETED: {summary ?? "Successfully completed"}\n\nCOMPLETION REPORT:\n{jsonReport}";
+            
+            return result;                      // unchanged
+        }
+        catch (Exception ex)
+        {
+            ToolLogger.LogError("complete_task", ex);
+            throw;
+        }
+        finally
+        {
+            ToolLogger.LogEnd("complete_task");
+        }
     }
 }

@@ -2,6 +2,7 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text.Json;
 using MCPServer.ToolApproval;
+using MCPServer.Logging;                       // +++
 
 namespace MCPServer.Tools;
 
@@ -12,6 +13,7 @@ public class FileTools
     [RequiresApproval(false)]
     public static string ReadFile(string filePath)
     {
+        ToolLogger.LogStart("read_file");
         try
         {
             if (!File.Exists(filePath))
@@ -22,7 +24,12 @@ public class FileTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("read_file", ex);
             return $"Error reading file '{filePath}': {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("read_file");
         }
     }
 
@@ -30,6 +37,7 @@ public class FileTools
     [RequiresApproval] // writes data
     public static string WriteFile(string filePath, string content)
     {
+        ToolLogger.LogStart("write_file");
         try
         {
             // Ensure the directory exists
@@ -44,7 +52,12 @@ public class FileTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("write_file", ex);
             return $"Error writing to file '{filePath}': {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("write_file");
         }
     }
 
@@ -52,6 +65,7 @@ public class FileTools
     [RequiresApproval(false)]
     public static string ListDirectory(string directoryPath)
     {
+        ToolLogger.LogStart("list_directory");
         try
         {
             if (!Directory.Exists(directoryPath))
@@ -75,7 +89,12 @@ public class FileTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("list_directory", ex);
             return $"Error listing directory '{directoryPath}': {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("list_directory");
         }
     }
 
@@ -83,6 +102,7 @@ public class FileTools
     [RequiresApproval(false)]
     public static string FileExists(string filePath)
     {
+        ToolLogger.LogStart("file_exists");
         try
         {
             bool exists = File.Exists(filePath);
@@ -90,7 +110,12 @@ public class FileTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("file_exists", ex);
             return $"Error checking file existence '{filePath}': {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("file_exists");
         }
     }
 
@@ -98,6 +123,7 @@ public class FileTools
     [RequiresApproval] // destructive
     public static string DeleteFile(string filePath)
     {
+        ToolLogger.LogStart("delete_file");
         try
         {
             if (!File.Exists(filePath))
@@ -108,7 +134,12 @@ public class FileTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("delete_file", ex);
             return $"Error deleting file '{filePath}': {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("delete_file");
         }
     }
 
@@ -116,6 +147,7 @@ public class FileTools
     [RequiresApproval] // creates data
     public static string CreateDirectory(string directoryPath)
     {
+        ToolLogger.LogStart("create_directory");
         try
         {
             if (Directory.Exists(directoryPath))
@@ -126,7 +158,12 @@ public class FileTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("create_directory", ex);
             return $"Error creating directory '{directoryPath}': {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("create_directory");
         }
     }
 
@@ -134,6 +171,7 @@ public class FileTools
     [RequiresApproval(false)]
     public static string GetFileInfo(string filePath)
     {
+        ToolLogger.LogStart("get_file_info");
         try
         {
             if (!File.Exists(filePath))
@@ -161,7 +199,12 @@ public class FileTools
         }
         catch (Exception ex)
         {
+            ToolLogger.LogError("get_file_info", ex);
             return $"Error getting file info for '{filePath}': {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("get_file_info");
         }
     }
 }
