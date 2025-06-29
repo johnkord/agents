@@ -78,7 +78,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 Model = "gpt-4.1",
                 Input = prompt,
                 Instructions = "You are a task planning assistant. Create clear, actionable markdown documents for task execution.",
-                MaxOutputTokens = 1000
+                MaxOutputTokens = 2000
             };
             
             var response = await _openAiService.CreateResponseAsync(request);
@@ -405,7 +405,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 Model = "gpt-4.1",
                 Input = prompt,
                 Instructions = "You are a task planning assistant. Update markdown documents to accurately reflect completed subtasks.",
-                MaxOutputTokens = 1500
+                MaxOutputTokens = 2000
             };
             
             var response = await _openAiService.CreateResponseAsync(request);
@@ -461,7 +461,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 Model = "gpt-4.1",
                 Input = prompt,
                 Instructions = "You are a task planning assistant. Add relevant subtasks to markdown documents based on evolving requirements.",
-                MaxOutputTokens = 1500
+                MaxOutputTokens = 2000
             };
             
             var response = await _openAiService.CreateResponseAsync(request);

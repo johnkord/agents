@@ -549,7 +549,7 @@ public class ToolSelector : IToolSelector
                 Model = _config.SelectionModel,
                 Input = new[] { new { role = "user", content = prompt } },
                 ToolChoice = "none",
-                MaxOutputTokens = 10 // Very short response needed
+                MaxOutputTokens = 2000 // Very short response needed
             };
 
             var response = await _openAi.CreateResponseAsync(request);
@@ -698,7 +698,7 @@ public class ToolSelector : IToolSelector
                 Model = _config.SelectionModel,
                 Input = new[] { new { role = "user", content = prompt } },
                 ToolChoice = "none",
-                MaxOutputTokens = 100
+                MaxOutputTokens = 2000
             };
 
             var response = await _openAi.CreateResponseAsync(request);
