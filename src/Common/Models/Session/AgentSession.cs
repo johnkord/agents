@@ -47,11 +47,10 @@ public class AgentSession
     /// </summary>
     public SessionStatus Status { get; set; } = SessionStatus.Active;
     
-
-    
     /// <summary>
-    /// Serialized activity log for session audit trail
+    /// Activity log for the session (JSON serialized list of SessionActivity)
     /// </summary>
+    [Obsolete("Use ISessionManager.GetSessionActivitiesAsync() instead")]
     public string ActivityLog { get; set; } = string.Empty;
     
     /// <summary>
@@ -110,50 +109,35 @@ public class AgentSession
         }
     }
     
-
-    
     /// <summary>
-    /// Get the activity log for this session
+    /// Add a new activity to the session log
     /// </summary>
-    public List<SessionActivity> GetActivityLog()
-    {
-        if (string.IsNullOrEmpty(ActivityLog))
-            return new List<SessionActivity>();
-            
-        try
-        {
-            return JsonSerializer.Deserialize<List<SessionActivity>>(ActivityLog) ?? new List<SessionActivity>();
-        }
-        catch
-        {
-            return new List<SessionActivity>();
-        }
-    }
-    
-    /// <summary>
-    /// Add an activity to the session log
-    /// </summary>
+    [Obsolete("Use ISessionManager.AddSessionActivityAsync() instead")]
     public void AddActivity(SessionActivity activity)
     {
-        var activities = GetActivityLog();
-        activities.Add(activity);
-        SetActivityLog(activities);
+        // This method is deprecated - activities are now stored in a separate table
+        // Left empty to avoid breaking existing code during migration
     }
     
     /// <summary>
-    /// Set the complete activity log for this session
+    /// Get all activities from the session log
     /// </summary>
+    [Obsolete("Use ISessionManager.GetSessionActivitiesAsync() instead")]
+    public List<SessionActivity> GetActivityLog()
+    {
+        // This method is deprecated - activities are now stored in a separate table
+        // Return empty list to avoid breaking existing code during migration
+        return new List<SessionActivity>();
+    }
+    
+    /// <summary>
+    /// Set the entire activity log (replaces existing)
+    /// </summary>
+    [Obsolete("Use ISessionManager.AddSessionActivityAsync() instead")]
     public void SetActivityLog(List<SessionActivity> activities)
     {
-        try
-        {
-            ActivityLog = JsonSerializer.Serialize(activities);
-            LastUpdatedAt = DateTime.UtcNow;
-        }
-        catch
-        {
-            ActivityLog = string.Empty;
-        }
+        // This method is deprecated - activities are now stored in a separate table
+        // Left empty to avoid breaking existing code during migration
     }
 }
 

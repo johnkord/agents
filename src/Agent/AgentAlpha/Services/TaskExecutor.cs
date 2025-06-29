@@ -750,11 +750,20 @@ public class TaskExecutor : ITaskExecutor
 
         try
         {
+            // Always fetch the latest session state before updating
             var session = await _sessionManager.GetSessionAsync(request.SessionId);
-            if (session == null) return;
+            if (session == null) 
+            {
+                _logger.LogWarning("Session {SessionId} not found when trying to save", request.SessionId);
+                return;
+            }
             
+            // Update the session with current conversation state
             session.SetConversationMessages(_conversationManager.GetCurrentMessages());
             session.Status = SessionStatus.Active;
+            session.LastUpdatedAt = DateTime.UtcNow;
+            
+            // Save the updated session
             await _sessionManager.SaveSessionAsync(session);
             _logger.LogInformation("Saved session state for {SessionId}", request.SessionId);
         }

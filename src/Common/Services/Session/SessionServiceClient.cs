@@ -26,6 +26,31 @@ public class SessionServiceClient : ISessionServiceClient
         _httpClient.BaseAddress = new Uri(_baseUrl);
     }
 
+    // ---------- helper to map JsonElement → AgentSession -----------------
+    private static AgentSession ParseAgentSession(JsonElement sessionData)
+    {
+        string GetOptionalString(string name) =>
+            sessionData.TryGetProperty(name, out var p) && p.ValueKind != JsonValueKind.Null
+                ? p.GetString() ?? string.Empty
+                : string.Empty;
+
+        var statusStr = GetOptionalString("status");
+
+        return new AgentSession
+        {
+            SessionId             = GetOptionalString("sessionId"),
+            Name                  = GetOptionalString("name"),
+            CreatedAt             = sessionData.GetProperty("createdAt").GetDateTime(),
+            LastUpdatedAt         = sessionData.GetProperty("lastUpdatedAt").GetDateTime(),
+            Status                = Enum.Parse<SessionStatus>(string.IsNullOrWhiteSpace(statusStr) ? "Active" : statusStr),
+            ConversationState     = GetOptionalString("conversationState"),
+            ConfigurationSnapshot = GetOptionalString("configurationSnapshot"),
+            Metadata              = GetOptionalString("metadata"),
+            TaskStateMarkdown     = GetOptionalString("taskStateMarkdown")
+        };
+    }
+    // ---------------------------------------------------------------------
+
     public async Task<AgentSession> CreateSessionAsync(string name = "")
     {
         try
@@ -39,15 +64,7 @@ public class SessionServiceClient : ISessionServiceClient
             
             var responseJson = await response.Content.ReadAsStringAsync();
             var sessionData = JsonSerializer.Deserialize<JsonElement>(responseJson);
-            
-            return new AgentSession
-            {
-                SessionId = sessionData.GetProperty("sessionId").GetString() ?? string.Empty,
-                Name = sessionData.GetProperty("name").GetString() ?? string.Empty,
-                CreatedAt = sessionData.GetProperty("createdAt").GetDateTime(),
-                LastUpdatedAt = sessionData.GetProperty("lastUpdatedAt").GetDateTime(),
-                Status = Enum.Parse<SessionStatus>(sessionData.GetProperty("status").GetString() ?? "Active")
-            };
+            return ParseAgentSession(sessionData);
         }
         catch (Exception ex)
         {
@@ -68,19 +85,7 @@ public class SessionServiceClient : ISessionServiceClient
             
             var responseJson = await response.Content.ReadAsStringAsync();
             var sessionData = JsonSerializer.Deserialize<JsonElement>(responseJson);
-            
-            return new AgentSession
-            {
-                SessionId = sessionData.GetProperty("sessionId").GetString() ?? string.Empty,
-                Name = sessionData.GetProperty("name").GetString() ?? string.Empty,
-                CreatedAt = sessionData.GetProperty("createdAt").GetDateTime(),
-                LastUpdatedAt = sessionData.GetProperty("lastUpdatedAt").GetDateTime(),
-                Status = Enum.Parse<SessionStatus>(sessionData.GetProperty("status").GetString() ?? "Active"),
-                ConversationState = sessionData.GetProperty("conversationState").GetString() ?? string.Empty,
-                ConfigurationSnapshot = sessionData.GetProperty("configurationSnapshot").GetString() ?? string.Empty,
-                Metadata = sessionData.GetProperty("metadata").GetString() ?? string.Empty,
-                ActivityLog = JsonSerializer.Serialize(sessionData.GetProperty("activities"))
-            };
+            return ParseAgentSession(sessionData);
         }
         catch (Exception ex)
         {
@@ -101,18 +106,7 @@ public class SessionServiceClient : ISessionServiceClient
             
             var responseJson = await response.Content.ReadAsStringAsync();
             var sessionData = JsonSerializer.Deserialize<JsonElement>(responseJson);
-            
-            return new AgentSession
-            {
-                SessionId = sessionData.GetProperty("sessionId").GetString() ?? string.Empty,
-                Name = sessionData.GetProperty("name").GetString() ?? string.Empty,
-                CreatedAt = sessionData.GetProperty("createdAt").GetDateTime(),
-                LastUpdatedAt = sessionData.GetProperty("lastUpdatedAt").GetDateTime(),
-                Status = Enum.Parse<SessionStatus>(sessionData.GetProperty("status").GetString() ?? "Active"),
-                ConversationState = sessionData.GetProperty("conversationState").GetString() ?? string.Empty,
-                ConfigurationSnapshot = sessionData.GetProperty("configurationSnapshot").GetString() ?? string.Empty,
-                Metadata = sessionData.GetProperty("metadata").GetString() ?? string.Empty
-            };
+            return ParseAgentSession(sessionData);
         }
         catch (Exception ex)
         {
@@ -132,7 +126,7 @@ public class SessionServiceClient : ISessionServiceClient
                 configurationSnapshot = session.ConfigurationSnapshot,
                 metadata = session.Metadata,
                 status = session.Status,
-                activities = session.GetActivityLog()
+                taskStateMarkdown = session.TaskStateMarkdown          // NEW
             };
             
             var json = JsonSerializer.Serialize(request);
@@ -157,23 +151,12 @@ public class SessionServiceClient : ISessionServiceClient
             
             var responseJson = await response.Content.ReadAsStringAsync();
             var sessionsData = JsonSerializer.Deserialize<JsonElement[]>(responseJson);
-            
             var sessions = new List<AgentSession>();
             if (sessionsData != null)
             {
-                foreach (var sessionData in sessionsData)
-                {
-                    sessions.Add(new AgentSession
-                    {
-                        SessionId = sessionData.GetProperty("sessionId").GetString() ?? string.Empty,
-                        Name = sessionData.GetProperty("name").GetString() ?? string.Empty,
-                        CreatedAt = sessionData.GetProperty("createdAt").GetDateTime(),
-                        LastUpdatedAt = sessionData.GetProperty("lastUpdatedAt").GetDateTime(),
-                        Status = Enum.Parse<SessionStatus>(sessionData.GetProperty("status").GetString() ?? "Active")
-                    });
-                }
+                foreach (var s in sessionsData)
+                    sessions.Add(ParseAgentSession(s));            // use helper
             }
-            
             return sessions;
         }
         catch (Exception ex)
@@ -215,6 +198,39 @@ public class SessionServiceClient : ISessionServiceClient
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to archive session {SessionId} via HTTP", sessionId);
+            throw;
+        }
+    }
+
+    public async Task AddSessionActivityAsync(string sessionId, SessionActivity activity)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(activity);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync($"{_baseUrl}/api/sessions/{sessionId}/activities", content);
+            response.EnsureSuccessStatusCode();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to add session activity for {SessionId} via HTTP", sessionId);
+            throw;
+        }
+    }
+
+    public async Task<List<SessionActivity>> GetSessionActivitiesAsync(string sessionId)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/sessions/{sessionId}/activities");
+            response.EnsureSuccessStatusCode();
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var activities = JsonSerializer.Deserialize<List<SessionActivity>>(responseJson) ?? new List<SessionActivity>();
+            return activities;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to get session activities for {SessionId} via HTTP", sessionId);
             throw;
         }
     }

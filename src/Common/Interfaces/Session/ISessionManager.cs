@@ -41,4 +41,14 @@ public interface ISessionManager
     /// Archive a session (mark as completed/archived)
     /// </summary>
     Task<bool> ArchiveSessionAsync(string sessionId);
+
+    /// <summary>
+    /// Add an activity to a session
+    /// </summary>
+    Task AddSessionActivityAsync(string sessionId, SessionActivity activity);
+
+    /// <summary>
+    /// Get all activities for a session
+    /// </summary>
+    Task<List<SessionActivity>> GetSessionActivitiesAsync(string sessionId);
 }

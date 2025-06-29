@@ -16,6 +16,66 @@ namespace AgentAlpha.Tests;
 /// </summary>
 public class MarkdownTaskStateManagerTests
 {
+    // Test markdown constants
+    private const string testMarkdown = """
+        # Task: Test Task
+        
+        **Strategy:** Execute sequentially
+        
+        ## Subtasks
+        
+        - [x] First task - completed
+        - [ ] Second task - pending
+        - [ ] Third task - pending
+        
+        ## Progress Notes
+        
+        *Task in progress*
+        
+        ## Context
+        
+        Test context
+        """;
+
+    private const string testMarkdownAllComplete = """
+        # Task: Test Task
+        
+        **Strategy:** Execute sequentially
+        
+        ## Subtasks
+        
+        - [x] First task - completed
+        - [x] Second task - completed
+        - [x] Third task - completed
+        
+        ## Progress Notes
+        
+        *All tasks completed*
+        
+        ## Context
+        
+        Test context
+        """;
+
+    private const string initialMarkdown = """
+        # Task: Test Task
+        
+        **Strategy:** Execute sequentially
+        
+        ## Subtasks
+        
+        - [ ] Data gathering
+        - [ ] Analysis
+        
+        ## Progress Notes
+        
+        *Task initialized*
+        
+        ## Context
+        
+        Initial context
+        """;
+
     [Fact]
     public async Task InitializeTaskMarkdownAsync_CreatesValidMarkdown()
     {
@@ -120,24 +180,10 @@ public class MarkdownTaskStateManagerTests
         var session = await sessionManager.CreateSessionAsync("Test Current Subtask Session");
         
         // Set up markdown with mixed completed/uncompleted subtasks
-        var testMarkdown = """
-            # Task: Test Task
-            
-            **Strategy:** Execute sequentially
-            
-            ## Subtasks
-            
-            - [x] First task - completed
-            - [ ] Second task - pending
-            - [ ] Third task - also pending
-            
-            ## Context
-            
-            Some progress made.
-            """;
-            
-        session.TaskStateMarkdown = testMarkdown;
-        await sessionManager.SaveSessionAsync(session);
+        var sessionToUpdate = await sessionManager.GetSessionAsync(session.SessionId);
+        Assert.NotNull(sessionToUpdate);
+        sessionToUpdate.TaskStateMarkdown = testMarkdown;
+        await sessionManager.SaveSessionAsync(sessionToUpdate);
 
         // Act
         var currentSubtask = await markdownManager.GetCurrentSubtaskFromMarkdownAsync(session.SessionId);
@@ -164,24 +210,10 @@ public class MarkdownTaskStateManagerTests
         var session = await sessionManager.CreateSessionAsync("Test All Complete Session");
         
         // Set up markdown with all completed subtasks
-        var testMarkdown = """
-            # Task: Test Task
-            
-            **Strategy:** Execute sequentially
-            
-            ## Subtasks
-            
-            - [x] First task - completed
-            - [x] Second task - completed
-            - [x] Third task - completed
-            
-            ## Context
-            
-            All tasks completed.
-            """;
-            
-        session.TaskStateMarkdown = testMarkdown;
-        await sessionManager.SaveSessionAsync(session);
+        var sessionToUpdate2 = await sessionManager.GetSessionAsync(session.SessionId);
+        Assert.NotNull(sessionToUpdate2);
+        sessionToUpdate2.TaskStateMarkdown = testMarkdownAllComplete;
+        await sessionManager.SaveSessionAsync(sessionToUpdate2);
 
         // Act
         var currentSubtask = await markdownManager.GetCurrentSubtaskFromMarkdownAsync(session.SessionId);
@@ -205,23 +237,10 @@ public class MarkdownTaskStateManagerTests
         var session = await sessionManager.CreateSessionAsync("Test Update Session");
         
         // Set up initial markdown
-        var initialMarkdown = """
-            # Task: Test Task
-            
-            **Strategy:** Execute sequentially
-            
-            ## Subtasks
-            
-            - [ ] Data gathering
-            - [ ] Analysis
-            
-            ## Context
-            
-            Initial setup.
-            """;
-            
-        session.TaskStateMarkdown = initialMarkdown;
-        await sessionManager.SaveSessionAsync(session);
+        var sessionToUpdate3 = await sessionManager.GetSessionAsync(session.SessionId);
+        Assert.NotNull(sessionToUpdate3);
+        sessionToUpdate3.TaskStateMarkdown = initialMarkdown;
+        await sessionManager.SaveSessionAsync(sessionToUpdate3);
 
         // Mock OpenAI response with updated markdown
         var updatedMarkdownContent = """

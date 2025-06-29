@@ -2,6 +2,8 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Common.Interfaces.Session;
 using Common.Models.Session;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SessionService.Services;
 
@@ -12,10 +14,43 @@ public class SessionManager : ISessionManager
 {
     private readonly ILogger<SessionManager> _logger;
     private readonly string _connectionString;
+    private readonly JsonSerializerOptions _jsonOptions;
+
+    // Helper class to exclude ActivityLog from serialization
+    private class LoggableAgentSession
+    {
+        public string SessionId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public DateTime LastUpdatedAt { get; set; }
+        public string ConversationState { get; set; } = string.Empty;
+        public string ConfigurationSnapshot { get; set; } = string.Empty;
+        public string Metadata { get; set; } = string.Empty;
+        public SessionStatus Status { get; set; }
+        public string TaskStateMarkdown { get; set; } = string.Empty;
+        
+        public static LoggableAgentSession FromAgentSession(AgentSession session) => new()
+        {
+            SessionId             = session.SessionId,
+            Name                  = session.Name,
+            CreatedAt             = session.CreatedAt,
+            LastUpdatedAt         = session.LastUpdatedAt,
+            ConversationState     = session.ConversationState,
+            ConfigurationSnapshot = session.ConfigurationSnapshot,
+            Metadata              = session.Metadata,
+            Status                = session.Status,
+            TaskStateMarkdown     = session.TaskStateMarkdown
+        };
+    }
 
     public SessionManager(ILogger<SessionManager> logger, string? databasePath = null)
     {
         _logger = logger;
+        _jsonOptions = new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
         
         // Prefer explicitly provided path, then environment variable, then default
         var dbPath = databasePath                                   // 1) caller-supplied
@@ -46,7 +81,7 @@ public class SessionManager : ISessionManager
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
+        cmd.CommandText = @"
             CREATE TABLE IF NOT EXISTS AgentSessions (
                 SessionId         TEXT PRIMARY KEY,
                 Name             TEXT NOT NULL,
@@ -56,63 +91,62 @@ public class SessionManager : ISessionManager
                 ConfigurationSnapshot TEXT NOT NULL DEFAULT '',
                 Metadata         TEXT NOT NULL DEFAULT '',
                 Status           INTEGER NOT NULL DEFAULT 0,
-                ActivityLog      TEXT NOT NULL DEFAULT '',
                 TaskStateMarkdown TEXT NOT NULL DEFAULT ''
             );
-            
             CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON AgentSessions(CreatedAt);
             CREATE INDEX IF NOT EXISTS idx_sessions_status ON AgentSessions(Status);
-            """;
+
+            CREATE TABLE IF NOT EXISTS SessionActivities (
+                ActivityId      TEXT PRIMARY KEY,
+                SessionId       TEXT NOT NULL,
+                Timestamp       TEXT NOT NULL,
+                ActivityType    TEXT NOT NULL,
+                Description     TEXT NOT NULL,
+                Data            TEXT NOT NULL DEFAULT '',
+                DurationMs      INTEGER,
+                Success         INTEGER NOT NULL DEFAULT 1,
+                ErrorMessage    TEXT,
+                FOREIGN KEY(SessionId) REFERENCES AgentSessions(SessionId) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_activities_session_id ON SessionActivities(SessionId);
+            CREATE INDEX IF NOT EXISTS idx_activities_timestamp ON SessionActivities(Timestamp);
+        ";
         cmd.ExecuteNonQuery();
-        
-        // Check if new columns exist and add them if they don't
-        cmd.CommandText = "PRAGMA table_info(AgentSessions)";
-        using var reader = cmd.ExecuteReader();
-        bool hasActivityLogColumn = false;
-        bool hasTaskStateMarkdownColumn = false;
-        while (reader.Read())
-        {
-            var columnName = reader.GetString(1);
-            if (string.Equals(columnName, "ActivityLog", StringComparison.OrdinalIgnoreCase))
-                hasActivityLogColumn = true;
-            if (string.Equals(columnName, "TaskStateMarkdown", StringComparison.OrdinalIgnoreCase))
-                hasTaskStateMarkdownColumn = true;
-        }
-        reader.Close();
+    }
 
-        // helper local to add a column but swallow "duplicate column" race conditions
-        void TryAddColumn(string sql)
+    private static AgentSession ReadAgentSession(SqliteDataReader reader)
+    {
+        return new AgentSession
         {
-            try
-            {
-                cmd.CommandText = sql;
-                cmd.ExecuteNonQuery();
-            }
-            catch (SqliteException ex) when (ex.SqliteErrorCode == 1 &&
-                                             ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase))
-            {
-                // Another concurrent initializer already added the column – safe to ignore.
-                _logger.LogDebug("Column already exists, skipping: {Sql}", sql);
-            }
-        }
-
-        if (!hasActivityLogColumn)
-        {
-            TryAddColumn("ALTER TABLE AgentSessions ADD COLUMN ActivityLog TEXT NOT NULL DEFAULT ''");
-        }
-
-        if (!hasTaskStateMarkdownColumn)
-        {
-            TryAddColumn("ALTER TABLE AgentSessions ADD COLUMN TaskStateMarkdown TEXT NOT NULL DEFAULT ''");
-        }
+            SessionId = reader.GetString(0),
+            Name = reader.GetString(1),
+            CreatedAt = DateTime.Parse(reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
+            LastUpdatedAt = DateTime.Parse(reader.GetString(3), null, System.Globalization.DateTimeStyles.RoundtripKind),
+            ConversationState = reader.GetString(4),
+            ConfigurationSnapshot = reader.GetString(5),
+            Metadata = reader.GetString(6),
+            Status = (SessionStatus)reader.GetInt32(7),
+            TaskStateMarkdown = reader.IsDBNull(8) ? string.Empty : reader.GetString(8)
+        };
     }
 
     public async Task<AgentSession> CreateSessionAsync(string name = "")
     {
-        var session = AgentSession.CreateNew(name);
-        await SaveSessionAsync(session);
+        var now = DateTime.UtcNow; // single, precise timestamp
+        var session = new AgentSession
+        {
+            SessionId      = Guid.NewGuid().ToString(),
+            Name           = string.IsNullOrEmpty(name) ? $"Session {now:yyyyMMdd_HHmmss}" : name,
+            CreatedAt      = now,
+            LastUpdatedAt  = now,
+            Status         = SessionStatus.Active
+        };
+
+        // Don't access ActivityLog directly - activities are stored separately
         
-        _logger.LogInformation("Created new session: {SessionId} - {Name}", session.SessionId, session.Name);
+        await SaveSessionAsync(session);
+        _logger?.LogInformation("Created new session {SessionId} with name {Name}", session.SessionId, session.Name);
+        
         return session;
     }
 
@@ -124,7 +158,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status, ActivityLog, TaskStateMarkdown
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, TaskStateMarkdown
             FROM AgentSessions 
             WHERE SessionId = $sessionId
             """;
@@ -133,21 +167,13 @@ public class SessionManager : ISessionManager
         using var reader = await cmd.ExecuteReaderAsync();
         if (await reader.ReadAsync())
         {
-            return new AgentSession
-            {
-                SessionId = reader.GetString(0),
-                Name = reader.GetString(1),
-                CreatedAt = DateTime.Parse(reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
-                LastUpdatedAt = DateTime.Parse(reader.GetString(3), null, System.Globalization.DateTimeStyles.RoundtripKind),
-                ConversationState = reader.GetString(4),
-                ConfigurationSnapshot = reader.GetString(5),
-                Metadata = reader.GetString(6),
-                Status = (SessionStatus)reader.GetInt32(7),
-                ActivityLog = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
-                TaskStateMarkdown = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
-            };
+            var session = ReadAgentSession(reader);
+            _logger.LogInformation("Fetched session by id: {SessionJson}",
+                JsonSerializer.Serialize(LoggableAgentSession.FromAgentSession(session), _jsonOptions));
+            return session;
         }
 
+        _logger.LogWarning("Session not found: {SessionId}", sessionId);
         return null;
     }
 
@@ -159,7 +185,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status, ActivityLog, TaskStateMarkdown
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, TaskStateMarkdown
             FROM AgentSessions 
             WHERE Name = $name
             ORDER BY LastUpdatedAt DESC
@@ -170,21 +196,13 @@ public class SessionManager : ISessionManager
         using var reader = await cmd.ExecuteReaderAsync();
         if (await reader.ReadAsync())
         {
-            return new AgentSession
-            {
-                SessionId = reader.GetString(0),
-                Name = reader.GetString(1),
-                CreatedAt = DateTime.Parse(reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
-                LastUpdatedAt = DateTime.Parse(reader.GetString(3), null, System.Globalization.DateTimeStyles.RoundtripKind),
-                ConversationState = reader.GetString(4),
-                ConfigurationSnapshot = reader.GetString(5),
-                Metadata = reader.GetString(6),
-                Status = (SessionStatus)reader.GetInt32(7),
-                ActivityLog = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
-                TaskStateMarkdown = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
-            };
+            var session = ReadAgentSession(reader);
+            _logger.LogInformation("Fetched session by name: {SessionJson}",
+                JsonSerializer.Serialize(LoggableAgentSession.FromAgentSession(session), _jsonOptions));
+            return session;
         }
 
+        _logger.LogWarning("Session with name '{Name}' not found", name);
         return null;
     }
 
@@ -193,13 +211,11 @@ public class SessionManager : ISessionManager
         using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
         using var cmd = conn.CreateCommand();
-        
-        cmd.CommandText = """
+        cmd.CommandText = @"
             INSERT OR REPLACE INTO AgentSessions 
-            (SessionId, Name, CreatedAt, LastUpdatedAt, ConversationState, ConfigurationSnapshot, Metadata, Status, ActivityLog, TaskStateMarkdown)
-            VALUES ($sessionId, $name, $createdAt, $lastUpdatedAt, $conversationState, $configSnapshot, $metadata, $status, $activityLog, $taskStateMarkdown)
-            """;
-            
+            (SessionId, Name, CreatedAt, LastUpdatedAt, ConversationState, ConfigurationSnapshot, Metadata, Status, TaskStateMarkdown)
+            VALUES ($sessionId, $name, $createdAt, $lastUpdatedAt, $conversationState, $configSnapshot, $metadata, $status, $taskStateMarkdown)
+        ";
         cmd.Parameters.AddWithValue("$sessionId", session.SessionId);
         cmd.Parameters.AddWithValue("$name", session.Name);
         cmd.Parameters.AddWithValue("$createdAt", session.CreatedAt.ToString("O"));
@@ -208,12 +224,10 @@ public class SessionManager : ISessionManager
         cmd.Parameters.AddWithValue("$configSnapshot", session.ConfigurationSnapshot);
         cmd.Parameters.AddWithValue("$metadata", session.Metadata);
         cmd.Parameters.AddWithValue("$status", (int)session.Status);
-        cmd.Parameters.AddWithValue("$activityLog", session.ActivityLog);
         cmd.Parameters.AddWithValue("$taskStateMarkdown", session.TaskStateMarkdown);
-
         await cmd.ExecuteNonQueryAsync();
-        
-        _logger.LogDebug("Saved session: {SessionId}", session.SessionId);
+        _logger.LogInformation("Saved session: {SessionJson}",
+            JsonSerializer.Serialize(LoggableAgentSession.FromAgentSession(session), _jsonOptions));
     }
 
     public async Task<IReadOnlyList<AgentSession>> ListSessionsAsync()
@@ -226,7 +240,7 @@ public class SessionManager : ISessionManager
         
         cmd.CommandText = """
             SELECT SessionId, Name, CreatedAt, LastUpdatedAt, 
-                   ConversationState, ConfigurationSnapshot, Metadata, Status, ActivityLog, TaskStateMarkdown
+                   ConversationState, ConfigurationSnapshot, Metadata, Status, TaskStateMarkdown
             FROM AgentSessions 
             ORDER BY LastUpdatedAt DESC
             """;
@@ -234,20 +248,12 @@ public class SessionManager : ISessionManager
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            sessions.Add(new AgentSession
-            {
-                SessionId = reader.GetString(0),
-                Name = reader.GetString(1),
-                CreatedAt = DateTime.Parse(reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
-                LastUpdatedAt = DateTime.Parse(reader.GetString(3), null, System.Globalization.DateTimeStyles.RoundtripKind),
-                ConversationState = reader.GetString(4),
-                ConfigurationSnapshot = reader.GetString(5),
-                Metadata = reader.GetString(6),
-                ActivityLog = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
-                TaskStateMarkdown = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
-            });
+            sessions.Add(ReadAgentSession(reader));
         }
 
+        _logger.LogInformation("Listed {Count} sessions: {SessionsJson}", 
+            sessions.Count,
+            JsonSerializer.Serialize(sessions.Select(s => LoggableAgentSession.FromAgentSession(s)), _jsonOptions));
         return sessions;
     }
 
@@ -295,5 +301,60 @@ public class SessionManager : ISessionManager
         }
         
         return archived;
+    }
+
+    // New: Add activity to SessionActivities table
+    public async Task AddSessionActivityAsync(string sessionId, SessionActivity activity)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO SessionActivities 
+            (ActivityId, SessionId, Timestamp, ActivityType, Description, Data, DurationMs, Success, ErrorMessage)
+            VALUES ($activityId, $sessionId, $timestamp, $activityType, $description, $data, $durationMs, $success, $errorMessage)
+        ";
+        cmd.Parameters.AddWithValue("$activityId", activity.ActivityId);
+        cmd.Parameters.AddWithValue("$sessionId", sessionId);
+        cmd.Parameters.AddWithValue("$timestamp", activity.Timestamp.ToString("O"));
+        cmd.Parameters.AddWithValue("$activityType", activity.ActivityType);
+        cmd.Parameters.AddWithValue("$description", activity.Description);
+        cmd.Parameters.AddWithValue("$data", activity.Data ?? string.Empty);
+        cmd.Parameters.AddWithValue("$durationMs", (object?)activity.DurationMs ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$success", activity.Success ? 1 : 0);
+        cmd.Parameters.AddWithValue("$errorMessage", (object?)activity.ErrorMessage ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    // New: Get activities for a session
+    public async Task<List<SessionActivity>> GetSessionActivitiesAsync(string sessionId)
+    {
+        var activities = new List<SessionActivity>();
+        using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT ActivityId, Timestamp, ActivityType, Description, Data, DurationMs, Success, ErrorMessage
+            FROM SessionActivities
+            WHERE SessionId = $sessionId
+            ORDER BY Timestamp ASC
+        ";
+        cmd.Parameters.AddWithValue("$sessionId", sessionId);
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            activities.Add(new SessionActivity
+            {
+                ActivityId = reader.GetString(0),
+                Timestamp = DateTime.Parse(reader.GetString(1), null, System.Globalization.DateTimeStyles.RoundtripKind),
+                ActivityType = reader.GetString(2),
+                Description = reader.GetString(3),
+                Data = reader.GetString(4),
+                DurationMs = reader.IsDBNull(5) ? null : reader.GetInt64(5),
+                Success = reader.GetInt32(6) != 0,
+                ErrorMessage = reader.IsDBNull(7) ? null : reader.GetString(7)
+            });
+        }
+        return activities;
     }
 }

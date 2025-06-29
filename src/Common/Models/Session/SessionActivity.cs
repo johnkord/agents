@@ -48,6 +48,11 @@ public class SessionActivity
     public string? ErrorMessage { get; set; }
 
     /// <summary>
+    /// The session this activity belongs to
+    /// </summary>
+    public string SessionId { get; set; } = string.Empty;
+
+    /// <summary>
     /// Create a new activity with the specified type and description
     /// </summary>
     public static SessionActivity Create(string activityType, string description, object? data = null)

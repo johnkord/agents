@@ -148,15 +148,16 @@ public class SessionActivityLogger : ISessionActivityLogger
             activity.ActivityType, activity.Description, timer.ElapsedMilliseconds, errorMessage);
     }
 
-    public Task<List<SessionActivity>> GetSessionActivitiesAsync()
+    public async Task<List<SessionActivity>> GetSessionActivitiesAsync()
     {
         if (_currentSession == null)
         {
             _logger.LogWarning("Cannot get activities - no current session set");
-            return Task.FromResult(new List<SessionActivity>());
+            return new List<SessionActivity>();
         }
 
-        return Task.FromResult(_currentSession.GetActivityLog());
+        // Use the session manager to get activities from the database
+        return await _sessionManager.GetSessionActivitiesAsync(_currentSession.SessionId);
     }
 
     private async Task SaveActivityAsync(SessionActivity activity)
@@ -166,8 +167,14 @@ public class SessionActivityLogger : ISessionActivityLogger
 
         try
         {
-            _currentSession.AddActivity(activity);
-            await _sessionManager.SaveSessionAsync(_currentSession);
+            // Set the session ID on the activity
+            activity.SessionId = _currentSession.SessionId;
+            
+            // Save the activity using the session manager
+            await _sessionManager.AddSessionActivityAsync(_currentSession.SessionId, activity);
+            
+            _logger.LogDebug("Saved activity to session {SessionId}: {ActivityType} - {Description}", 
+                _currentSession.SessionId, activity.ActivityType, activity.Description);
         }
         catch (Exception ex)
         {

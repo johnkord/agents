@@ -106,12 +106,8 @@ public class SessionActivityLoggerTests
         await activityLogger.LogActivityAsync(ActivityTypes.SessionStart, "Session started");
         await activityLogger.LogActivityAsync(ActivityTypes.TaskPlanning, "Planning task");
         
-        // Retrieve the session again and check activities are persisted
-        var retrievedSession = await sessionManager.GetSessionAsync(session.SessionId);
-        
-        // Assert
-        Assert.NotNull(retrievedSession);
-        var activities = retrievedSession.GetActivityLog();
+        // Retrieve activities from the new activity log table
+        var activities = await sessionManager.GetSessionActivitiesAsync(session.SessionId);
         Assert.Equal(2, activities.Count);
         
         var sessionStartActivity = activities[0];
@@ -167,8 +163,8 @@ public class SessionActivityLoggerTests
         
         await activityLogger.LogActivityAsync(ActivityTypes.ToolResult, "Tool result with details", toolResultData);
         
-        // Assert
-        var activities = session.GetActivityLog();
+        // Fetch activities from the new activity log table
+        var activities = await sessionManager.GetSessionActivitiesAsync(session.SessionId);
         Assert.Equal(2, activities.Count);
         
         var toolCallActivity = activities[0];

@@ -23,17 +23,19 @@ public class SessionsController : ControllerBase
         try
         {
             var sessions = await _sessionManager.ListSessionsAsync();
-            
-            var result = sessions.Select(s => new 
+            var result = new List<object>();
+            foreach (var s in sessions)
             {
-                sessionId = s.SessionId,
-                name = s.Name,
-                createdAt = s.CreatedAt,
-                lastUpdatedAt = s.LastUpdatedAt,
-                status = s.Status.ToString(),
-                activityCount = s.GetActivityLog().Count
-            });
-
+                var activityCount = (await _sessionManager.GetSessionActivitiesAsync(s.SessionId)).Count;
+                result.Add(new {
+                    sessionId = s.SessionId,
+                    name = s.Name,
+                    createdAt = s.CreatedAt,
+                    lastUpdatedAt = s.LastUpdatedAt,
+                    status = s.Status.ToString(),
+                    activityCount
+                });
+            }
             return Ok(result);
         }
         catch (Exception ex)
@@ -53,10 +55,8 @@ public class SessionsController : ControllerBase
             {
                 return NotFound();
             }
-
-            var activities = session.GetActivityLog();
-            
-            var result = new 
+            var activities = await _sessionManager.GetSessionActivitiesAsync(sessionId);
+            var result = new
             {
                 sessionId = session.SessionId,
                 name = session.Name,
@@ -66,7 +66,7 @@ public class SessionsController : ControllerBase
                 conversationState = session.ConversationState,
                 configurationSnapshot = session.ConfigurationSnapshot,
                 metadata = session.Metadata,
-                activities = activities.Select(a => new 
+                activities = activities.Select(a => new
                 {
                     activityId = a.ActivityId,
                     timestamp = a.Timestamp,
@@ -78,7 +78,6 @@ public class SessionsController : ControllerBase
                     data = a.Data
                 }).OrderBy(a => a.timestamp)
             };
-
             return Ok(result);
         }
         catch (Exception ex)
@@ -123,35 +122,52 @@ public class SessionsController : ControllerBase
             {
                 return NotFound();
             }
-
             // Update fields
             if (!string.IsNullOrEmpty(request.Name))
                 session.Name = request.Name;
-            
             if (request.ConversationMessages != null)
                 session.SetConversationMessages(request.ConversationMessages);
-            
             if (!string.IsNullOrEmpty(request.ConfigurationSnapshot))
                 session.ConfigurationSnapshot = request.ConfigurationSnapshot;
-            
             if (!string.IsNullOrEmpty(request.Metadata))
                 session.Metadata = request.Metadata;
-            
             if (request.Status.HasValue)
                 session.Status = request.Status.Value;
-            
-            if (request.Activities != null)
-                session.SetActivityLog(request.Activities);
-
+            if (!string.IsNullOrEmpty(request.TaskStateMarkdown))
+                session.TaskStateMarkdown = request.TaskStateMarkdown;
             session.LastUpdatedAt = DateTime.UtcNow;
             await _sessionManager.SaveSessionAsync(session);
-
             return NoContent();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to update session {SessionId}", sessionId);
             return StatusCode(500, new { error = "Failed to update session" });
+        }
+    }
+
+    // New endpoint: Add activity to a session
+    [HttpPost("{sessionId}/activities")]
+    public async Task<IActionResult> AddSessionActivity(string sessionId, [FromBody] SessionActivity activity)
+    {
+        try
+        {
+            var session = await _sessionManager.GetSessionAsync(sessionId);
+            if (session == null)
+                return NotFound();
+            // Ensure the activity is associated with the correct session
+            activity.SessionId = sessionId;
+            if (string.IsNullOrEmpty(activity.ActivityId))
+                activity.ActivityId = Guid.NewGuid().ToString();
+            if (activity.Timestamp == default)
+                activity.Timestamp = DateTime.UtcNow;
+            await _sessionManager.AddSessionActivityAsync(sessionId, activity);
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add activity to session {SessionId}", sessionId);
+            return StatusCode(500, new { error = "Failed to add activity" });
         }
     }
 
@@ -241,4 +257,6 @@ public class UpdateSessionRequest
     public string? Metadata { get; set; }
     public SessionStatus? Status { get; set; }
     public List<SessionActivity>? Activities { get; set; }
+
+    public string? TaskStateMarkdown { get; set; }
 }

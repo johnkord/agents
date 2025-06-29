@@ -104,8 +104,10 @@ public class SessionResumeIntegrationTests : IDisposable
             Assert.Equal(sessionName, foundSession.Name);
             
             // Update session (simulate saving conversation state)
-            foundSession.ConversationState = $"Updated state {i}";
-            await _sessionManager.SaveSessionAsync(foundSession);
+            var sessionToUpdate = await _sessionManager.GetSessionAsync(foundSession.SessionId);
+            Assert.NotNull(sessionToUpdate);
+            sessionToUpdate.ConversationState = $"Updated state {i}";
+            await _sessionManager.SaveSessionAsync(sessionToUpdate);
         }
 
         // Verify final state

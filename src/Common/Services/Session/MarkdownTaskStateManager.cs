@@ -193,19 +193,8 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
             // Save updated markdown
             await SaveTaskMarkdownToSessionAsync(sessionId, updatedMarkdown);
 
-            var session = await _sessionManager.GetSessionAsync(sessionId);
-            if (session != null)
-            {
-                session.AddActivity(new SessionActivity
-                {
-                    ActivityId   = Guid.NewGuid().ToString(),
-                    Timestamp    = DateTime.UtcNow,
-                    ActivityType = ActivityTypes.TaskMarkdownUpdate,
-                    Description  = $"Task markdown updated after action: {actionDescription}",
-                    Success      = true,
-                    Data         = SessionActivity.TruncateString(updatedMarkdown, 50000)
-                });
-            }
+            // The activity is now logged in SaveTaskMarkdownToSessionAsync
+            // Remove the duplicate activity logging here
             
             return updatedMarkdown;
         }
@@ -476,31 +465,42 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
     
     private async Task SaveTaskMarkdownToSessionAsync(string sessionId, string markdown)
     {
+        // Always fetch the latest session state first
         var session = await _sessionManager.GetSessionAsync(sessionId);
         if (session == null)
             throw new InvalidOperationException($"Session {sessionId} not found");
 
-        // add activity only when the markdown actually changed
+        // Check if markdown actually changed
         if (!string.Equals(session.TaskStateMarkdown, markdown, StringComparison.Ordinal))
         {
-            session.AddActivity(new SessionActivity
+            // Update the session
+            session.TaskStateMarkdown = markdown;
+            session.LastUpdatedAt = DateTime.UtcNow;
+            
+            // Save the updated session first
+            await _sessionManager.SaveSessionAsync(session);
+            
+            // Then add the activity separately
+            var activity = new SessionActivity
             {
-                ActivityId  = Guid.NewGuid().ToString(),
-                Timestamp   = DateTime.UtcNow,
-                ActivityType = ActivityTypes.TaskMarkdownUpdate,   // NEW
-                Description  = "Task state markdown updated",
-                Success      = true,
-                // keep full markdown but truncate to avoid over-sized log rows
-                Data         = SessionActivity.TruncateString(markdown, 50000)
-            });
+                ActivityId = Guid.NewGuid().ToString(),
+                SessionId = sessionId,
+                Timestamp = DateTime.UtcNow,
+                ActivityType = ActivityTypes.TaskMarkdownUpdate,
+                Description = "Task state markdown updated",
+                Success = true,
+                Data = SessionActivity.TruncateString(markdown, 50000)
+            };
+            
+            await _sessionManager.AddSessionActivityAsync(sessionId, activity);
+            
+            _logger.LogDebug("Saved task markdown for session {SessionId}: {Length} characters", 
+                             sessionId, markdown.Length);
         }
-
-        session.TaskStateMarkdown = markdown;
-        session.LastUpdatedAt     = DateTime.UtcNow;
-        await _sessionManager.SaveSessionAsync(session);
-
-        _logger.LogDebug("Saved task markdown for session {SessionId}: {Length} characters", 
-                         sessionId, markdown.Length);
+        else
+        {
+            _logger.LogDebug("Task markdown unchanged for session {SessionId}, skipping save", sessionId);
+        }
     }
     
     private string? ExtractContentFromResponse(ResponsesCreateResponse response)

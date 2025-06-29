@@ -119,8 +119,10 @@ public class ToolSelectionForNewTaskTests : IDisposable
         var initialSession = await _sessionManager.CreateSessionAsync(sessionName);
         
         // Simulate first task execution
-        initialSession.ConversationState = "Completed first task";
-        await _sessionManager.SaveSessionAsync(initialSession);
+        var sessionToUpdate = await _sessionManager.GetSessionAsync(initialSession.SessionId);
+        Assert.NotNull(sessionToUpdate);
+        sessionToUpdate.ConversationState = "Completed first task";
+        await _sessionManager.SaveSessionAsync(sessionToUpdate);
         
         // Act - Simulate second execution with new task
         var resumedSession = await _sessionManager.GetSessionByNameAsync(sessionName);

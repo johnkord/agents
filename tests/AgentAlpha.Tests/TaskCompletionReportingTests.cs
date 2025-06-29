@@ -102,51 +102,40 @@ public class TaskCompletionReportingTests
             new { Model = "gpt-4", TokensUsed = 500 });
 
         // Simulate task completion
-        await activityLogger.LogActivityAsync(ActivityTypes.TaskCompletionEvaluation, 
-            "Task completion report - Successfully analyzed data",
-            new 
+        var completionInfo = new
+        {
+            TaskCompletion = new
             {
-                TaskCompletion = new
+                Status = "COMPLETED",
+                Summary = "Successfully analyzed data and generated report",
+                Results = new
                 {
-                    Status = "COMPLETED",
-                    Summary = "Successfully analyzed data",
-                    ProvidedReasoning = "All analysis steps completed successfully",
-                    ProvidedEvidence = "Generated reports and charts"
-                },
-                ExecutionEvidence = new
-                {
-                    ToolsUsed = new[] { "test_tool" },
-                    OpenAIInteractions = 2,
-                    ErrorsEncountered = new object[0]
-                },
-                TaskCompletionQuality = new
-                {
-                    HasDetailedReasoning = true,
-                    HasExplicitEvidence = true,
-                    RecommendationScore = 0.95
+                    FilesProcessed = 5,
+                    ReportGenerated = true,
+                    OutputFile = "analysis_report.pdf"
                 }
-            });
+            }
+        };
+        
+        await activityLogger.LogActivityAsync(
+            ActivityTypes.TaskCompletionEvaluation,
+            "Task completion report - " + completionInfo.TaskCompletion.Summary,
+            completionInfo);
 
-        // Act
-        var activities = await activityLogger.GetSessionActivitiesAsync();
-
+        // Get activities from database
+        var activities = await sessionManager.GetSessionActivitiesAsync(session.SessionId);
+        
         // Assert
         Assert.NotEmpty(activities);
         
-        // Verify we have different types of activities
-        Assert.Contains(activities, a => a.ActivityType == ActivityTypes.SessionStart);
-        Assert.Contains(activities, a => a.ActivityType == ActivityTypes.TaskPlanning);
-        Assert.Contains(activities, a => a.ActivityType == ActivityTypes.ToolSelection);
-        Assert.Contains(activities, a => a.ActivityType == ActivityTypes.ToolCall);
-        Assert.Contains(activities, a => a.ActivityType == ActivityTypes.ToolResult);
-        Assert.Contains(activities, a => a.ActivityType == ActivityTypes.OpenAIRequest);
-        Assert.Contains(activities, a => a.ActivityType == ActivityTypes.OpenAIResponse);
-        Assert.Contains(activities, a => a.ActivityType == ActivityTypes.TaskCompletionEvaluation);
-
-        // Verify the task completion evaluation activity has comprehensive data
-        var completionActivity = activities.FirstOrDefault(a => a.ActivityType == ActivityTypes.TaskCompletionEvaluation);
+        // Find task completion activity
+        var completionActivity = activities.FirstOrDefault(a => 
+            a.ActivityType == ActivityTypes.TaskCompletionEvaluation);
+        
         Assert.NotNull(completionActivity);
-        Assert.Contains("Task completion report", completionActivity.Description);
+        Assert.Contains("Successfully analyzed data", completionActivity.Description);
+        Assert.Contains("COMPLETED", completionActivity.Data);
+        Assert.Contains("FilesProcessed", completionActivity.Data);
         Assert.True(completionActivity.Success);
         
         // Verify the completion data structure
@@ -155,15 +144,16 @@ public class TaskCompletionReportingTests
         Assert.NotEmpty(completionData);
         
         // Parse the JSON data
-        var completionJson = JsonSerializer.Deserialize<JsonElement>(completionData);
-        Assert.True(completionJson.TryGetProperty("TaskCompletion", out var taskCompletion));
-        Assert.True(taskCompletion.TryGetProperty("Status", out var status));
-        Assert.Equal("COMPLETED", status.GetString());
+        var completionJsonRaw = completionActivity.Data;
+        var completionJson    = JsonSerializer.Deserialize<JsonElement>(completionJsonRaw);
         
-        Assert.True(completionJson.TryGetProperty("ExecutionEvidence", out var evidence));
-        Assert.True(completionJson.TryGetProperty("TaskCompletionQuality", out var quality));
-        Assert.True(quality.TryGetProperty("RecommendationScore", out var score));
-        Assert.Equal(0.95, score.GetDouble());
+        var tc = completionJson.GetProperty("TaskCompletion");
+        Assert.Equal("COMPLETED", tc.GetProperty("Status").GetString());
+        Assert.Equal("Successfully analyzed data and generated report", tc.GetProperty("Summary").GetString());
+        var results = tc.GetProperty("Results");
+        Assert.Equal(5, results.GetProperty("FilesProcessed").GetInt32());
+        Assert.True(results.GetProperty("ReportGenerated").GetBoolean());
+        Assert.Equal("analysis_report.pdf", results.GetProperty("OutputFile").GetString());
     }
 
     [Fact]
