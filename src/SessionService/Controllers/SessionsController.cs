@@ -245,6 +245,5 @@ public class UpdateSessionRequest
     public string? ConfigurationSnapshot { get; set; }
     public string? Metadata { get; set; }
     public SessionStatus? Status { get; set; }
-    public TaskPlan? CurrentPlan { get; set; }
     public List<SessionActivity>? Activities { get; set; }
 }

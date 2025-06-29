@@ -155,117 +155,51 @@ public class TaskExecutor : ITaskExecutor
                 request.SessionId = currentSession.SessionId; // Update request with new session ID
             }
 
-            // Step 3: Create execution plan for the task
-            TaskPlan? taskPlan = null;
+            // Step 3: Initialize or resume markdown-based task planning
+            string taskMarkdown = "";
             
-            // Check if we're resuming a session with an existing plan
+            // Check if we're resuming a session with existing markdown plan
             if (isResumingSession && !string.IsNullOrEmpty(request.SessionId))
             {
                 var session = await _sessionManager.GetSessionAsync(request.SessionId);
                 
-                // First try to get markdown-based plan
-                TaskPlan? existingPlan = null;
-                bool hasMarkdownPlan = false;
-                
                 if (!string.IsNullOrEmpty(session?.TaskStateMarkdown))
                 {
                     Console.WriteLine("📋 Found existing markdown-based plan in session");
-                    hasMarkdownPlan = true;
+                    taskMarkdown = session.TaskStateMarkdown;
                     
-                    // For now, create a simple TaskPlan from markdown for compatibility
-                    // In the future, we could parse the markdown directly
-                    existingPlan = await ExtractPlanFromMarkdownAsync(session.TaskStateMarkdown);
+                    await _activityLogger.LogActivityAsync(
+                        ActivityTypes.TaskPlanning,
+                        "Found existing markdown plan in session",
+                        new { SessionId = request.SessionId, HasMarkdown = true });
                 }
                 else
                 {
-                    // Fallback to traditional CurrentPlan
-                    existingPlan = session?.GetCurrentPlan();
+                    Console.WriteLine("📋 No existing plan found, creating new markdown plan");
+                    taskMarkdown = await InitializeMarkdownPlanAsync(request);
                 }
-                
-                if (existingPlan != null)
-                {
-                    Console.WriteLine("📋 Found existing plan in session");
-                    await _activityLogger.LogActivityAsync(
-                        ActivityTypes.TaskPlanning,
-                        "Found existing plan in session",
-                        new { ExistingPlan = existingPlan.Task, NewTask = request.Task, IsMarkdownBased = hasMarkdownPlan });
-                    
-                    // Check if the existing plan is still relevant for the new task
-                    if (IsPlanRelevantForTask(existingPlan, request.Task))
-                    {
-                        Console.WriteLine("✅ Reusing existing plan for similar task");
-                        await _activityLogger.LogActivityAsync(
-                            ActivityTypes.TaskPlanning,
-                            "Reusing existing plan for similar task",
-                            new { PlanTask = existingPlan.Task, NewTask = request.Task });
-                        taskPlan = existingPlan;
-                    }
-                    else
-                    {
-                        Console.WriteLine("🔄 Refining existing plan for new task");
-                        var planningActivityId = _activityLogger.StartActivity(
-                            ActivityTypes.TaskPlanning,
-                            "Refining existing plan for new task",
-                            new { ExistingPlan = existingPlan.Task, NewTask = request.Task });
-                        
-                        try
-                        {
-                            // TODO: Implement plan refinement with markdown-based planning
-                            // For now, use the existing plan or create a new one
-                            _logger.LogWarning("Plan refinement not yet implemented for markdown-based planning");
-                            taskPlan = existingPlan; // Keep existing plan for now
-                            await _activityLogger.CompleteActivityAsync(planningActivityId, new { Message = "Plan refinement skipped - not yet implemented" });
-                        }
-                        catch (Exception ex)
-                        {
-                            await _activityLogger.FailActivityAsync(planningActivityId, ex.Message);
-                            throw;
-                        }
-                    }
-                }
-            }
-            
-            // If we don't have a plan yet, create a new one
-            if (taskPlan == null)
-            {
-                var planningActivityId = _activityLogger.StartActivity(
-                    ActivityTypes.TaskPlanning,
-                    "Creating new task plan",
-                    new { Task = request.Task });
-                
-                try
-                {
-                    taskPlan = await CreateTaskPlanAsync(request.Task);
-                    await _activityLogger.CompleteActivityAsync(planningActivityId, new { CreatedPlan = taskPlan?.Task });
-                }
-                catch (Exception ex)
-                {
-                    await _activityLogger.FailActivityAsync(planningActivityId, ex.Message);
-                    throw;
-                }
-            }
-            
-            // Save the plan to the session if we have one
-            if (!string.IsNullOrEmpty(request.SessionId) && taskPlan != null)
-            {
-                await SavePlanToSessionAsync(request.SessionId, taskPlan);
-            }
-            
-            // Display the plan to the user
-            if (taskPlan != null)
-            {
-                DisplayTaskPlan(taskPlan);
-            }
-
-            // Step 4: Create task state from plan and execute subtasks sequentially
-            if (taskPlan != null && !string.IsNullOrEmpty(request.SessionId))
-            {
-                await ExecuteSubtasksSequentiallyAsync(taskPlan, request, effectiveConfig, currentSession!);
             }
             else
             {
-                // Fallback to original execution for cases without session or plan
-                await ExecuteTraditionalFlowAsync(taskPlan, request, effectiveConfig, isResumingSession);
+                Console.WriteLine("📋 Creating new markdown-based plan");
+                taskMarkdown = await InitializeMarkdownPlanAsync(request);
+            }
+
+            // Display the markdown plan to the user
+            if (!string.IsNullOrEmpty(taskMarkdown))
+            {
+                DisplayMarkdownPlan(taskMarkdown);
+            }
+
+            // Step 4: Execute using markdown-based task management
+            if (!string.IsNullOrEmpty(taskMarkdown) && !string.IsNullOrEmpty(request.SessionId))
+            {
+                await ExecuteMarkdownBasedTaskAsync(taskMarkdown, request, effectiveConfig, currentSession!);
+            }
+            else
+            {
+                // Fallback to conversation-based execution without structured plan
+                await ExecuteConversationBasedAsync(request, effectiveConfig);
             }
             
             // Step 6: Save session if applicable
@@ -304,93 +238,103 @@ public class TaskExecutor : ITaskExecutor
         var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
         return _toolManager.ApplyFiltersToAllTools(allTools, _config.ToolFilter);
     }
-
-
-
-    private async Task ConsiderPlanUpdateAsync(TaskPlan taskPlan, List<string> executionFeedback, IList<IUnifiedTool> availableTools)
+    
+    private async Task<string> InitializeMarkdownPlanAsync(TaskExecutionRequest request)
     {
         try
         {
-            _logger.LogInformation("Considering plan update due to execution feedback");
+            _logger.LogInformation("Initializing markdown-based plan for task: {Task}", request.Task);
             
-            var feedback = $"Execution issues encountered: {string.Join("; ", executionFeedback)}. " +
-                          "Please refine the plan to address these issues and improve execution.";
-            
-            // Get current session for markdown updates
-            var currentSession = _activityLogger.GetCurrentSession();
-            
-            // First, try to update the markdown plan iteratively if we have markdown management
-            if (_markdownTaskStateManager != null && currentSession != null)
+            if (_markdownTaskStateManager == null)
             {
-                try
-                {
-                    _logger.LogInformation("Using iterative markdown-based plan update");
-                    
-                    var currentContext = $"Available tools: {string.Join(", ", availableTools.Select(t => t.Name).Take(10))}. " +
-                                       $"Task: {taskPlan.Task}. Strategy: {taskPlan.Strategy}";
-                    
-                    var updatedMarkdown = await _markdownTaskStateManager.UpdatePlanIterativelyAsync(
-                        currentSession.SessionId, 
-                        feedback, 
-                        currentContext);
-                    
-                    Console.WriteLine("🔄 Plan updated iteratively using markdown-based approach");
-                    
-                    // Provide updated plan context to the conversation
-                    var updatedPlanContext = $"""
-                        📋 Plan updated iteratively based on execution feedback:
-                        
-                        {updatedMarkdown}
-                        
-                        Please follow the updated plan going forward.
-                        """;
-                    _conversationManager.AddAssistantMessage(updatedPlanContext);
-                    
-                    _logger.LogInformation("Plan successfully updated iteratively using markdown approach");
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to update plan iteratively with markdown, falling back to traditional approach");
-                }
+                throw new InvalidOperationException("Markdown task state manager is not available");
             }
             
-            // TODO: Implement plan refinement with markdown-based planning
-            _logger.LogWarning("Plan refinement not yet implemented for markdown-based planning in ConsiderPlanUpdateAsync");
-            // For now, skip plan refinement
-            return;
+            // Use planning service to create initial markdown plan
+            var availableTools = await DiscoverAvailableToolsAsync();
+            string taskMarkdown;
+            
+            if (_planningService != null)
+            {
+                taskMarkdown = await _planningService.InitializeTaskPlanningAsync(
+                    request.SessionId ?? Guid.NewGuid().ToString(), 
+                    request.Task, 
+                    availableTools);
+            }
+            else
+            {
+                // Fallback: create basic markdown structure
+                taskMarkdown = await _markdownTaskStateManager.InitializeTaskMarkdownAsync(
+                    request.SessionId ?? Guid.NewGuid().ToString(), 
+                    request.Task);
+            }
+            
+            await _activityLogger.LogActivityAsync(
+                ActivityTypes.TaskPlanning,
+                "Created new markdown-based plan",
+                new { Task = request.Task, MarkdownLength = taskMarkdown.Length });
+            
+            return taskMarkdown;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to update plan based on execution feedback");
+            _logger.LogError(ex, "Failed to initialize markdown plan for task: {Task}", request.Task);
+            throw;
         }
     }
 
-    private bool IsPlanSignificantlyDifferent(TaskPlan originalPlan, TaskPlan refinedPlan)
+    private void DisplayMarkdownPlan(string taskMarkdown)
     {
-        // Check if the number of steps changed significantly
-        if (Math.Abs(originalPlan.Steps.Count - refinedPlan.Steps.Count) > 1)
-            return true;
-            
-        // Check if the strategy changed significantly
-        var originalWords = originalPlan.Strategy.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var refinedWords = refinedPlan.Strategy.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var strategySimilarity = originalWords.Intersect(refinedWords).Count() / (double)originalWords.Union(refinedWords).Count();
-        
-        if (strategySimilarity < 0.7) // Less than 70% similarity in strategy
-            return true;
-            
-        // Check if required tools changed significantly
-        var originalTools = originalPlan.RequiredTools.ToHashSet();
-        var refinedTools = refinedPlan.RequiredTools.ToHashSet();
-        var toolOverlap = originalTools.Intersect(refinedTools).Count();
-        var totalTools = originalTools.Union(refinedTools).Count();
-        
-        if (totalTools > 0 && toolOverlap / (double)totalTools < 0.8) // Less than 80% tool overlap
-            return true;
-            
-        return false;
+        Console.WriteLine("\n" + "=".PadRight(80, '='));
+        Console.WriteLine("📋 TASK EXECUTION PLAN");
+        Console.WriteLine("=".PadRight(80, '='));
+        Console.WriteLine(taskMarkdown);
+        Console.WriteLine("=".PadRight(80, '=') + "\n");
     }
+
+    private async Task ExecuteMarkdownBasedTaskAsync(string taskMarkdown, TaskExecutionRequest request, AgentConfiguration config, AgentSession session)
+    {
+        try
+        {
+            _logger.LogInformation("Starting markdown-based task execution for session {SessionId}", session.SessionId);
+            
+            // Discover available tools for execution
+            var availableTools = await DiscoverAvailableToolsAsync();
+            var toolDefinitions = availableTools.Select(t => t.GetToolDefinition()).ToArray();
+            
+            // Start the conversation-based execution loop
+            await ExecuteConversationLoopAsync(toolDefinitions, config, session.SessionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to execute markdown-based task for session {SessionId}", session.SessionId);
+            throw;
+        }
+    }
+
+    private async Task ExecuteConversationBasedAsync(TaskExecutionRequest request, AgentConfiguration config)
+    {
+        try
+        {
+            _logger.LogInformation("Starting conversation-based execution (no session/plan)");
+            
+            // Discover available tools for execution
+            var availableTools = await DiscoverAvailableToolsAsync();
+            var toolDefinitions = availableTools.Select(t => t.GetToolDefinition()).ToArray();
+            
+            // Start the conversation-based execution loop without session
+            await ExecuteConversationLoopAsync(toolDefinitions, config, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to execute conversation-based task");
+            throw;
+        }
+    }
+
+
+
+
 
     private AgentConfiguration ApplyRequestOverrides(TaskExecutionRequest request)
     {
@@ -481,101 +425,10 @@ public class TaskExecutor : ITaskExecutor
         }
     }
 
-    private async Task<TaskPlan> CreateTaskPlanAsync(string task)
-    {
-        Console.WriteLine("\n📋 Creating execution plan...");
-        
-        try
-        {
-            // Discover all available tools for planning
-            var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
-            var filteredTools = _toolManager.ApplyFiltersToAllTools(allTools, _config.ToolFilter);
-            
-            // TODO: Use the new markdown-based planning approach
-            // For now, create a simple fallback plan
-            _logger.LogWarning("Using fallback plan creation - markdown-based planning not yet fully integrated");
-            
-            return new TaskPlan
-            {
-                Task = task,
-                Strategy = "Adaptive execution using available tools with markdown-based task management",
-                Steps = new List<PlanStep>
-                {
-                    new PlanStep
-                    {
-                        StepNumber = 1,
-                        Description = "Analyze task requirements and available tools",
-                        IsMandatory = true,
-                        ExpectedOutput = "Understanding of task and available capabilities"
-                    },
-                    new PlanStep
-                    {
-                        StepNumber = 2,
-                        Description = "Execute task using appropriate tools",
-                        IsMandatory = true,
-                        ExpectedOutput = "Task completion"
-                    },
-                    new PlanStep
-                    {
-                        StepNumber = 3,
-                        Description = "Verify results and provide summary",
-                        IsMandatory = true,
-                        ExpectedOutput = "Verification of task completion"
-                    }
-                },
-                RequiredTools = filteredTools.Select(t => t.Name).Take(5).ToList(), // Limit to first 5 tools
-                Complexity = TaskComplexity.Medium,
-                Confidence = 0.7
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create plan, using minimal fallback approach");
-            Console.WriteLine("⚠️  Planning failed, using minimal adaptive approach");
-            
-            // Return a simple fallback plan
-            return new TaskPlan
-            {
-                Task = task,
-                Strategy = "Adaptive execution using available tools",
-                Steps = new List<PlanStep>
-                {
-                    new PlanStep
-                    {
-                        StepNumber = 1,
-                        Description = "Execute task using appropriate tools",
-                        IsMandatory = true,
-                        ExpectedOutput = "Task completion"
-                    }
-                },
-                Complexity = TaskComplexity.Medium,
-                Confidence = 0.7
-            };
-        }
-    }
 
-    private void DisplayTaskPlan(TaskPlan plan)
-    {
-        Console.WriteLine($"\n📋 Execution Plan for: {plan.Task}");
-        Console.WriteLine($"Strategy: {plan.Strategy}");
-        Console.WriteLine($"Complexity: {plan.Complexity}");
-        Console.WriteLine($"Confidence: {plan.Confidence:P0}");
-        Console.WriteLine($"Required Tools: {string.Join(", ", plan.RequiredTools)}");
-        
-        Console.WriteLine("\nExecution Steps:");
-        foreach (var step in plan.Steps)
-        {
-            var mandatory = step.IsMandatory ? "✓" : "○";
-            Console.WriteLine($"  {mandatory} Step {step.StepNumber}: {step.Description}");
-            if (step.PotentialTools.Count > 0)
-            {
-                Console.WriteLine($"    Tools: {string.Join(", ", step.PotentialTools)}");
-            }
-        }
-        Console.WriteLine();
-    }
 
-    private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverAndSelectToolsForPlanAsync(TaskPlan plan, TaskExecutionRequest request, bool isResumingSession = false)
+    [Obsolete("This method uses TaskPlan and should be removed - use markdown-based approach")]
+    private async Task<OpenAIIntegration.Model.ToolDefinition[]> OBSOLETE_DiscoverAndSelectToolsForPlanAsync_REMOVE(string planString, TaskExecutionRequest request, bool isResumingSession = false)
     {
         var filterConfig = request.ToolFilter ?? _config.ToolFilter;
         
@@ -739,7 +592,7 @@ public class TaskExecutor : ITaskExecutor
         return isResumingSession;
     }
 
-    private async Task ExecuteConversationLoopAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools, AgentConfiguration config, TaskPlan? taskPlan = null, CancellationToken cancellationToken = default)
+    private async Task ExecuteConversationLoopAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools, AgentConfiguration config, string? sessionId = null, CancellationToken cancellationToken = default)
     {
         // Keep track of currently available tools for dynamic expansion
         var currentTools = availableTools.ToList();
@@ -1679,68 +1532,4 @@ public class TaskExecutor : ITaskExecutor
     /// <summary>
     /// Extract a TaskPlan from markdown content for compatibility purposes
     /// </summary>
-    private Task<TaskPlan?> ExtractPlanFromMarkdownAsync(string markdown)
-    {
-        try
-        {
-            // Simple extraction for now - this could be improved with better parsing
-            var lines = markdown.Split('\n');
-            var task = "";
-            var strategy = "";
-            var steps = new List<PlanStep>();
-            
-            foreach (var line in lines)
-            {
-                var trimmed = line.Trim();
-                
-                // Extract task title
-                if (trimmed.StartsWith("# Task:"))
-                {
-                    task = trimmed.Substring(7).Trim();
-                }
-                // Extract strategy
-                else if (trimmed.StartsWith("**Strategy:**"))
-                {
-                    strategy = trimmed.Substring(13).Trim();
-                }
-                // Extract subtasks
-                else if (trimmed.StartsWith("- [ ]") || trimmed.StartsWith("- [x]"))
-                {
-                    var stepMatch = System.Text.RegularExpressions.Regex.Match(trimmed, @"(?:\*\*)?Step (\d+)(?:\*\*)?: (.+)");
-                    if (stepMatch.Success)
-                    {
-                        if (int.TryParse(stepMatch.Groups[1].Value, out int stepNumber))
-                        {
-                            var description = stepMatch.Groups[2].Value.Trim();
-                            steps.Add(new PlanStep
-                            {
-                                StepNumber = stepNumber,
-                                Description = description,
-                                IsMandatory = true
-                            });
-                        }
-                    }
-                }
-            }
-            
-            if (!string.IsNullOrEmpty(task))
-            {
-                return Task.FromResult<TaskPlan?>(new TaskPlan
-                {
-                    Task = task,
-                    Strategy = strategy,
-                    Steps = steps,
-                    Complexity = TaskComplexity.Medium,
-                    Confidence = 0.8
-                });
-            }
-            
-            return Task.FromResult<TaskPlan?>(null);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to extract TaskPlan from markdown");
-            return Task.FromResult<TaskPlan?>(null);
-        }
-    }
 }
