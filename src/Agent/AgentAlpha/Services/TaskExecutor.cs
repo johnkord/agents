@@ -161,50 +161,47 @@ public class TaskExecutor : ITaskExecutor
 
             // Step 3: Initialize or resume markdown-based task planning
             string taskMarkdown = "";
+            var session = await _sessionManager.GetSessionAsync(request.SessionId);
 
-            // Check if we're resuming a session with existing markdown plan
-            if (!string.IsNullOrEmpty(request.SessionId))
+            if (!string.IsNullOrEmpty(session?.TaskStateMarkdown))
             {
-                var session = await _sessionManager.GetSessionAsync(request.SessionId);
+                Console.WriteLine("📋 Found existing markdown-based plan in session");
+                taskMarkdown = session.TaskStateMarkdown;
 
-                if (!string.IsNullOrEmpty(session?.TaskStateMarkdown))
-                {
-                    Console.WriteLine("📋 Found existing markdown-based plan in session");
-                    taskMarkdown = session.TaskStateMarkdown;
-
-                    await _activityLogger.LogActivityAsync(
-                        ActivityTypes.TaskPlanning,
-                        "Found existing markdown plan in session",
-                        new { SessionId = request.SessionId, HasMarkdown = true, MarkdownPlan = taskMarkdown });
-                }
-                else if (session != null)
-                {
-                    // Session exists but no markdown plan yet
-                    Console.WriteLine("📋 No existing plan found, creating new markdown plan");
-                    taskMarkdown = await InitializeMarkdownPlanAsync(request);
-                    
-                    // Save the markdown plan to the session only if MarkdownTaskStateManager didn't handle it
-                    if (_markdownTaskStateManager == null)
-                    {
-                        session.TaskStateMarkdown = taskMarkdown;
-                        session.LastUpdatedAt = DateTime.UtcNow;
-                        await _sessionManager.SaveSessionAsync(session);
-                    }
-                    // If MarkdownTaskStateManager is available, it has already saved the markdown to the session
-                }
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.TaskPlanning,
+                    "Found existing markdown plan in session",
+                    new { SessionId = request.SessionId, HasMarkdown = true, MarkdownPlan = taskMarkdown });
             }
-            else
+            else if (session != null)
             {
-                // No session ID provided, create markdown plan without persistence
-                Console.WriteLine("📋 Creating new markdown-based plan");
+                // Session exists but no markdown plan yet
+                Console.WriteLine("📋 No existing plan found, creating new markdown plan");
                 taskMarkdown = await InitializeMarkdownPlanAsync(request);
+                
+                // Save the markdown plan to the session only if MarkdownTaskStateManager didn't handle it
+                if (_markdownTaskStateManager == null)
+                {
+                    session.TaskStateMarkdown = taskMarkdown;
+                    session.LastUpdatedAt = DateTime.UtcNow;
+                    await _sessionManager.SaveSessionAsync(session);
+                }
+                // If MarkdownTaskStateManager is available, it has already saved the markdown to the session
             }
 
             // Display the markdown plan to the user
-            if (!string.IsNullOrEmpty(taskMarkdown))
+            if (string.IsNullOrEmpty(taskMarkdown))
             {
-                DisplayMarkdownPlan(taskMarkdown);
+                await _activityLogger.LogFailedActivityAsync(
+                    ActivityTypes.Error,
+                    "Failed to initialize task markdown",
+                    "Markdown task planning did not produce a valid plan.",
+                    new { Error = "Markdown plan is empty or null" });
+                throw new InvalidOperationException($"Markdown task planning did not produce a valid plan. " +
+                                                    "Please check the task description and available tools.");
             }
+
+            DisplayMarkdownPlan(taskMarkdown);
 
             // Step 4: Execute using markdown-based task management
             if (!string.IsNullOrEmpty(taskMarkdown) && !string.IsNullOrEmpty(request.SessionId))
@@ -717,6 +714,15 @@ public class TaskExecutor : ITaskExecutor
         }
 
         Console.WriteLine($"⚠️  Reached maximum iterations ({config.MaxIterations}).");
+        if (sessionId != null)
+        {
+            await _activityLogger.LogFailedActivityAsync(
+                ActivityTypes.Error,
+                "Max iterations reached",
+                $"Reached maximum iterations ({config.MaxIterations}).",
+                new { MaxIterations = config.MaxIterations });
+        }
+        throw new InvalidOperationException($"Reached maximum iterations ({config.MaxIterations}).");
     }
 
     // ---------------- helper ------------------------------------------------
