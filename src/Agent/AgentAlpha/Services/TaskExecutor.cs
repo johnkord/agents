@@ -183,10 +183,14 @@ public class TaskExecutor : ITaskExecutor
                     Console.WriteLine("📋 No existing plan found, creating new markdown plan");
                     taskMarkdown = await InitializeMarkdownPlanAsync(request);
                     
-                    // Save the markdown plan to the session
-                    session.TaskStateMarkdown = taskMarkdown;
-                    session.LastUpdatedAt = DateTime.UtcNow;
-                    await _sessionManager.SaveSessionAsync(session);
+                    // Save the markdown plan to the session only if MarkdownTaskStateManager didn't handle it
+                    if (_markdownTaskStateManager == null)
+                    {
+                        session.TaskStateMarkdown = taskMarkdown;
+                        session.LastUpdatedAt = DateTime.UtcNow;
+                        await _sessionManager.SaveSessionAsync(session);
+                    }
+                    // If MarkdownTaskStateManager is available, it has already saved the markdown to the session
                 }
             }
             else
@@ -259,6 +263,13 @@ public class TaskExecutor : ITaskExecutor
     {
         _logger.LogInformation("Initializing markdown-based plan for task: {Task}", request.Task);
 
+        // If MarkdownTaskStateManager is available, use it directly for consistent state management
+        if (_markdownTaskStateManager != null && !string.IsNullOrEmpty(request.SessionId))
+        {
+            return await _markdownTaskStateManager.InitializeTaskMarkdownAsync(request.SessionId, request.Task);
+        }
+
+        // Fallback to PlanningService for cases where MarkdownTaskStateManager is not available
         var availableTools = await DiscoverAvailableToolsAsync();
         var state = new CurrentState { CapturedAt = DateTime.UtcNow };
 
@@ -715,15 +726,9 @@ public class TaskExecutor : ITaskExecutor
         try
         {
             await _markdownTaskStateManager.UpdateTaskMarkdownAsync(sessionId, description, result);
-
-            // Persist the updated markdown to the AgentSession
-            var session = await _sessionManager.GetSessionAsync(sessionId);
-            if (session != null)
-            {
-                session.TaskStateMarkdown = await _markdownTaskStateManager.GetTaskMarkdownAsync(sessionId);
-                session.LastUpdatedAt = DateTime.UtcNow;
-                await _sessionManager.SaveSessionAsync(session);
-            }
+            
+            // Note: MarkdownTaskStateManager.UpdateTaskMarkdownAsync already persists the markdown to the session
+            // so we don't need to manually save it again here
         }
         catch (Exception ex)
         {
