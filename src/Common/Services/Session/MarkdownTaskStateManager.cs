@@ -128,7 +128,31 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
             var currentMarkdown = await GetTaskMarkdownAsync(sessionId);
             if (string.IsNullOrEmpty(currentMarkdown))
             {
-                throw new InvalidOperationException($"No task markdown found for session {sessionId}");
+                // If no markdown exists, initialize it with a basic structure
+                _logger.LogWarning("No task markdown found for session {SessionId}, initializing with action result", sessionId);
+                
+                var basicMarkdown = $"""
+                    # Task: Session {sessionId}
+                    
+                    **Strategy:** Task execution in progress
+                    
+                    **Status:** In Progress
+                    
+                    ## Progress Notes
+                    
+                    *Session started without initial task plan*
+                    
+                    ### Action: {actionDescription}
+                    Result: {actionResult}
+                    {(string.IsNullOrEmpty(observations) ? "" : $"\nObservations: {observations}")}
+                    
+                    ## Context
+                    
+                    Session executing without predefined task structure.
+                    """;
+                
+                await SaveTaskMarkdownToSessionAsync(sessionId, basicMarkdown);
+                return basicMarkdown;
             }
             
             _logger.LogInformation("Updating task markdown for session {SessionId} with action: {Action}", sessionId, actionDescription);
@@ -248,7 +272,31 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
             var currentMarkdown = await GetTaskMarkdownAsync(sessionId);
             if (string.IsNullOrEmpty(currentMarkdown))
             {
-                throw new InvalidOperationException($"No task markdown found for session {sessionId}");
+                _logger.LogWarning("No task markdown found for session {SessionId}, cannot complete subtask", sessionId);
+                
+                // Initialize with the completed subtask
+                var initialMarkdown = $"""
+                    # Task: Session {sessionId}
+                    
+                    **Strategy:** Task execution in progress
+                    
+                    **Status:** In Progress
+                    
+                    ## Subtasks
+                    
+                    - [x] {subtaskDescription} - {completionResult}
+                    
+                    ## Progress Notes
+                    
+                    *Subtask completed on {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC*
+                    
+                    ## Context
+                    
+                    {completionResult}
+                    """;
+                
+                await SaveTaskMarkdownToSessionAsync(sessionId, initialMarkdown);
+                return initialMarkdown;
             }
             
             _logger.LogInformation("Completing subtask in markdown for session {SessionId}: {Subtask}", sessionId, subtaskDescription);

@@ -7,6 +7,7 @@ using AgentAlpha.Models;
 using Common.Interfaces.Session;
 using Common.Models.Session;
 using System.Text.Json;                 // +NEW
+using System.Linq;                      // make Count() extension available
 
 namespace AgentAlpha.Services;
 
@@ -162,7 +163,7 @@ public class TaskExecutor : ITaskExecutor
             string taskMarkdown = "";
 
             // Check if we're resuming a session with existing markdown plan
-            if (isResumingSession && !string.IsNullOrEmpty(request.SessionId))
+            if (!string.IsNullOrEmpty(request.SessionId))
             {
                 var session = await _sessionManager.GetSessionAsync(request.SessionId);
 
@@ -176,14 +177,21 @@ public class TaskExecutor : ITaskExecutor
                         "Found existing markdown plan in session",
                         new { SessionId = request.SessionId, HasMarkdown = true, MarkdownPlan = taskMarkdown });
                 }
-                else
+                else if (session != null)
                 {
+                    // Session exists but no markdown plan yet
                     Console.WriteLine("📋 No existing plan found, creating new markdown plan");
                     taskMarkdown = await InitializeMarkdownPlanAsync(request);
+                    
+                    // Save the markdown plan to the session
+                    session.TaskStateMarkdown = taskMarkdown;
+                    session.LastUpdatedAt = DateTime.UtcNow;
+                    await _sessionManager.SaveSessionAsync(session);
                 }
             }
             else
             {
+                // No session ID provided, create markdown plan without persistence
                 Console.WriteLine("📋 Creating new markdown-based plan");
                 taskMarkdown = await InitializeMarkdownPlanAsync(request);
             }
@@ -252,21 +260,14 @@ public class TaskExecutor : ITaskExecutor
         _logger.LogInformation("Initializing markdown-based plan for task: {Task}", request.Task);
 
         var availableTools = await DiscoverAvailableToolsAsync();
+        var state = new CurrentState { CapturedAt = DateTime.UtcNow };
 
-        // Build minimal state – session already contains context
-        var state = new CurrentState
-        {
-            CapturedAt = DateTime.UtcNow
-        };
-
-        // --- call signature changed (no context arg) ---
         var markdownPlan = await _planningService.InitializeTaskPlanningWithStateAsync(
             request.SessionId ?? Guid.NewGuid().ToString(),
             request.Task,
             availableTools,
             state);
 
-        // No local copy needed
         return markdownPlan;
     }
 
@@ -545,20 +546,26 @@ public class TaskExecutor : ITaskExecutor
         return isResumingSession;
     }
 
-    private async Task ExecuteConversationLoopAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools, AgentConfiguration config, string? sessionId = null, CancellationToken cancellationToken = default)
+    private async Task ExecuteConversationLoopAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools,
+                                                    AgentConfiguration config,
+                                                    string? sessionId = null,
+                                                    CancellationToken cancellationToken = default)
     {
         // Keep track of currently available tools for dynamic expansion
         var currentTools = availableTools.ToList();
         var allAvailableTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
         var filteredAvailableTools = _toolManager.ApplyFiltersToAllTools(allAvailableTools, config.ToolFilter);
 
+        // --- new: variables to capture previous iteration info -------------
+        string? lastActionDescription = null;
+        string? lastActionResult      = null;
+        // -------------------------------------------------------------------
+
         for (int i = 0; i < config.MaxIterations; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             Console.WriteLine($"\n--- Iteration {i + 1} ---");
 
-            // Process one iteration with potential tool expansion
             var response = await _conversationManager.ProcessIterationWithExpansionAsync(
                 currentTools.ToArray(),
                 async () => await GetAdditionalToolsAsync(filteredAvailableTools, currentTools.ToArray()));
@@ -632,32 +639,41 @@ public class TaskExecutor : ITaskExecutor
                 _conversationManager.AddToolResults(toolSummaries);
                 Console.WriteLine($"🔧 {string.Join("\n", toolSummaries)}");
 
-                // Log conversation statistics for monitoring
-                var stats = _conversationManager.GetConversationStatistics();
-                _logger.LogDebug("Conversation stats: {TotalMessages} messages ({EstimatedTokens} estimated tokens)",
-                    stats.TotalMessages, stats.EstimatedTokens);
+                // --- new: remember action/result for next iteration ----------
+                lastActionDescription = "Tool execution(s)";
+                lastActionResult      = string.Join(" | ", toolSummaries);
+                // ---------------------------------------------------------
 
-                if (taskCompleted)               // NEW
+                if (taskCompleted)
                 {
+                    if (sessionId != null)
+                        await TryUpdateMarkdownAsync(sessionId, "Task completed", lastActionResult);
                     Console.WriteLine("✅ Task completed!");
                     return;
                 }
 
-                continue; // go to next iteration
+                // update markdown before continuing to next iteration
+                if (sessionId != null)
+                    await TryUpdateMarkdownAsync(sessionId, lastActionDescription!, lastActionResult!);
+                continue;
             }
 
             // Display assistant response
             Console.WriteLine($"AI: {response.AssistantText}");
 
-            // Check if task is complete
+            // --- remember assistant response for next iteration -------------
+            lastActionDescription = "Assistant response";
+            lastActionResult      = response.AssistantText;
+            // ----------------------------------------------------------------
+
             if (_conversationManager.IsTaskComplete(response.AssistantText))
             {
-                _logger.LogInformation("Task completion detected in iteration {Iteration}", i + 1);
+                if (sessionId != null)
+                    await TryUpdateMarkdownAsync(sessionId, "Task completed", lastActionResult);
                 Console.WriteLine("✅ Task completed!");
                 return;
             }
 
-            // Check for repetitive responses that indicate the agent is stuck
             if (_conversationManager.WouldBeRepetitive(response.AssistantText))
             {
                 Console.WriteLine("🔄 Detected repetitive responses - attempting to break out of loop");
@@ -670,6 +686,8 @@ public class TaskExecutor : ITaskExecutor
                 // Try one more iteration with guidance, then exit if still stuck
                 if (i >= 2) // Allow at least 3 iterations before breaking due to repetition
                 {
+                    if (sessionId != null)
+                        await TryUpdateMarkdownAsync(sessionId, lastActionDescription!, lastActionResult!);
                     Console.WriteLine("⚠️  Breaking conversation loop due to repetitive responses.");
                     break;
                 }
@@ -680,34 +698,42 @@ public class TaskExecutor : ITaskExecutor
                 _conversationManager.AddAssistantMessage(response.AssistantText);
                 _logger.LogDebug("Added assistant response to conversation for iteration {Iteration}", i + 1);
             }
+
+            // --- update markdown at the bottom of the iteration -------------
+            if (sessionId != null && lastActionDescription != null)
+                await TryUpdateMarkdownAsync(sessionId, lastActionDescription, lastActionResult ?? string.Empty);
+            // ----------------------------------------------------------------
         }
 
         Console.WriteLine($"⚠️  Reached maximum iterations ({config.MaxIterations}).");
     }
 
-    private async Task<OpenAIIntegration.Model.ToolDefinition[]> GetAdditionalToolsAsync(
-        IList<IUnifiedTool> allAvailableTools,
-        OpenAIIntegration.Model.ToolDefinition[] currentTools)
+    // ---------------- helper ------------------------------------------------
+    private async Task TryUpdateMarkdownAsync(string sessionId, string description, string result)
     {
+        if (_markdownTaskStateManager == null) return;
         try
         {
-            var conversationContext = _conversationManager.GetCurrentMessages();
-            return await _toolSelector.SelectAdditionalToolsAsync(
-                conversationContext,
-                allAvailableTools,
-                currentTools,
-                _config.ToolSelection.MaxAdditionalToolsPerIteration);
+            await _markdownTaskStateManager.UpdateTaskMarkdownAsync(sessionId, description, result);
+
+            // Persist the updated markdown to the AgentSession
+            var session = await _sessionManager.GetSessionAsync(sessionId);
+            if (session != null)
+            {
+                session.TaskStateMarkdown = await _markdownTaskStateManager.GetTaskMarkdownAsync(sessionId);
+                session.LastUpdatedAt = DateTime.UtcNow;
+                await _sessionManager.SaveSessionAsync(session);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get additional tools");
-            return Array.Empty<OpenAIIntegration.Model.ToolDefinition>();
+            _logger.LogError(ex, "Failed to update markdown for session {SessionId}", sessionId);
         }
     }
+    // --------------------------------------------------------------------
 
     private async Task SaveSessionIfApplicableAsync(TaskExecutionRequest request)
     {
-        // no session → nothing to save
         if (string.IsNullOrWhiteSpace(request.SessionId))
             return;
 
@@ -715,11 +741,9 @@ public class TaskExecutor : ITaskExecutor
         {
             var session = await _sessionManager.GetSessionAsync(request.SessionId);
             if (session == null) return;
-
-            // persist latest conversation
+            
             session.SetConversationMessages(_conversationManager.GetCurrentMessages());
             session.Status = SessionStatus.Active;
-
             await _sessionManager.SaveSessionAsync(session);
             _logger.LogInformation("Saved session state for {SessionId}", request.SessionId);
         }
@@ -728,4 +752,22 @@ public class TaskExecutor : ITaskExecutor
             _logger.LogError(ex, "Failed to save session {SessionId}", request.SessionId);
         }
     }
+
+    // ------------------------------------------------------------------    
+    // NEW helper used by the conversation loop    
+    // ------------------------------------------------------------------    
+
+    /// <summary>
+    /// Ask <see cref="_toolSelector"/> for additional tools based on the
+    /// current conversation context.
+    /// </summary>
+    private Task<OpenAIIntegration.Model.ToolDefinition[]> GetAdditionalToolsAsync(
+        IList<IUnifiedTool> remainingTools,
+        OpenAIIntegration.Model.ToolDefinition[] currentlySelectedTools,
+        int maxAdditional = 3)
+        => _toolSelector.SelectAdditionalToolsAsync(
+                _conversationManager.GetCurrentMessages(),          // conversation context
+                remainingTools,                                     // still-available tools
+                currentlySelectedTools,                             // already selected
+                maxAdditional);                                     // how many more
 }
