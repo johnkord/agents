@@ -47,10 +47,7 @@ public class AgentSession
     /// </summary>
     public SessionStatus Status { get; set; } = SessionStatus.Active;
     
-    /// <summary>
-    /// Serialized current task plan for the session
-    /// </summary>
-    public string CurrentPlan { get; set; } = string.Empty;
+
     
     /// <summary>
     /// Serialized activity log for session audit trail
@@ -113,39 +110,7 @@ public class AgentSession
         }
     }
     
-    /// <summary>
-    /// Get the current task plan for this session
-    /// </summary>
-    public TaskPlan? GetCurrentPlan()
-    {
-        if (string.IsNullOrEmpty(CurrentPlan))
-            return null;
-            
-        try
-        {
-            return JsonSerializer.Deserialize<TaskPlan>(CurrentPlan);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-    
-    /// <summary>
-    /// Set the current task plan for this session
-    /// </summary>
-    public void SetCurrentPlan(TaskPlan? plan)
-    {
-        try
-        {
-            CurrentPlan = plan != null ? JsonSerializer.Serialize(plan) : string.Empty;
-            LastUpdatedAt = DateTime.UtcNow;
-        }
-        catch
-        {
-            CurrentPlan = string.Empty;
-        }
-    }
+
     
     /// <summary>
     /// Get the activity log for this session

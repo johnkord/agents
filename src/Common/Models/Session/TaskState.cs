@@ -177,28 +177,7 @@ public class TaskState
         }
     }
     
-    /// <summary>
-    /// Create a TaskState from a TaskPlan
-    /// </summary>
-    public static TaskState FromTaskPlan(TaskPlan taskPlan)
-    {
-        var taskState = new TaskState
-        {
-            Task = taskPlan.Task,
-            Strategy = taskPlan.Strategy,
-            Subtasks = taskPlan.Steps.Select(step => new SubtaskState
-            {
-                StepNumber = step.StepNumber,
-                Description = step.Description,
-                ExpectedInput = step.ExpectedInput,
-                ExpectedOutput = step.ExpectedOutput,
-                IsMandatory = step.IsMandatory,
-                PotentialTools = step.PotentialTools.ToList()
-            }).ToList()
-        };
-        
-        return taskState;
-    }
+
 }
 
 /// <summary>

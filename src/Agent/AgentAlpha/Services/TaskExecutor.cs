@@ -297,29 +297,7 @@ public class TaskExecutor : ITaskExecutor
         }
     }
 
-    private bool IsPlanRelevantForTask(TaskPlan existingPlan, string newTask)
-    {
-        // Simple heuristic to check if the existing plan is still relevant
-        // Check for keyword overlap and task similarity
-        var existingTaskWords = existingPlan.Task.ToLowerInvariant()
-            .Split(new[] { ' ', ',', '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
-            .Where(w => w.Length > 3)
-            .ToHashSet();
-            
-        var newTaskWords = newTask.ToLowerInvariant()
-            .Split(new[] { ' ', ',', '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
-            .Where(w => w.Length > 3)
-            .ToHashSet();
-            
-        var commonWords = existingTaskWords.Intersect(newTaskWords).Count();
-        var totalUniqueWords = existingTaskWords.Union(newTaskWords).Count();
-        
-        // Consider plan relevant if there's significant word overlap (>30%)
-        var similarity = totalUniqueWords > 0 ? (double)commonWords / totalUniqueWords : 0;
-        
-        _logger.LogDebug("Plan relevance check: {Similarity:P0} similarity between tasks", similarity);
-        return similarity > 0.3;
-    }
+
 
     private async Task<IList<IUnifiedTool>> DiscoverAvailableToolsAsync()
     {
@@ -327,33 +305,7 @@ public class TaskExecutor : ITaskExecutor
         return _toolManager.ApplyFiltersToAllTools(allTools, _config.ToolFilter);
     }
 
-    private async Task SavePlanToSessionAsync(string sessionId, TaskPlan plan)
-    {
-        try
-        {
-            var session = await _sessionManager.GetSessionAsync(sessionId);
-            if (session != null)
-            {
-                // Use markdown task state manager to store the plan as markdown
-                if (_markdownTaskStateManager != null)
-                {
-                    await _markdownTaskStateManager.InitializeTaskMarkdownAsync(sessionId, plan.Task);
-                    _logger.LogDebug("Initialized markdown task state for session {SessionId}", sessionId);
-                }
-                else
-                {
-                    // Fallback to traditional CurrentPlan storage if markdown manager not available
-                    session.SetCurrentPlan(plan);
-                    await _sessionManager.SaveSessionAsync(session);
-                    _logger.LogDebug("Saved plan to session {SessionId} (fallback mode)", sessionId);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to save plan to session {SessionId}", sessionId);
-        }
-    }
+
 
     private async Task ConsiderPlanUpdateAsync(TaskPlan taskPlan, List<string> executionFeedback, IList<IUnifiedTool> availableTools)
     {
