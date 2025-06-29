@@ -79,23 +79,15 @@ public class PlanningService : IPlanningService
             // Create markdown-based planning prompt
             var markdownPlanPrompt = CreateMarkdownPlanningPrompt(task, availableTools, currentState, context);
             
-            var request = new RequestsCreateRequest
+            var request = new ResponsesCreateRequest
             {
-                Model = _config.ModelId,
-                Messages = new[]
+                Model = _config.Model,
+                Input = new[]
                 {
-                    new Message 
-                    { 
-                        Role = MessageRole.System, 
-                        Content = "You are an expert task planning assistant. Create comprehensive markdown-based task plans with clear checklist items for execution tracking." 
-                    },
-                    new Message 
-                    { 
-                        Role = MessageRole.User, 
-                        Content = markdownPlanPrompt 
-                    }
+                    new { role = "system", content = "You are an expert task planning assistant. Create comprehensive markdown-based task plans with clear checklist items for execution tracking." },
+                    new { role = "user", content = markdownPlanPrompt }
                 },
-                MaxTokens = 2000
+                MaxOutputTokens = 2000
             };
 
             // Log the planning activity
@@ -108,11 +100,16 @@ public class PlanningService : IPlanningService
                 );
             }
 
-            var response = await _openAi.CreateRequestsAsync(request);
+            var response = await _openAi.CreateResponseAsync(request);
+            
+            var outputMessage = response.Output?
+                .OfType<OutputMessage>()
+                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase));
+            
+            var markdownPlan = ExtractTextFromContent(outputMessage?.Content);
 
-            if (response?.Choices?.FirstOrDefault()?.Message?.Content != null)
+            if (!string.IsNullOrEmpty(markdownPlan))
             {
-                var markdownPlan = response.Choices.First().Message.Content;
                 _logger.LogInformation("Successfully created markdown task plan for session {SessionId}", sessionId);
                 return markdownPlan;
             }
@@ -1019,5 +1016,26 @@ Create a logical, state-aware execution plan using the create_execution_plan too
         
         _logger.LogInformation("Created fallback markdown plan for task: {Task}", task);
         return string.Join("\n", plan);
+    }
+
+    /// <summary>
+    /// Extracts text content from OpenAI response
+    /// </summary>
+    private static string ExtractTextFromContent(JsonElement? content)
+    {
+        if (!content.HasValue || content.Value.ValueKind != JsonValueKind.Array)
+            return "";
+
+        foreach (var item in content.Value.EnumerateArray())
+        {
+            if (item.TryGetProperty("type", out var typeElement) && 
+                typeElement.GetString() == "output_text" &&
+                item.TryGetProperty("text", out var textElement))
+            {
+                return textElement.GetString() ?? "";
+            }
+        }
+
+        return "";
     }
 }
