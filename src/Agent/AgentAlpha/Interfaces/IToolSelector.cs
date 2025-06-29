@@ -61,4 +61,12 @@ public interface IToolSelector
     /// </summary>
     /// <param name="activityLogger">The activity logger to use for this session</param>
     void SetActivityLogger(ISessionActivityLogger? activityLogger);
+
+    /// <summary>
+    /// Ask the LLM if there are additional (currently unavailable) tools
+    /// that would help with the task.  
+    /// Returns an array of tool *names* the model would like to have,
+    /// or an empty array if none are suggested.
+    /// </summary>
+    Task<string[]> RecommendMissingToolsAsync(string task, IList<IUnifiedTool> availableTools);
 }

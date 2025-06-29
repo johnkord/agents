@@ -147,11 +147,27 @@
             "envFile": "${workspaceFolder}/.env"
         },
         {
-            "name": "AgentAlpha (Quick Test)",
+            "name": "AgentAlpha (Quick Test 1)",
             "type": "coreclr",
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
             "args": ["--max-iterations", "3", "--verbose", "list all model names that are available through openai, that can be passed as parameters to openai APIs"],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (Quick Test 2)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": ["--max-iterations", "5", "--verbose", "Come up with a plan to build a highly efficient kernel using the Rust programming language"],
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",
             "stopAtEntry": false,

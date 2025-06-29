@@ -439,6 +439,23 @@ public class TaskExecutor : ITaskExecutor
             Console.WriteLine($"🎯 Selected {selectedTools.Length} relevant tools {selectionContext}: " +
                             $"{string.Join(", ", selectedTools.Select(t => t.Name))}");
 
+            // NEW ------------------------------------------------------------
+            // Ask the LLM if it would *like* other tools that we don't have.
+            var desiredExtras = await _toolSelector.RecommendMissingToolsAsync(
+                                    request.Task, allTools);
+
+            if (desiredExtras.Length > 0)
+            {
+                Console.WriteLine($"💡 LLM suggested missing tools: {string.Join(", ", desiredExtras)}");
+
+                // NEW – emit an activity log instead of updating markdown
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.ToolSelection,
+                    "LLM recommended missing tools",
+                    new { Task = request.Task, SuggestedTools = desiredExtras });
+            }
+            // ----------------------------------------------------------------
+
             if (selectedTools.Length < filteredTools.Count)
             {
                 var notSelected = filteredTools
