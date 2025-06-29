@@ -8,6 +8,7 @@ using AgentAlpha.Models;
 using AgentAlpha.Configuration;
 using Common.Models.Session;
 using Common.Interfaces.Session;
+using System.Text;
 
 namespace AgentAlpha.Services;
 
@@ -237,5 +238,21 @@ public class PlanningService : IPlanningService
         }
 
         return "";
+    }
+
+    /// <summary>
+    /// Very lightweight fallback analysis – just summarises counts. Replaces the
+    /// removed full analyser so the build succeeds.
+    /// </summary>
+    private static string AnalyzeCurrentState(CurrentState state, IList<IUnifiedTool> tools)
+    {
+        if (state == null) return string.Empty;
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"• Context provided: {(!string.IsNullOrWhiteSpace(state.SessionContext))}");
+        sb.AppendLine($"• Previous results: {state.PreviousResults?.Count ?? 0}");
+        sb.AppendLine($"• User prefs set : {state.UserPreferences != null}");
+        sb.AppendLine($"• Available tools: {tools.Count}");
+        return sb.ToString();
     }
 }

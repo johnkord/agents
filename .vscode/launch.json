@@ -151,7 +151,7 @@
             "type": "coreclr",
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
-            "args": ["--max-iterations", "3", "--verbose", "which models are available through openai?"],
+            "args": ["--max-iterations", "3", "--verbose", "list all model names that are available through openai, that can be passed as parameters to openai APIs"],
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",
             "stopAtEntry": false,

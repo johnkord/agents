@@ -7,7 +7,6 @@ using AgentAlpha.Models;
 using Common.Interfaces.Session;
 using Common.Models.Session;
 using System.Text.Json;                 // +NEW
-using System.Text;
 
 namespace AgentAlpha.Services;
 
@@ -90,10 +89,10 @@ public class TaskExecutor : ITaskExecutor
 
         // Apply request-specific configuration overrides
         var effectiveConfig = ApplyRequestOverrides(request);
-        
+
         // Initialize session and activity logging
         AgentSession? currentSession = null;
-        
+
         try
         {
             // Step 1: Connect to MCP Server
@@ -101,7 +100,7 @@ public class TaskExecutor : ITaskExecutor
 
             // Step 2: Initialize conversation and determine if we're resuming a session
             var isResumingSession = await InitializeConversationAsync(request);
-            
+
             // Set up activity logging for the session
             if (!string.IsNullOrEmpty(request.SessionId))
             {
@@ -109,11 +108,11 @@ public class TaskExecutor : ITaskExecutor
                 if (currentSession != null)
                 {
                     _activityLogger.SetCurrentSession(currentSession);
-                    
+
                     // Set activity logger for all services that need OpenAI request logging
                     _toolSelector.SetActivityLogger(_activityLogger);
                     _planningService.SetActivityLogger(_activityLogger);
-                    
+
                     await _activityLogger.LogActivityAsync(
                         ActivityTypes.SessionStart,
                         $"Resumed session for task: {request.Task}",
@@ -125,11 +124,11 @@ public class TaskExecutor : ITaskExecutor
                 // Create new session
                 currentSession = await _sessionManager.CreateSessionAsync(request.SessionName);
                 _activityLogger.SetCurrentSession(currentSession);
-                
+
                 // Set activity logger for all services that need OpenAI request logging
                 _toolSelector.SetActivityLogger(_activityLogger);
                 _planningService.SetActivityLogger(_activityLogger);
-                
+
                 await _activityLogger.LogActivityAsync(
                     ActivityTypes.SessionStart,
                     $"Created new session for task: {request.Task}",
@@ -143,11 +142,11 @@ public class TaskExecutor : ITaskExecutor
                 var defaultSessionName = $"Session {timestamp}";
                 currentSession = await _sessionManager.CreateSessionAsync(defaultSessionName);
                 _activityLogger.SetCurrentSession(currentSession);
-                
+
                 // Set activity logger for all services that need OpenAI request logging
                 _toolSelector.SetActivityLogger(_activityLogger);
                 _planningService.SetActivityLogger(_activityLogger);
-                
+
                 await _activityLogger.LogActivityAsync(
                     ActivityTypes.SessionStart,
                     $"Created default session for task: {request.Task}",
@@ -157,17 +156,17 @@ public class TaskExecutor : ITaskExecutor
 
             // Step 3: Initialize or resume markdown-based task planning
             string taskMarkdown = "";
-            
+
             // Check if we're resuming a session with existing markdown plan
             if (isResumingSession && !string.IsNullOrEmpty(request.SessionId))
             {
                 var session = await _sessionManager.GetSessionAsync(request.SessionId);
-                
+
                 if (!string.IsNullOrEmpty(session?.TaskStateMarkdown))
                 {
                     Console.WriteLine("📋 Found existing markdown-based plan in session");
                     taskMarkdown = session.TaskStateMarkdown;
-                    
+
                     await _activityLogger.LogActivityAsync(
                         ActivityTypes.TaskPlanning,
                         "Found existing markdown plan in session",
@@ -201,10 +200,10 @@ public class TaskExecutor : ITaskExecutor
                 // Fallback to conversation-based execution without structured plan
                 await ExecuteConversationBasedAsync(request, effectiveConfig);
             }
-            
+
             // Step 6: Save session if applicable
             await SaveSessionIfApplicableAsync(request);
-            
+
             // Log successful completion
             if (currentSession != null)
             {
@@ -225,7 +224,7 @@ public class TaskExecutor : ITaskExecutor
                     ex.Message,
                     new { TaskRequest = request.Task, ErrorType = ex.GetType().Name });
             }
-            
+
             _logger.LogError(ex, "Task execution failed");
             throw;
         }
@@ -238,42 +237,42 @@ public class TaskExecutor : ITaskExecutor
         var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
         return _toolManager.ApplyFiltersToAllTools(allTools, _config.ToolFilter);
     }
-    
+
     private async Task<string> InitializeMarkdownPlanAsync(TaskExecutionRequest request)
     {
         try
         {
             _logger.LogInformation("Initializing markdown-based plan for task: {Task}", request.Task);
-            
+
             if (_markdownTaskStateManager == null)
             {
                 throw new InvalidOperationException("Markdown task state manager is not available");
             }
-            
+
             // Use planning service to create initial markdown plan
             var availableTools = await DiscoverAvailableToolsAsync();
             string taskMarkdown;
-            
+
             if (_planningService != null)
             {
                 taskMarkdown = await _planningService.InitializeTaskPlanningAsync(
-                    request.SessionId ?? Guid.NewGuid().ToString(), 
-                    request.Task, 
+                    request.SessionId ?? Guid.NewGuid().ToString(),
+                    request.Task,
                     availableTools);
             }
             else
             {
                 // Fallback: create basic markdown structure
                 taskMarkdown = await _markdownTaskStateManager.InitializeTaskMarkdownAsync(
-                    request.SessionId ?? Guid.NewGuid().ToString(), 
+                    request.SessionId ?? Guid.NewGuid().ToString(),
                     request.Task);
             }
-            
+
             await _activityLogger.LogActivityAsync(
                 ActivityTypes.TaskPlanning,
                 "Created new markdown-based plan",
                 new { Task = request.Task, MarkdownLength = taskMarkdown.Length });
-            
+
             return taskMarkdown;
         }
         catch (Exception ex)
@@ -297,11 +296,11 @@ public class TaskExecutor : ITaskExecutor
         try
         {
             _logger.LogInformation("Starting markdown-based task execution for session {SessionId}", session.SessionId);
-            
+
             // Discover available tools for execution
             var availableTools = await DiscoverAvailableToolsAsync();
-            var toolDefinitions = availableTools.Select(t => t.GetToolDefinition()).ToArray();
-            
+            var toolDefinitions = availableTools.Select(t => t.ToToolDefinition()).ToArray();
+
             // Start the conversation-based execution loop
             await ExecuteConversationLoopAsync(toolDefinitions, config, session.SessionId);
         }
@@ -317,11 +316,11 @@ public class TaskExecutor : ITaskExecutor
         try
         {
             _logger.LogInformation("Starting conversation-based execution (no session/plan)");
-            
+
             // Discover available tools for execution
             var availableTools = await DiscoverAvailableToolsAsync();
-            var toolDefinitions = availableTools.Select(t => t.GetToolDefinition()).ToArray();
-            
+            var toolDefinitions = availableTools.Select(t => t.ToToolDefinition()).ToArray();
+
             // Start the conversation-based execution loop without session
             await ExecuteConversationLoopAsync(toolDefinitions, config, null);
         }
@@ -348,13 +347,13 @@ public class TaskExecutor : ITaskExecutor
             ServerUrl = _config.ServerUrl,
             ToolFilter = request.ToolFilter ?? _config.ToolFilter
         };
-        
+
         if (request.VerboseLogging)
         {
-            _logger.LogInformation("Request overrides applied - Model: {Model}, MaxIterations: {MaxIterations}, Priority: {Priority}", 
+            _logger.LogInformation("Request overrides applied - Model: {Model}, MaxIterations: {MaxIterations}, Priority: {Priority}",
                 config.Model, config.MaxIterations, request.Priority);
         }
-        
+
         return config;
     }
 
@@ -380,33 +379,33 @@ public class TaskExecutor : ITaskExecutor
     private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverAndSelectToolsAsync(TaskExecutionRequest request, bool isResumingSession = false)
     {
         var filterConfig = request.ToolFilter ?? _config.ToolFilter;
-        
+
         // Step 1: Discover all tools from MCP server
         var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
-        
+
         // Step 2: Apply filtering configuration
         var filteredTools = _toolManager.ApplyFiltersToAllTools(allTools, filterConfig);
-        
+
         Console.WriteLine($"🔧 Discovered {allTools.Count} tools total, {filteredTools.Count} after filtering");
-        
+
         if (filteredTools.Count != allTools.Count)
         {
             var excluded = allTools.Where(t => !filterConfig.ShouldIncludeTool(t.Name)).Select(t => t.Name);
             Console.WriteLine($"🚫 Excluded tools: {string.Join(", ", excluded)}");
         }
-        
+
         // Step 3: Use intelligent tool selection to reduce context size
         try
         {
             var selectedTools = await _toolSelector.SelectToolsForTaskAsync(
-                request.Task, 
-                filteredTools, 
+                request.Task,
+                filteredTools,
                 _config.ToolSelection.MaxToolsPerRequest);
-            
+
             var selectionContext = isResumingSession ? "for new task in session" : "for task";
             Console.WriteLine($"🎯 Selected {selectedTools.Length} relevant tools {selectionContext}: " +
                             $"{string.Join(", ", selectedTools.Select(t => t.Name))}");
-            
+
             if (selectedTools.Length < filteredTools.Count)
             {
                 var notSelected = filteredTools
@@ -414,82 +413,13 @@ public class TaskExecutor : ITaskExecutor
                     .Select(t => t.Name);
                 Console.WriteLine($"💡 Available for expansion: {notSelected.Count()} additional tools");
             }
-            
+
             return selectedTools;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Tool selection failed, falling back to all filtered tools");
             Console.WriteLine($"⚠️  Tool selection failed, using all {filteredTools.Count} filtered tools");
-            return filteredTools.Select(t => t.ToToolDefinition()).ToArray();
-        }
-    }
-
-
-
-    [Obsolete("This method uses TaskPlan and should be removed - use markdown-based approach")]
-    private async Task<OpenAIIntegration.Model.ToolDefinition[]> OBSOLETE_DiscoverAndSelectToolsForPlanAsync_REMOVE(string planString, TaskExecutionRequest request, bool isResumingSession = false)
-    {
-        var filterConfig = request.ToolFilter ?? _config.ToolFilter;
-        
-        // Discover all tools from MCP server
-        var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
-        var filteredTools = _toolManager.ApplyFiltersToAllTools(allTools, filterConfig);
-        
-        Console.WriteLine($"🔧 Discovered {allTools.Count} tools total, {filteredTools.Count} after filtering");
-        
-        // Prioritize tools mentioned in the plan
-        var planTools = plan.RequiredTools.Concat(
-            plan.Steps.SelectMany(s => s.PotentialTools)
-        ).Distinct().ToList();
-        
-        var availableToolNames = filteredTools.Select(t => t.Name).ToHashSet();
-        var planToolsAvailable = planTools.Where(t => availableToolNames.Contains(t)).ToList();
-        var planToolsMissing = planTools.Where(t => !availableToolNames.Contains(t)).ToList();
-        
-        if (planToolsMissing.Count > 0)
-        {
-            Console.WriteLine($"⚠️  Plan requires unavailable tools: {string.Join(", ", planToolsMissing)}");
-        }
-        
-        try
-        {
-            // Select tools based on the plan, ensuring plan-required tools are included
-            var maxTools = _config.ToolSelection.MaxToolsPerRequest;
-            
-            // Start with plan-required tools that are available
-            var selectedToolNames = new HashSet<string>(planToolsAvailable);
-            
-            // If we need more tools, use intelligent selection
-            if (selectedToolNames.Count < maxTools)
-            {
-                var remainingSlots = maxTools - selectedToolNames.Count;
-                var additionalTools = await _toolSelector.SelectToolsForTaskAsync(
-                    request.Task, 
-                    filteredTools.Where(t => !selectedToolNames.Contains(t.Name)).ToList(),
-                    remainingSlots);
-                
-                foreach (var tool in additionalTools)
-                {
-                    selectedToolNames.Add(tool.Name);
-                }
-            }
-            
-            // Convert to tool definitions
-            var selectedTools = filteredTools
-                .Where(t => selectedToolNames.Contains(t.Name))
-                .Select(t => t.ToToolDefinition())
-                .ToArray();
-            
-            Console.WriteLine($"🎯 Selected {selectedTools.Length} tools based on plan: " +
-                            $"{string.Join(", ", selectedTools.Select(t => t.Name))}");
-            
-            return selectedTools;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Plan-based tool selection failed, falling back to all filtered tools");
-            Console.WriteLine($"⚠️  Plan-based tool selection failed, using all {filteredTools.Count} filtered tools");
             return filteredTools.Select(t => t.ToToolDefinition()).ToArray();
         }
     }
@@ -524,7 +454,7 @@ public class TaskExecutor : ITaskExecutor
 
         // Handle session-based initialization
         bool isResumingSession = false;
-        
+
         if (!string.IsNullOrEmpty(request.SessionId))
         {
             // Load existing session
@@ -561,7 +491,7 @@ public class TaskExecutor : ITaskExecutor
                 // Create new session
                 var session = await _sessionManager.CreateSessionAsync(request.SessionName);
                 request.SessionId = session.SessionId; // Set for later saving
-                
+
                 _conversationManager.InitializeConversation(systemPrompt, request.Task);
                 Console.WriteLine($"💾 Created new session: {session.Name} ({session.SessionId})");
                 Console.WriteLine($"📝 Task: {request.Task}");
@@ -573,22 +503,22 @@ public class TaskExecutor : ITaskExecutor
             _conversationManager.InitializeConversation(systemPrompt, request.Task);
             Console.WriteLine($"📝 Task: {request.Task}");
         }
-        
+
         if (request.Model != null)
         {
             Console.WriteLine($"🤖 Model: {request.Model}");
         }
-        
+
         if (request.Temperature.HasValue)
         {
             Console.WriteLine($"🌡️ Temperature: {request.Temperature:F1}");
         }
-        
+
         if (request.Priority != TaskPriority.Normal)
         {
             Console.WriteLine($"⚡ Priority: {request.Priority}");
         }
-        
+
         return isResumingSession;
     }
 
@@ -598,29 +528,11 @@ public class TaskExecutor : ITaskExecutor
         var currentTools = availableTools.ToList();
         var allAvailableTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
         var filteredAvailableTools = _toolManager.ApplyFiltersToAllTools(allAvailableTools, config.ToolFilter);
-        
-        // Track plan execution for potential updates
-        var planStepsCompleted = new HashSet<int>();
-        var iterationsSincePlanUpdate = 0;
-        const int maxIterationsBeforePlanReview = 5;
-        
-        // If we have a plan, provide it as context to the conversation
-        if (taskPlan != null)
-        {
-            var planContext = $"""
-                Following execution plan:
-                Strategy: {taskPlan.Strategy}
-                Steps: {string.Join(", ", taskPlan.Steps.Select(s => $"{s.StepNumber}. {s.Description}"))}
-                
-                Execute the plan step by step, using the identified tools appropriately.
-                """;
-            _conversationManager.AddAssistantMessage($"📋 Plan created: {planContext}");
-        }
-        
+
         for (int i = 0; i < config.MaxIterations; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            
+
             Console.WriteLine($"\n--- Iteration {i + 1} ---");
 
             // Process one iteration with potential tool expansion
@@ -634,7 +546,7 @@ public class TaskExecutor : ITaskExecutor
                 // Check if any tool calls used tools not in our current set
                 var usedToolNames = response.ToolCalls.Select(tc => tc.Name).ToHashSet();
                 var newToolsUsed = usedToolNames.Where(name => !currentTools.Any(t => t.Name == name)).ToList();
-                
+
                 if (newToolsUsed.Count > 0)
                 {
                     // Add the newly used tools to our current set for future iterations
@@ -647,7 +559,7 @@ public class TaskExecutor : ITaskExecutor
                             currentTools.Add(toolDef);
                         }
                     }
-                    
+
                     Console.WriteLine($"🔧 Expanded tools for next iteration: +{newToolsUsed.Count} tools");
                 }
             }
@@ -656,7 +568,7 @@ public class TaskExecutor : ITaskExecutor
             if (response.HasToolCalls)
             {
                 var toolSummaries = new List<string>();
-                var taskCompleted = false;       // NEW
+                var taskCompleted = false;
                 var executionFeedback = new List<string>();
 
                 foreach (var toolCall in response.ToolCalls)
@@ -679,21 +591,9 @@ public class TaskExecutor : ITaskExecutor
                         : "{}";
                     toolSummaries.Add(
                         $"Tool '{toolCall.Name}' called with args {argsJson}. Result: {result}");
-                    
-                    // Track execution progress for plan updates
-                    if (taskPlan != null)
-                    {
-                        var correspondingStep = taskPlan.Steps.FirstOrDefault(s => 
-                            s.PotentialTools.Contains(toolCall.Name, StringComparer.OrdinalIgnoreCase));
-                        if (correspondingStep != null && !planStepsCompleted.Contains(correspondingStep.StepNumber))
-                        {
-                            planStepsCompleted.Add(correspondingStep.StepNumber);
-                            _logger.LogDebug("Plan step {StepNumber} appears to be completed", correspondingStep.StepNumber);
-                        }
-                    }
-                    
+
                     // Check for execution issues that might require plan updates
-                    if (result.ToString().ToLowerInvariant().Contains("error") || 
+                    if (result.ToString().ToLowerInvariant().Contains("error") ||
                         result.ToString().ToLowerInvariant().Contains("failed"))
                     {
                         executionFeedback.Add($"Tool '{toolCall.Name}' encountered issues: {result}");
@@ -703,8 +603,6 @@ public class TaskExecutor : ITaskExecutor
                     if (toolCall.Name.Equals("complete_task", StringComparison.OrdinalIgnoreCase))
                     {
                         taskCompleted = true;
-                        // Generate comprehensive task completion report
-                        await GenerateTaskCompletionReportAsync(toolCall, result.ToString(), taskPlan, planStepsCompleted);
                     }
                 }
 
@@ -713,19 +611,8 @@ public class TaskExecutor : ITaskExecutor
 
                 // Log conversation statistics for monitoring
                 var stats = _conversationManager.GetConversationStatistics();
-                _logger.LogDebug("Conversation stats: {TotalMessages} messages ({EstimatedTokens} estimated tokens)", 
+                _logger.LogDebug("Conversation stats: {TotalMessages} messages ({EstimatedTokens} estimated tokens)",
                     stats.TotalMessages, stats.EstimatedTokens);
-
-                // Check if plan needs updating based on execution feedback
-                if (taskPlan != null && executionFeedback.Count > 0 && iterationsSincePlanUpdate >= maxIterationsBeforePlanReview)
-                {
-                    await ConsiderPlanUpdateAsync(taskPlan, executionFeedback, filteredAvailableTools);
-                    iterationsSincePlanUpdate = 0;
-                }
-                else
-                {
-                    iterationsSincePlanUpdate++;
-                }
 
                 if (taskCompleted)               // NEW
                 {
@@ -752,11 +639,11 @@ public class TaskExecutor : ITaskExecutor
             {
                 Console.WriteLine("🔄 Detected repetitive responses - attempting to break out of loop");
                 _logger.LogWarning("Agent appears to be stuck in repetitive responses at iteration {Iteration}", i + 1);
-                
+
                 // Add a guidance message to help the agent move forward
                 var guidanceMessage = "I notice I'm providing similar responses repeatedly. Let me try a different approach or acknowledge if there are limitations preventing me from completing this task.";
                 _conversationManager.AddAssistantMessage(guidanceMessage);
-                
+
                 // Try one more iteration with guidance, then exit if still stuck
                 if (i >= 2) // Allow at least 3 iterations before breaking due to repetition
                 {
@@ -770,15 +657,13 @@ public class TaskExecutor : ITaskExecutor
                 _conversationManager.AddAssistantMessage(response.AssistantText);
                 _logger.LogDebug("Added assistant response to conversation for iteration {Iteration}", i + 1);
             }
-            
-            iterationsSincePlanUpdate++;
         }
 
         Console.WriteLine($"⚠️  Reached maximum iterations ({config.MaxIterations}).");
     }
 
     private async Task<OpenAIIntegration.Model.ToolDefinition[]> GetAdditionalToolsAsync(
-        IList<IUnifiedTool> allAvailableTools, 
+        IList<IUnifiedTool> allAvailableTools,
         OpenAIIntegration.Model.ToolDefinition[] currentTools)
     {
         try
@@ -799,742 +684,25 @@ public class TaskExecutor : ITaskExecutor
 
     private async Task SaveSessionIfApplicableAsync(TaskExecutionRequest request)
     {
-        if (!string.IsNullOrEmpty(request.SessionId))
-        {
-            try
-            {
-                var session = await _sessionManager.GetSessionAsync(request.SessionId);
-                if (session != null)
-                {
-                    // Update the session with current conversation state
-                    var currentMessages = _conversationManager.GetCurrentMessages();
-                    session.SetConversationMessages(currentMessages);
-                    session.Status = SessionStatus.Active; // Keep as active for continued use
-                    
-                    await _sessionManager.SaveSessionAsync(session);
-                    _logger.LogInformation("Saved session state for {SessionId}", request.SessionId);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to save session {SessionId}", request.SessionId);
-            }
-        }
-    }
+        if (string.IsNullOrEmpty(request.SessionId))
+            return;
 
-    /// <summary>
-    /// Generates a comprehensive task completion report with reasoning and evidence
-    /// TODO: Remove this method - it uses TaskPlan which has been removed
-    /// </summary>
-    /*
-    private async Task GenerateTaskCompletionReportAsync(ToolCall completeTaskCall, string toolResult, TaskPlan? taskPlan, HashSet<int> completedSteps)
-    {
         try
         {
-            // Extract completion information from the tool call arguments
-            var completionArgs = completeTaskCall.Arguments ?? new Dictionary<string, object?>();
-            var summary = completionArgs.GetValueOrDefault("summary")?.ToString() ?? "Task completed";
-            var reasoning = completionArgs.GetValueOrDefault("reasoning")?.ToString() ?? "";
-            var evidence = completionArgs.GetValueOrDefault("evidence")?.ToString() ?? "";
-            var deliverables = completionArgs.GetValueOrDefault("deliverables")?.ToString() ?? "";
-            var keyActions = completionArgs.GetValueOrDefault("keyActions")?.ToString() ?? "";
-
-            // Gather evidence from session activities
-            var sessionActivities = await _activityLogger.GetSessionActivitiesAsync();
-            var evidenceFromActivities = GatherEvidenceFromActivities(sessionActivities);
-
-            // Analyze task plan completion
-            var planAnalysis = AnalyzeTaskPlanCompletion(taskPlan, completedSteps);
-            
-            // Extract completion rate for quality calculation
-            var completionRate = GetCompletionRateFromPlanAnalysis(planAnalysis);
-
-            // Gather conversation statistics
-            var conversationStats = _conversationManager.GetConversationStatistics();
-
-            // Build comprehensive completion report
-            var completionReport = new
+            var session = await _sessionManager.GetSessionAsync(request.SessionId);
+            if (session != null)
             {
-                TaskCompletion = new
-                {
-                    Status = "COMPLETED",
-                    CompletedAt = DateTime.UtcNow,
-                    Summary = summary,
-                    ProvidedReasoning = reasoning,
-                    ProvidedEvidence = evidence,
-                    Deliverables = deliverables,
-                    KeyActions = keyActions
-                },
-                ExecutionEvidence = evidenceFromActivities,
-                PlanCompletion = planAnalysis,
-                ConversationMetrics = new
-                {
-                    TotalMessages = conversationStats.TotalMessages,
-                    EstimatedTokens = conversationStats.EstimatedTokens,
-                    TotalActivities = sessionActivities.Count,
-                    SuccessfulActivities = sessionActivities.Count(a => a.Success),
-                    FailedActivities = sessionActivities.Count(a => !a.Success)
-                },
-                TaskCompletionQuality = new
-                {
-                    HasDetailedReasoning = !string.IsNullOrWhiteSpace(reasoning),
-                    HasExplicitEvidence = !string.IsNullOrWhiteSpace(evidence),
-                    HasDeliverables = !string.IsNullOrWhiteSpace(deliverables),
-                    PlanCompletionRate = completionRate,
-                    RecommendationScore = CalculateCompletionQualityScore(reasoning, evidence, deliverables, completionRate)
-                }
-            };
+                var currentMessages = _conversationManager.GetCurrentMessages();
+                session.SetConversationMessages(currentMessages);
+                session.Status = SessionStatus.Active;   // keep session open
 
-            // Log the comprehensive completion report
-            await _activityLogger.LogActivityAsync(
-                ActivityTypes.TaskCompletionEvaluation,
-                $"Task completion report - {summary}",
-                completionReport);
-
-            _logger.LogInformation("Generated comprehensive task completion report with {ActivityCount} activities analyzed", 
-                sessionActivities.Count);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to generate task completion report");
-            
-            // Log a basic completion report if detailed generation fails
-            await _activityLogger.LogActivityAsync(
-                ActivityTypes.TaskCompletionEvaluation,
-                "Task completion (basic report due to error)",
-                new { 
-                    Status = "COMPLETED", 
-                    CompletedAt = DateTime.UtcNow,
-                    Error = ex.Message,
-                    ToolResult = toolResult
-                });
-        }
-    }
-
-    /// <summary>
-    /// Gathers evidence from session activities to support task completion
-    /// </summary>
-    private object GatherEvidenceFromActivities(List<SessionActivity> activities)
-    {
-        var toolCalls = activities.Where(a => a.ActivityType == ActivityTypes.ToolCall).ToList();
-        var toolResults = activities.Where(a => a.ActivityType == ActivityTypes.ToolResult).ToList();
-        var errors = activities.Where(a => !a.Success).ToList();
-
-        var evidenceSummary = new
-        {
-            ToolsUsed = toolCalls.Select(a => new
-            {
-                Tool = ExtractToolNameFromActivity(a),
-                Timestamp = a.Timestamp,
-                Success = a.Success,
-                Description = a.Description
-            }).ToList(),
-            
-            ResultsGenerated = toolResults.Select(a => new
-            {
-                Tool = ExtractToolNameFromActivity(a),
-                Timestamp = a.Timestamp,
-                Success = a.Success,
-                ResultSummary = TruncateForEvidence(a.Description, 200)
-            }).Take(10).ToList(), // Limit to prevent oversized logs
-
-            OpenAIInteractions = activities.Where(a => 
-                a.ActivityType == ActivityTypes.OpenAIRequest || 
-                a.ActivityType == ActivityTypes.OpenAIResponse).Count(),
-
-            ErrorsEncountered = errors.Select(a => new
-            {
-                Type = a.ActivityType,
-                Error = a.ErrorMessage,
-                Timestamp = a.Timestamp
-            }).Take(5).ToList(), // Limit error details
-
-            ExecutionSpan = new
-            {
-                StartTime = activities.FirstOrDefault()?.Timestamp,
-                EndTime = activities.LastOrDefault()?.Timestamp,
-                TotalDurationMinutes = activities.Any() ? 
-                    (activities.Last().Timestamp - activities.First().Timestamp).TotalMinutes : 0
-            },
-
-            KeyMilestones = activities.Where(a => 
-                a.ActivityType == ActivityTypes.TaskPlanning ||
-                a.ActivityType == ActivityTypes.PlanDetails ||
-                a.ActivityType == ActivityTypes.ToolSelectionReasoning).Select(a => new
-                {
-                    Type = a.ActivityType,
-                    Description = TruncateForEvidence(a.Description, 150),
-                    Timestamp = a.Timestamp
-                }).ToList()
-        };
-
-        return evidenceSummary;
-    }
-    */
-
-    /// <summary>
-    /// Analyzes task plan completion status
-    /// TODO: Remove this method - it uses TaskPlan which has been removed
-    /// </summary>
-    /*
-    private object AnalyzeTaskPlanCompletion(TaskPlan? taskPlan, HashSet<int> completedSteps)
-    {
-        if (taskPlan == null)
-        {
-            return new
-            {
-                HasPlan = false,
-                CompletionRate = 1.0, // Assume complete if no plan was used
-                Message = "Task completed without explicit plan"
-            };
-        }
-
-        var totalSteps = taskPlan.Steps.Count;
-        var completedCount = completedSteps.Count;
-        var completionRate = totalSteps > 0 ? (double)completedCount / totalSteps : 1.0;
-
-        return new
-        {
-            HasPlan = true,
-            TotalSteps = totalSteps,
-            CompletedSteps = completedCount,
-            CompletionRate = Math.Round(completionRate, 2),
-            PlanDetails = new
-            {
-                Strategy = taskPlan.Strategy,
-                Complexity = taskPlan.Complexity,
-                Confidence = taskPlan.Confidence
-            },
-            StepCompletion = taskPlan.Steps.Select(step => new
-            {
-                StepNumber = step.StepNumber,
-                Description = TruncateForEvidence(step.Description, 100),
-                Completed = completedSteps.Contains(step.StepNumber),
-                PotentialTools = step.PotentialTools.Take(3).ToList() // Limit tools listed
-            }).ToList()
-        };
-    }
-
-    /// <summary>
-    /// Calculates a quality score for the task completion
-    /// </summary>
-    private double CalculateCompletionQualityScore(string reasoning, string evidence, string deliverables, double planCompletionRate)
-    {
-        double score = 0.0;
-        
-        // Base score for completion
-        score += 0.4;
-        
-        // Bonus for detailed reasoning
-        if (!string.IsNullOrWhiteSpace(reasoning) && reasoning.Length > 50)
-            score += 0.2;
-        
-        // Bonus for explicit evidence
-        if (!string.IsNullOrWhiteSpace(evidence) && evidence.Length > 30)
-            score += 0.15;
-            
-        // Bonus for deliverables mentioned
-        if (!string.IsNullOrWhiteSpace(deliverables))
-            score += 0.1;
-            
-        // Bonus for plan completion rate
-        score += planCompletionRate * 0.15;
-        
-        return Math.Round(Math.Min(score, 1.0), 2);
-    }
-
-    /// <summary>
-    /// Extracts tool name from activity data
-    /// </summary>
-    private string ExtractToolNameFromActivity(SessionActivity activity)
-    {
-        try
-        {
-            if (string.IsNullOrEmpty(activity.Data))
-                return "unknown";
-
-            var data = JsonSerializer.Deserialize<JsonElement>(activity.Data);
-            if (data.TryGetProperty("ToolName", out var toolNameElement))
-                return toolNameElement.GetString() ?? "unknown";
-
-            return "unknown";
-        }
-        catch
-        {
-            return "unknown";
-        }
-    }
-
-    /// <summary>
-    /// Extracts completion rate from plan analysis object
-    /// </summary>
-    private double GetCompletionRateFromPlanAnalysis(object planAnalysis)
-    {
-        try
-        {
-            var json = JsonSerializer.Serialize(planAnalysis);
-            var element = JsonSerializer.Deserialize<JsonElement>(json);
-            if (element.TryGetProperty("CompletionRate", out var rateElement))
-                return rateElement.GetDouble();
-            return 1.0; // Default to complete if no plan analysis
-        }
-        catch
-        {
-            return 1.0; // Default to complete on error
-        }
-    }
-
-    /// <summary>
-    /// Truncates text for evidence summary to prevent oversized logs
-    /// </summary>
-    private string TruncateForEvidence(string? text, int maxLength)
-    {
-        if (string.IsNullOrEmpty(text))
-            return "";
-            
-        return text.Length <= maxLength ? text : text.Substring(0, maxLength - 3) + "...";
-    }
-
-    /// <summary>
-    /// Execute subtasks sequentially with context passing
-    /// </summary>
-    private async Task ExecuteSubtasksSequentiallyAsync(TaskPlan taskPlan, TaskExecutionRequest request, AgentConfiguration config, AgentSession session)
-    {
-        _logger.LogInformation("Starting sequential subtask execution for task: {Task}", taskPlan.Task);
-        
-        try
-        {
-            // Initialize markdown-based task state
-            await _taskStateManager.InitializeTaskStateAsync(request.SessionId!, taskPlan.Task);
-            
-            // Log activity for subtask execution start
-            await _activityLogger.LogActivityAsync(
-                ActivityTypes.TaskPlanning,
-                "Starting sequential subtask execution with markdown-based approach",
-                new { 
-                    TaskDescription = taskPlan.Task,
-                    Strategy = taskPlan.Strategy,
-                    SessionId = request.SessionId
-                });
-
-            // Show initial markdown state to user
-            var initialMarkdown = await _taskStateManager.GetTaskMarkdownAsync(request.SessionId!);
-            Console.WriteLine("\n📋 Initial Task Plan:");
-            Console.WriteLine(initialMarkdown);
-
-            // Main execution loop - get and execute subtasks iteratively
-            var maxIterations = 20; // Prevent infinite loops
-            var iteration = 0;
-            
-            while (iteration < maxIterations)
-            {
-                // Get the current subtask to execute
-                var currentSubtask = await _taskStateManager.GetCurrentSubtaskAsync(request.SessionId!);
-                
-                if (currentSubtask == null)
-                {
-                    _logger.LogInformation("No more subtasks found, task execution complete");
-                    Console.WriteLine("✅ All subtasks completed!");
-                    break;
-                }
-                
-                if (currentSubtask.IsCompleted)
-                {
-                    _logger.LogDebug("Current subtask already completed: {Description}", currentSubtask.Description);
-                    iteration++;
-                    continue;
-                }
-                
-                Console.WriteLine($"\n🎯 Starting Subtask {iteration + 1}: {currentSubtask.Description}");
-                _logger.LogInformation("Executing subtask: {Description}", currentSubtask.Description);
-                
-                try
-                {
-                    // TODO: Implement actual subtask execution with conversation loop
-                    // For now, just mark it as completed with a placeholder
-                    await _taskStateManager.CompleteSubtaskAsync(
-                        request.SessionId!, 
-                        currentSubtask.Description, 
-                        "Subtask executed successfully via markdown-based approach",
-                        $"Completed at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}", 
-                        new Dictionary<string, object> { ["iteration"] = iteration });
-                    
-                    _logger.LogInformation("Completed subtask: {Description}", currentSubtask.Description);
-                    Console.WriteLine($"✅ Completed: {currentSubtask.Description}");
-                    
-                    // Show updated markdown state
-                    var updatedMarkdown = await _taskStateManager.GetTaskMarkdownAsync(request.SessionId!);
-                    Console.WriteLine("\n📋 Updated Task Plan:");
-                    Console.WriteLine(updatedMarkdown);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to execute subtask: {Description}", currentSubtask.Description);
-                    Console.WriteLine($"❌ Failed: {currentSubtask.Description} - {ex.Message}");
-                    
-                    // Update plan based on the failure
-                    var feedback = $"Subtask failed: {currentSubtask.Description}. Error: {ex.Message}";
-                    await _taskStateManager.UpdatePlanIterativelyAsync(request.SessionId!, feedback);
-                }
-                
-                iteration++;
-            }
-            
-            if (iteration >= maxIterations)
-            {
-                _logger.LogWarning("Maximum iterations reached ({MaxIterations}), stopping execution", maxIterations);
-                Console.WriteLine($"⚠️ Maximum iterations reached ({maxIterations}), stopping execution");
-            }
-            
-            _logger.LogInformation("Sequential subtask execution completed for task: {Task}", taskPlan.Task);
-            
-            // Log final completion
-            await _activityLogger.LogActivityAsync(
-                ActivityTypes.TaskCompletionEvaluation,
-                "Sequential subtask execution completed",
-                new { 
-                    TaskDescription = taskPlan.Task,
-                    Iterations = iteration,
-                    MaxIterations = maxIterations
-                });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed during sequential subtask execution");
-            throw;
-        }
-    }
-    
-    /// <summary>
-    /// Execute a single subtask with context from previous subtasks
-    /// </summary>
-    /// <summary>
-    /// Build context message for a subtask including accumulated context
-    /// </summary>
-    private string BuildSubtaskContext(SubtaskState subtask, TaskState taskState, Dictionary<string, object> accumulatedContext)
-    {
-        var context = new StringBuilder();
-        
-        context.AppendLine($"🎯 **Current Subtask: Step {subtask.StepNumber}**");
-        context.AppendLine($"**Description:** {subtask.Description}");
-        context.AppendLine();
-        
-        if (!string.IsNullOrEmpty(subtask.ExpectedInput))
-        {
-            context.AppendLine($"**Expected Input:** {subtask.ExpectedInput}");
-        }
-        
-        if (!string.IsNullOrEmpty(subtask.ExpectedOutput))
-        {
-            context.AppendLine($"**Expected Output:** {subtask.ExpectedOutput}");
-        }
-        
-        if (subtask.PotentialTools.Any())
-        {
-            context.AppendLine($"**Suggested Tools:** {string.Join(", ", subtask.PotentialTools)}");
-        }
-        
-        context.AppendLine();
-        
-        // Add context from completed subtasks
-        if (accumulatedContext.Any())
-        {
-            context.AppendLine("📚 **Context from Previous Subtasks:**");
-            foreach (var ctx in accumulatedContext)
-            {
-                context.AppendLine($"- {ctx.Key}: {ctx.Value}");
-            }
-            context.AppendLine();
-        }
-        
-        // Add overall task context
-        context.AppendLine($"**Overall Task:** {taskState.Task}");
-        context.AppendLine($"**Strategy:** {taskState.Strategy}");
-        context.AppendLine($"**Progress:** {taskState.GetCompletedCount()}/{taskState.Subtasks.Count} subtasks completed");
-        context.AppendLine();
-        
-        context.AppendLine("**Instructions:**");
-        context.AppendLine("1. Focus only on completing this specific subtask");
-        context.AppendLine("2. Use the provided context from previous subtasks to inform your work");
-        context.AppendLine("3. When you have completed this subtask, use the 'complete_subtask' tool");
-        context.AppendLine("4. Provide a clear summary, evidence, and any context needed for the next subtask");
-        
-        return context.ToString();
-    }
-    
-    /// <summary>
-    /// Execute conversation loop focused on a specific subtask
-    /// </summary>
-    private async Task ExecuteSubtaskConversationLoopAsync(SubtaskState subtask, OpenAIIntegration.Model.ToolDefinition[] availableTools, AgentConfiguration config, string sessionId)
-    {
-        _logger.LogInformation("Starting conversation loop for subtask {StepNumber}", subtask.StepNumber);
-        
-        for (int i = 0; i < config.MaxIterations; i++)
-        {
-            Console.WriteLine($"\n--- Subtask {subtask.StepNumber} - Iteration {i + 1} ---");
-
-            var response = await _conversationManager.ProcessIterationAsync(availableTools);
-
-            if (response.HasToolCalls)
-            {
-                var toolSummaries = new List<string>();
-                var subtaskCompleted = false;
-
-                foreach (var toolCall in response.ToolCalls)
-                {
-                    if (!config.ToolFilter.ShouldIncludeTool(toolCall.Name))
-                    {
-                        toolSummaries.Add($"Tool '{toolCall.Name}' call blocked by tool filter configuration.");
-                        continue;
-                    }
-
-                    var result = await _toolManager.ExecuteToolAsync(
-                        _connectionManager,
-                        toolCall.Name,
-                        toolCall.Arguments ?? new Dictionary<string, object?>());
-
-                    var argsJson = toolCall.Arguments?.Count > 0
-                        ? JsonSerializer.Serialize(toolCall.Arguments)
-                        : "{}";
-                    toolSummaries.Add($"Tool '{toolCall.Name}' called with args {argsJson}. Result: {result}");
-
-                    // Handle subtask completion
-                    if (toolCall.Name.Equals("complete_subtask", StringComparison.OrdinalIgnoreCase))
-                    {
-                        await HandleSubtaskCompletionAsync(toolCall, result.ToString(), sessionId);
-                        subtaskCompleted = true;
-                    }
-                    else if (toolCall.Name.Equals("update_subtask_notes", StringComparison.OrdinalIgnoreCase))
-                    {
-                        await HandleSubtaskNotesUpdateAsync(toolCall, sessionId);
-                    }
-                    else if (toolCall.Name.Equals("get_task_state", StringComparison.OrdinalIgnoreCase))
-                    {
-                        await HandleTaskStateRequestAsync(sessionId);
-                    }
-                }
-
-                _conversationManager.AddToolResults(toolSummaries);
-                Console.WriteLine($"🔧 {string.Join("\n", toolSummaries)}");
-
-                if (subtaskCompleted)
-                {
-                    Console.WriteLine($"✅ Subtask {subtask.StepNumber} completed!");
-                    return;
-                }
-
-                continue;
-            }
-
-            // Display assistant response
-            Console.WriteLine($"AI: {response.AssistantText}");
-
-            // Check for repetitive responses
-            if (_conversationManager.WouldBeRepetitive(response.AssistantText))
-            {
-                Console.WriteLine("🔄 Detected repetitive responses for subtask - providing guidance");
-                
-                var guidanceMessage = $"I notice I'm being repetitive. Let me focus on completing subtask {subtask.StepNumber}: {subtask.Description}. I should use the 'complete_subtask' tool when I'm done.";
-                _conversationManager.AddAssistantMessage(guidanceMessage);
-                
-                if (i >= 2)
-                {
-                    Console.WriteLine($"⚠️ Breaking subtask {subtask.StepNumber} loop due to repetitive responses.");
-                    break;
-                }
-            }
-            else
-            {
-                _conversationManager.AddAssistantMessage(response.AssistantText);
-            }
-        }
-
-        Console.WriteLine($"⚠️ Subtask {subtask.StepNumber} reached maximum iterations ({config.MaxIterations}).");
-    }
-    
-    /// <summary>
-    /// Handle subtask completion tool call
-    /// </summary>
-    private async Task HandleSubtaskCompletionAsync(ToolCall toolCall, string toolResult, string sessionId)
-    {
-        try
-        {
-            var args = toolCall.Arguments ?? new Dictionary<string, object?>();
-            var stepNumber = args.GetValueOrDefault("stepNumber")?.ToString();
-            var summary = args.GetValueOrDefault("summary")?.ToString();
-            var evidence = args.GetValueOrDefault("evidence")?.ToString();
-            var context = args.GetValueOrDefault("context")?.ToString();
-            
-            if (int.TryParse(stepNumber, out int step))
-            {
-                var contextDict = new Dictionary<string, object>();
-                if (!string.IsNullOrEmpty(context))
-                {
-                    contextDict["CompletionContext"] = context;
-                }
-                if (!string.IsNullOrEmpty(evidence))
-                {
-                    contextDict["Evidence"] = evidence;
-                }
-                
-                var subtaskDescription = summary ?? $"Subtask {step}";
-                await _taskStateManager.CompleteSubtaskAsync(sessionId, subtaskDescription, summary ?? "Subtask completed", evidence, contextDict);
-                
-                await _activityLogger.LogActivityAsync(
-                    ActivityTypes.TaskCompletionEvaluation,
-                    $"Subtask {step} completed",
-                    new {
-                        StepNumber = step,
-                        Summary = summary,
-                        Evidence = evidence,
-                        Context = context
-                    });
-                
-                _logger.LogInformation("Subtask {StepNumber} marked as completed", step);
+                await _sessionManager.SaveSessionAsync(session);
+                _logger.LogInformation("Saved session state for {SessionId}", request.SessionId);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to handle subtask completion");
+            _logger.LogError(ex, "Failed to save session {SessionId}", request.SessionId);
         }
     }
-    
-    /// <summary>
-    /// Handle subtask notes update tool call
-    /// </summary>
-    private async Task HandleSubtaskNotesUpdateAsync(ToolCall toolCall, string sessionId)
-    {
-        try
-        {
-            var args = toolCall.Arguments ?? new Dictionary<string, object?>();
-            var stepNumber = args.GetValueOrDefault("stepNumber")?.ToString();
-            var notes = args.GetValueOrDefault("notes")?.ToString();
-            var progressUpdate = args.GetValueOrDefault("progressUpdate")?.ToString();
-            
-            if (!string.IsNullOrEmpty(notes) || !string.IsNullOrEmpty(progressUpdate))
-            {
-                var feedback = $"Subtask {stepNumber} update: ";
-                if (!string.IsNullOrEmpty(notes))
-                {
-                    feedback += $"Notes: {notes}. ";
-                }
-                if (!string.IsNullOrEmpty(progressUpdate))
-                {
-                    feedback += $"Progress: {progressUpdate}.";
-                }
-                
-                await _taskStateManager.UpdatePlanIterativelyAsync(sessionId, feedback);
-                _logger.LogDebug("Updated plan with notes for subtask {StepNumber}", stepNumber);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to handle subtask notes update");
-        }
-    }
-    
-    /// <summary>
-    /// Handle task state request
-    /// </summary>
-    private async Task HandleTaskStateRequestAsync(string sessionId)
-    {
-        try
-        {
-            var taskMarkdown = await _taskStateManager.GetTaskMarkdownAsync(sessionId);
-            if (!string.IsNullOrEmpty(taskMarkdown))
-            {
-                _conversationManager.AddAssistantMessage($"Current Task State:\n\n{taskMarkdown}");
-                Console.WriteLine("\n📋 Task State Requested:");
-                Console.WriteLine(taskMarkdown);
-            }
-            else
-            {
-                _conversationManager.AddAssistantMessage("No task state found for this session.");
-                Console.WriteLine("\n📋 No task state found for this session.");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to handle task state request");
-        }
-    }
-    
-    /// <summary>
-    /// Check if a tool is relevant for a subtask based on its name and description
-    /// </summary>
-    private bool IsToolRelevantForSubtask(string toolName, string subtaskDescription)
-    {
-        // Basic heuristic to determine tool relevance
-        var toolLower = toolName.ToLowerInvariant();
-        var descLower = subtaskDescription.ToLowerInvariant();
-        
-        // File operations
-        if (descLower.Contains("file") || descLower.Contains("read") || descLower.Contains("write"))
-        {
-            if (toolLower.Contains("file") || toolLower.Contains("read") || toolLower.Contains("write"))
-                return true;
-        }
-        
-        // Math operations
-        if (descLower.Contains("calculate") || descLower.Contains("math") || descLower.Contains("compute"))
-        {
-            if (toolLower.Contains("math") || toolLower.Contains("calculate"))
-                return true;
-        }
-        
-        // Text operations
-        if (descLower.Contains("text") || descLower.Contains("string") || descLower.Contains("search"))
-        {
-            if (toolLower.Contains("text") || toolLower.Contains("string") || toolLower.Contains("search"))
-                return true;
-        }
-        
-        // System operations
-        if (descLower.Contains("system") || descLower.Contains("environment") || descLower.Contains("time"))
-        {
-            if (toolLower.Contains("system") || toolLower.Contains("environment") || toolLower.Contains("time"))
-                return true;
-        }
-        
-        return false;
-    }
-    
-    /// <summary>
-    /// Fallback to traditional execution flow for backward compatibility
-    /// </summary>
-    private async Task ExecuteTraditionalFlowAsync(TaskPlan? taskPlan, TaskExecutionRequest request, AgentConfiguration config, bool isResumingSession)
-    {
-        _logger.LogInformation("Using traditional execution flow");
-        
-        var toolSelectionActivityId = _activityLogger.StartActivity(
-            ActivityTypes.ToolSelection,
-            "Discovering and selecting tools for traditional execution",
-            new { PlanTask = taskPlan?.Task, TaskCreatedAt = taskPlan?.CreatedAt });
-        
-        try
-        {
-            var availableTools = await DiscoverAndSelectToolsForPlanAsync(taskPlan!, request, isResumingSession);
-            await _activityLogger.CompleteActivityAsync(toolSelectionActivityId, 
-                new { SelectedToolCount = availableTools?.Length, ToolNames = availableTools?.Select(t => t.Name).ToArray() });
-
-            if (request.Timeout.HasValue)
-            {
-                using var cts = new CancellationTokenSource(request.Timeout.Value);
-                await ExecuteConversationLoopAsync(availableTools!, config, taskPlan, cts.Token);
-            }
-            else
-            {
-                await ExecuteConversationLoopAsync(availableTools!, config, taskPlan);
-            }
-        }
-        catch (Exception ex)
-        {
-            await _activityLogger.FailActivityAsync(toolSelectionActivityId, ex.Message);
-            throw;
-        }
-    }
-    
-    /// <summary>
-    /// Extract a TaskPlan from markdown content for compatibility purposes
-    /// </summary>
 }
