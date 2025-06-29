@@ -8,6 +8,7 @@ using Common.Interfaces.Session;
 using Common.Models.Session;
 using System.Text.Json;                 // +NEW
 using System.Linq;                      // make Count() extension available
+using Common.Interfaces.Tools;
 
 namespace AgentAlpha.Services;
 
@@ -404,7 +405,7 @@ public class TaskExecutor : ITaskExecutor
                 _config.ToolSelection.MaxToolsPerRequest);
 
             // --- ensure required tools are always included ----------------
-            var required = _toolScope.GetRequiredTools(request.SessionId ?? "");
+            var required = _toolScope.GetRequiredTools(request.SessionId ?? "").ToArray();
             if (required.Length > 0)
             {
                 var selectedNames = selectedTools.Select(t => t.Name)

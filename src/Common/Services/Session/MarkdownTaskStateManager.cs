@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Linq;
 using Common.Models.Session;
 using Common.Interfaces.Session;
+using Common.Interfaces.Tools;                 // NEW – tool scope
 using OpenAIIntegration;
 using OpenAIIntegration.Model;
 
@@ -16,16 +17,19 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
 {
     private readonly ISessionManager _sessionManager;
     private readonly ISessionAwareOpenAIService _openAiService;
+    private readonly IToolScopeManager _toolScope;            // NEW
     private readonly ILogger<MarkdownTaskStateManager> _logger;
     
     public MarkdownTaskStateManager(
         ISessionManager sessionManager,
         ISessionAwareOpenAIService openAiService,
+        IToolScopeManager toolScope,                          // NEW
         ILogger<MarkdownTaskStateManager> logger)
     {
         _sessionManager = sessionManager;
         _openAiService = openAiService;
-        _logger = logger;
+        _toolScope     = toolScope;                           // NEW
+        _logger        = logger;
     }
     
     public async Task<string> InitializeTaskMarkdownAsync(string sessionId, string taskDescription)
@@ -121,6 +125,71 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
     
 
     
+    // NEW – single tool definition identical to PlanningService
+    private static readonly ToolDefinition SaveMarkdownPlanTool = new()
+    {
+        Type        = "function",
+        Name        = "save_markdown_plan",
+        Description = "Return the updated markdown plan and the list of required tools.",
+        Parameters  = new
+        {
+            type       = "object",
+            properties = new
+            {
+                markdown_plan  = new { type = "string", description = "The markdown task plan." },
+                required_tools = new
+                {
+                    type  = "array",
+                    items = new { type = "string" },
+                    description = "Names of tools required for executing the next steps."
+                }
+            },
+            required = new[] { "markdown_plan", "required_tools" }
+        }
+    };
+
+    // NEW – helper copied from PlanningService (fixed variable scope)
+    private static (string markdown, string[] tools) ParseFunctionCall(FunctionToolCall? fnCall)
+    {
+        if (fnCall == null)                         // no function call
+            return ("", Array.Empty<string>());
+
+        if (!fnCall.Arguments.HasValue)             // no arguments at all
+            return ("", Array.Empty<string>());
+
+        JsonElement argElement = fnCall.Arguments.Value;
+        JsonElement root;
+
+        if (argElement.ValueKind == JsonValueKind.Object)
+        {
+            root = argElement;
+        }
+        else if (argElement.ValueKind == JsonValueKind.String)
+        {
+            var jsonText = argElement.GetString();
+            if (string.IsNullOrWhiteSpace(jsonText))
+                return ("", Array.Empty<string>());
+
+            using var doc = JsonDocument.Parse(jsonText);
+            root = doc.RootElement.Clone();         // clone to use outside `using`
+        }
+        else
+        {
+            return ("", Array.Empty<string>());
+        }
+
+        var markdown = root.GetProperty("markdown_plan").GetString() ?? "";
+
+        var toolsArr = root.TryGetProperty("required_tools", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.EnumerateArray()
+                  .Where(e => e.ValueKind == JsonValueKind.String)
+                  .Select(e => e.GetString()!)
+                  .ToArray()
+            : Array.Empty<string>();
+
+        return (markdown.Trim(), toolsArr);
+    }
+
     public async Task<string> UpdateTaskMarkdownAsync(string sessionId, string actionDescription, string actionResult, string? observations = null)
     {
         try
@@ -154,49 +223,56 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 await SaveTaskMarkdownToSessionAsync(sessionId, basicMarkdown);
                 return basicMarkdown;
             }
-            
+
             _logger.LogInformation("Updating task markdown for session {SessionId} with action: {Action}", sessionId, actionDescription);
-            
+
             var prompt = $"""
-                Update the following task markdown document based on a recent action and its result.
-                
-                Current markdown document:
+                Update the markdown plan below based on the recent action/result.
+                Maintain structure, mark completed subtasks, add new ones as needed, update context.
+
                 ```markdown
                 {currentMarkdown}
                 ```
-                
-                Recent action: {actionDescription}
-                Action result: {actionResult}
-                {(string.IsNullOrEmpty(observations) ? "" : $"Additional observations: {observations}")}
-                
-                Please update the markdown document to reflect:
-                1. Progress made from this action
-                2. Update relevant subtasks (mark as completed with checkboxes if appropriate)
-                3. Add new subtasks if the action revealed additional work needed
-                4. Update the context section with relevant information from the action
-                5. Update progress notes with timestamp
-                
-                Keep the same structure and format. Return only the updated markdown content.
+
+                • Action: {actionDescription}
+                • Result: {actionResult}
+                {(string.IsNullOrEmpty(observations) ? "" : $"• Observations: {observations}")}
+
+                When done, call the tool {SaveMarkdownPlanTool.Name} with:
+                  - markdown_plan  : the updated markdown
+                  - required_tools : array of tools needed for the upcoming subtasks
+                Return nothing else.
                 """;
-                
+
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-4o",
-                Input = prompt,
-                Instructions = "You are a task planning assistant. Update markdown documents to reflect progress accurately.",
-                MaxOutputTokens = 1500
+                Model          = "gpt-4o",
+                Input          = new[] { new { role = "user", content = prompt } },
+                Tools          = new[] { SaveMarkdownPlanTool },
+                ToolChoice     = "auto",
+                MaxOutputTokens = 2000
             };
-            
+
             var response = await _openAiService.CreateResponseAsync(request);
-            var updatedMarkdown = ExtractContentFromResponse(response) ?? currentMarkdown;
 
-            // Save updated markdown
-            await SaveTaskMarkdownToSessionAsync(sessionId, updatedMarkdown);
+            var fnCall = response.Output?
+                               .OfType<FunctionToolCall>()
+                               .FirstOrDefault(fc => fc.Name == SaveMarkdownPlanTool.Name);
 
-            // The activity is now logged in SaveTaskMarkdownToSessionAsync
-            // Remove the duplicate activity logging here
-            
-            return updatedMarkdown;
+            var (updatedMarkdown, requiredTools) = ParseFunctionCall(fnCall);
+
+            if (!string.IsNullOrWhiteSpace(updatedMarkdown))
+            {
+                await SaveTaskMarkdownToSessionAsync(sessionId, updatedMarkdown);
+                _toolScope.SetRequiredTools(sessionId, requiredTools);   // NEW
+                return updatedMarkdown;
+            }
+
+            _logger.LogWarning("Function call did not return markdown – falling back to existing extractor");
+            // ...existing ExtractContentFromResponse fallback...
+            var extracted = ExtractContentFromResponse(response) ?? currentMarkdown;
+            await SaveTaskMarkdownToSessionAsync(sessionId, extracted);
+            return extracted;
         }
         catch (Exception ex)
         {

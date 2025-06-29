@@ -13,6 +13,8 @@ using OpenAIIntegration;
 using OpenAIIntegration.Model;
 using MCPClient;
 using System.Text.Json;
+using Common.Interfaces.Tools;          // NEW
+using CommonToolScope = Common.Interfaces.Tools.IToolScopeManager;   // alias to disambiguate
 
 namespace AgentAlpha.Tests;
 
@@ -36,31 +38,35 @@ public class TaskExecutorMarkdownIntegrationTest
             builder.SetMinimumLevel(LogLevel.Debug); // Capture all logs to verify no warnings
         });
 
-        var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
-        var activityLogger = new SessionActivityLogger(sessionManager, loggerFactory.CreateLogger<SessionActivityLogger>());
-        
+        var sessionManager  = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
+        var activityLogger  = new SessionActivityLogger(sessionManager, loggerFactory.CreateLogger<SessionActivityLogger>());
+
+        // Mocks needed *before* they are first used
+        var mockToolScopeCommon   = new Mock<CommonToolScope>();                 // for MarkdownTaskStateManager (Common)
+        var mockToolScopeManager  = new Mock<IToolScopeManager>(); // for TaskExecutor (AgentAlpha)
+
         // Create MarkdownTaskStateManager with mocked OpenAI
         var mockOpenAiService = new Mock<ISessionAwareOpenAIService>();
-        var initMarkdownResponse = CreateMockInitializeResponse();
+        var initMarkdownResponse  = CreateMockInitializeResponse();
         var updateMarkdownResponse = CreateMockUpdateResponse();
-        
+
         mockOpenAiService.SetupSequence(x => x.CreateResponseAsync(It.IsAny<ResponsesCreateRequest>(), default))
-                        .ReturnsAsync(initMarkdownResponse)  // For initialization
-                        .ReturnsAsync(updateMarkdownResponse); // For updates
+                         .ReturnsAsync(initMarkdownResponse)   // For initialization
+                         .ReturnsAsync(updateMarkdownResponse); // For updates
 
         var markdownTaskStateManager = new MarkdownTaskStateManager(
             sessionManager,
             mockOpenAiService.Object,
+            mockToolScopeCommon.Object,                        // use Common alias mock
             loggerFactory.CreateLogger<MarkdownTaskStateManager>());
 
         // Mock other required services for TaskExecutor
-        var mockConnectionManager = new Mock<IConnectionManager>();
-        var mockToolManager = new Mock<IToolManager>();
-        var mockToolSelector = new Mock<IToolSelector>();
+        var mockConnectionManager   = new Mock<IConnectionManager>();
+        var mockToolManager         = new Mock<IToolManager>();
+        var mockToolSelector        = new Mock<IToolSelector>();
         var mockConversationManager = new Mock<IConversationManager>();
-        var mockPlanningService = new Mock<IPlanningService>();
-        var mockTaskStateManager = new Mock<ITaskStateManager>();
-        var mockToolScopeManager = new Mock<IToolScopeManager>();
+        var mockPlanningService     = new Mock<IPlanningService>();
+        var mockTaskStateManager    = new Mock<ITaskStateManager>();
 
         // Setup basic mocks
         mockConnectionManager.Setup(x => x.ConnectAsync(
@@ -90,7 +96,7 @@ public class TaskExecutorMarkdownIntegrationTest
             mockTaskStateManager.Object,
             config,
             loggerFactory.CreateLogger<TaskExecutor>(),
-            mockToolScopeManager.Object,
+            mockToolScopeManager.Object,                       // AgentAlpha mock
             markdownTaskStateManager); // This is the key: provide MarkdownTaskStateManager
 
         // Act: Call the InitializeMarkdownPlanAsync workflow

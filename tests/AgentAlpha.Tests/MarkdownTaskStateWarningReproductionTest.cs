@@ -7,6 +7,7 @@ using SessionService.Services;
 using OpenAIIntegration;
 using OpenAIIntegration.Model;
 using System.Text.Json;
+using Common.Interfaces.Tools;          // NEW
 
 namespace AgentAlpha.Tests;
 
@@ -31,10 +32,12 @@ public class MarkdownTaskStateWarningReproductionTest
         
         var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
         var mockOpenAiService = new Mock<ISessionAwareOpenAIService>();
-        
+        var mockToolScope     = new Mock<IToolScopeManager>();   // NEW
+
         var markdownManager = new MarkdownTaskStateManager(
             sessionManager,
             mockOpenAiService.Object,
+            mockToolScope.Object,                                 // NEW
             loggerFactory.CreateLogger<MarkdownTaskStateManager>());
 
         // Create a session but don't initialize markdown
@@ -74,6 +77,7 @@ public class MarkdownTaskStateWarningReproductionTest
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
         var mockOpenAiService = new Mock<ISessionAwareOpenAIService>();
+        var mockToolScope     = new Mock<IToolScopeManager>();   // NEW
         
         // Mock OpenAI to return valid markdown for both initialize and update
         var initMarkdownResponse = CreateMockInitializeResponse();
@@ -86,6 +90,7 @@ public class MarkdownTaskStateWarningReproductionTest
         var markdownManager = new MarkdownTaskStateManager(
             sessionManager,
             mockOpenAiService.Object,
+            mockToolScope.Object,                                 // NEW
             loggerFactory.CreateLogger<MarkdownTaskStateManager>());
 
         var session = await sessionManager.CreateSessionAsync("Correct Workflow Test");

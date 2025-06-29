@@ -10,6 +10,7 @@ using Common.Models.Session;
 using Common.Interfaces.Session;
 using System.Text;
 using System.Text.RegularExpressions;
+using Common.Interfaces.Tools;
 
 namespace AgentAlpha.Services;
 
