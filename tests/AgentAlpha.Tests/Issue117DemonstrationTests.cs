@@ -50,14 +50,14 @@ namespace AgentAlpha.Tests
         }
 
         [Fact]
-        public void Issue117_BuiltInToolsIncluded_InLLMPrompt()
+        public async Task Issue117_BuiltInToolsIncluded_InLLMPrompt()
         {
             // This demonstrates that built-in tools are now included in the LLM prompt
             var task = "which models are available through openai"; // From problem statement
             var toolSelector = CreateTestToolSelector();
             
             // Test the method that gets built-in tool descriptions
-            var builtInDescriptions = GetBuiltInToolDescriptionsViaReflection(toolSelector, task, new List<ToolDefinition>());
+            var builtInDescriptions = await GetBuiltInToolDescriptionsViaReflection(toolSelector, task, new List<ToolDefinition>());
             
             // Should include web search for this type of query about current information
             Assert.Contains("- web_search_preview: Search the web for current information and real-time data", builtInDescriptions);
@@ -71,13 +71,13 @@ namespace AgentAlpha.Tests
         }
 
         [Fact]
-        public void Issue117_WebSearchDetection_WorksForProblemStatementTask()
+        public async Task Issue117_WebSearchDetection_WorksForProblemStatementTask()
         {
             // The specific task from the problem statement should trigger web search
             var task = "which models are available through openai?";
             var toolSelector = CreateTestToolSelector();
             
-            var shouldIncludeWebSearch = toolSelector.ShouldIncludeWebSearch(task);
+            var shouldIncludeWebSearch = await toolSelector.ShouldIncludeWebSearchAsync(task);
             
             // This should return true because "which", "available", and "models" are keywords that suggest need for current info
             Assert.True(shouldIncludeWebSearch);
@@ -105,16 +105,16 @@ namespace AgentAlpha.Tests
             return result?.ToString() ?? "";
         }
 
-        private static List<string> GetBuiltInToolDescriptionsViaReflection(ToolSelector toolSelector, string task, List<ToolDefinition> alreadySelected)
+        private static async Task<List<string>> GetBuiltInToolDescriptionsViaReflection(ToolSelector toolSelector, string task, List<ToolDefinition> alreadySelected)
         {
             var toolSelectorType = typeof(ToolSelector);
-            var method = toolSelectorType.GetMethod("GetBuiltInOpenAIToolDescriptions", 
+            var method = toolSelectorType.GetMethod("GetBuiltInOpenAIToolDescriptionsAsync", 
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             
             Assert.NotNull(method);
             
             var result = method.Invoke(toolSelector, new object[] { task, alreadySelected });
-            return (List<string>)result!;
+            return await (Task<List<string>>)result!;
         }
 
         private static ToolDefinition? GetBuiltInToolDefinitionViaReflection(ToolSelector toolSelector, string toolName)

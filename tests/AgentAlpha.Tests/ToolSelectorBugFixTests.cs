@@ -105,10 +105,10 @@ namespace AgentAlpha.Tests
         [InlineData("calculate 2 + 2", false)]
         [InlineData("find current openai api status", true)]
         [InlineData("add two numbers", false)]
-        public void ShouldIncludeWebSearch_WithVariousTasks_ShouldReturnCorrectResult(string task, bool expectedResult)
+        public async Task ShouldIncludeWebSearch_WithVariousTasks_ShouldReturnCorrectResult(string task, bool expectedResult)
         {
             // Test the web search detection logic which is mentioned in the problem
-            var result = ShouldIncludeWebSearchHelper(task);
+            var result = await ShouldIncludeWebSearchHelper(task);
             Assert.Equal(expectedResult, result);
         }
 
@@ -178,7 +178,7 @@ namespace AgentAlpha.Tests
         /// <summary>
         /// Helper method to test the private ShouldIncludeWebSearch method via reflection
         /// </summary>
-        private static bool ShouldIncludeWebSearchHelper(string task)
+        private static async Task<bool> ShouldIncludeWebSearchHelper(string task)
         {
             // Create a minimal ToolSelector instance for testing
             var mockOpenAI = new MockSessionAwareOpenAIServiceForBugFix();
@@ -188,7 +188,7 @@ namespace AgentAlpha.Tests
             
             var toolSelector = new ToolSelector(mockOpenAI, mockToolManager, mockLogger, agentConfig);
             
-            return toolSelector.ShouldIncludeWebSearch(task);
+            return await toolSelector.ShouldIncludeWebSearchAsync(task);
         }
 
         /// <summary>

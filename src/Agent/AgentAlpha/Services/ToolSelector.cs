@@ -22,7 +22,10 @@ public class ToolSelector : IToolSelector
     private readonly ILogger<ToolSelector> _logger;
     private readonly ToolSelectionConfig _config;
     private readonly AgentConfiguration _agentConfig;
-    private ISessionActivityLogger? _activityLogger;
+    private ISession​ActivityLogger? _activityLogger;
+    
+    // Deprecation flag for heuristic methods
+    private bool _showDeprecationWarnings = true;
 
     public ToolSelector(
         ISessionAwareOpenAIService openAi,
@@ -67,44 +70,46 @@ public class ToolSelector : IToolSelector
                 return selectedTools.Take(maxToolCount).ToArray();
             }
             
-            // Use LLM to select additional relevant tools (including built-in tools)
-            if (_config.UseLLMSelection && availableTools.Count > 0)
+            // Always use LLM-based selection - defer tool selection logic to SessionAwareOpenAIService
+            if (availableTools.Count > 0)
             {
                 var remainingSlots = maxToolCount - selectedTools.Count;
                 var additionalTools = await SelectToolsUsingLLMAsync(task, availableTools, selectedTools, remainingSlots);
                 selectedTools.AddRange(additionalTools);
             }
-            else
+            
+            // Log deprecation warning if heuristic-based selection was configured
+            if (!_config.UseLLMSelection && _showDeprecationWarnings)
             {
-                // Fallback: use simple heuristics if LLM selection is disabled
-                var additionalTools = SelectToolsUsingHeuristics(task, availableTools, selectedTools, maxToolCount - selectedTools.Count);
-                selectedTools.AddRange(additionalTools);
+                _logger.LogWarning("Heuristic-based tool selection is deprecated and will be removed in a future version. " +
+                                 "All tool selection now uses LLM-based analysis through SessionAwareOpenAIService. " +
+                                 "Please update your configuration to set UseLLMSelection=true.");
+                _showDeprecationWarnings = false; // Only show once per instance
             }
             
-            // Add web search tool if task requires it and model supports it (for both LLM and heuristic selection)
-            if (ShouldIncludeWebSearch(task) && selectedTools.Count < maxToolCount && 
+            // Use LLM-based analysis for web search determination instead of hardcoded keywords
+            if (await ShouldIncludeWebSearchAsync(task) && selectedTools.Count < maxToolCount && 
                 !selectedTools.Any(t => t.Name == "web_search_preview") && _agentConfig.WebSearch != null)
             {
                 var webSearchTool = _agentConfig.WebSearch.ToToolDefinition();
                 selectedTools.Add(webSearchTool);
-                _logger.LogInformation("Added web search tool for task requiring current information");
+                _logger.LogInformation("Added web search tool based on LLM analysis");
             }
             
-            // -----------------------------------------------------------------
-            // FALLBACK: if nothing was selected, use web search only when needed
+            // FALLBACK: if nothing was selected, use LLM to determine if web search is needed
             if (selectedTools.Count == 0)
             {
-                if (ShouldIncludeWebSearch(task))
+                if (await ShouldIncludeWebSearchAsync(task))
                 {
                     var webSearchToolDef = GetWebSearchFallback();
                     if (webSearchToolDef != null)
                     {
-                        _logger.LogInformation("Fallback – no tools selected but task requires current information, using WebSearchTool.");
+                        _logger.LogInformation("Fallback – no tools selected but LLM analysis suggests web search is needed");
                         return new[] { webSearchToolDef };
                     }
                 }
 
-                _logger.LogInformation("No relevant tools selected and task does not require web search – returning empty tool list.");
+                _logger.LogInformation("No relevant tools selected and LLM analysis does not suggest web search – returning empty tool list.");
                 return Array.Empty<ToolDefinition>();
             }
             
@@ -122,8 +127,8 @@ public class ToolSelector : IToolSelector
         {
             _logger.LogError(ex, "Tool selection failed");
 
-            // Only fall back to web search if the task actually benefits from it
-            if (ShouldIncludeWebSearch(task))
+            // Only fall back to web search if LLM analysis suggests it's beneficial
+            if (await ShouldIncludeWebSearchAsync(task))
             {
                 var webSearchToolDef = GetWebSearchFallback();
                 if (webSearchToolDef != null)
@@ -219,7 +224,7 @@ public class ToolSelector : IToolSelector
         allAvailableToolDescriptions.AddRange(mcpToolDescriptions);
         
         // Add built-in OpenAI tools that could be relevant
-        var builtInTools = GetBuiltInOpenAIToolDescriptions(task, alreadySelectedTools);
+        var builtInTools = await GetBuiltInOpenAIToolDescriptionsAsync(task, alreadySelectedTools);
         allAvailableToolDescriptions.AddRange(builtInTools);
         
         if (allAvailableToolDescriptions.Count == 0)
@@ -313,11 +318,17 @@ public class ToolSelector : IToolSelector
         {
             // Log detailed error information for debugging (without request details since it may not be available)
             await LogToolSelectionErrorAsync(null, null, null, ex, "LLM tool selection failed");
-            _logger.LogError(ex, "Failed to use LLM for tool selection, falling back to heuristics");
-            return SelectToolsUsingHeuristics(task, availableTools, alreadySelectedTools, maxAdditionalTools);
+            _logger.LogError(ex, "Failed to use LLM for tool selection, returning empty tool set");
+            return Array.Empty<ToolDefinition>();
         }
     }
 
+    /// <summary>
+    /// [DEPRECATED] Legacy heuristic-based tool selection using hardcoded keyword mapping.
+    /// This method is deprecated and will be removed in a future version.
+    /// All tool selection now uses LLM-based analysis through SessionAwareOpenAIService.
+    /// </summary>
+    [Obsolete("Heuristic-based tool selection is deprecated. Use LLM-based selection through SelectToolsUsingLLMAsync.")]
     private ToolDefinition[] SelectToolsUsingHeuristics(
         string task, 
         IList<IUnifiedTool> availableTools, 
@@ -503,6 +514,75 @@ public class ToolSelector : IToolSelector
         
         return "";
     }
+    
+    /// <summary>
+    /// Determine if web search should be included using LLM analysis instead of hardcoded keywords
+    /// </summary>
+    /// <param name="task">The user's task description</param>
+    /// <returns>True if web search tool should be included based on LLM analysis</returns>
+    public async Task<bool> ShouldIncludeWebSearchAsync(string task)
+    {
+        if (string.IsNullOrWhiteSpace(task))
+            return false;
+
+        try
+        {
+            var prompt = $"""
+                Analyze the following task to determine if it requires web search or current/real-time information.
+                
+                Task: {task}
+                
+                Consider whether the task:
+                1. Asks for current, latest, or recent information
+                2. Needs real-time data or news
+                3. Requires information that changes frequently
+                4. Explicitly mentions web search, browsing, or online research
+                5. Asks about availability, status, or current offerings
+                
+                Respond with only "true" if web search is needed, or "false" if not needed.
+                
+                Answer:
+                """;
+
+            var request = new ResponsesCreateRequest
+            {
+                Model = _config.SelectionModel,
+                Input = new[] { new { role = "user", content = prompt } },
+                ToolChoice = "none",
+                MaxOutputTokens = 10 // Very short response needed
+            };
+
+            var response = await _openAi.CreateResponseAsync(request);
+            var outputMessage = response.Output?
+                .OfType<OutputMessage>()
+                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase));
+                
+            var content = ExtractTextFromContent(outputMessage?.Content)?.Trim().ToLowerInvariant();
+            
+            return content == "true";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to use LLM for web search determination, using fallback analysis");
+            // Fallback to deprecated method but log the deprecation
+            if (_showDeprecationWarnings)
+            {
+                _logger.LogWarning("Falling back to deprecated hardcoded web search determination. " +
+                                 "Consider investigating LLM integration issues.");
+            }
+#pragma warning disable CS0618 // Type or member is obsolete
+            return ShouldIncludeWebSearch(task);
+#pragma warning restore CS0618 // Type or member is obsolete
+        }
+    }
+
+    /// <summary>
+    /// [DEPRECATED] Legacy method that uses hardcoded keyword matching for web search determination.
+    /// Use ShouldIncludeWebSearchAsync instead for LLM-based analysis.
+    /// </summary>
+    /// <param name="task">The user's task description</param>
+    /// <returns>True if web search tool should be included</returns>
+    [Obsolete("This method uses hardcoded keyword matching and is deprecated. Use ShouldIncludeWebSearchAsync for LLM-based analysis.")]
 
     public bool ShouldIncludeWebSearch(string task)
     {
@@ -557,13 +637,10 @@ public class ToolSelector : IToolSelector
         var selectedToolNames = selectedTools.Select(t => t.Name).ToList();
         var rejectedToolNames = availableToolNames.Except(selectedToolNames).ToList();
 
-        // Analyze task to determine reasoning
-        var taskAnalysis = AnalyzeTaskForToolSelection(task);
-        
+        // Use simplified reasoning since LLM handles the detailed analysis
         var selectionReasoning = new
         {
             Task = task,
-            TaskAnalysis = taskAnalysis,
             SelectionDurationMs = durationMs,
             AvailableToolsCount = availableTools.Count,
             SelectedToolsCount = selectedTools.Count,
@@ -573,25 +650,20 @@ public class ToolSelector : IToolSelector
             { 
                 Name = t.Name, 
                 Description = t.Description,
-                SelectionReason = DetermineSelectionReason(t.Name, task, taskAnalysis)
+                SelectionReason = "Selected by LLM analysis"
             }).ToList(),
             
             RejectedTools = rejectedToolNames.Select(name => new 
             { 
                 Name = name,
-                RejectionReason = DetermineRejectionReason(name, task, taskAnalysis)
+                RejectionReason = "Not selected by LLM analysis"
             }).ToList(),
             
-            SelectionMethod = _config.UseLLMSelection ? "LLM-based" : "Heuristic-based",
-            WebSearchIncluded = ShouldIncludeWebSearch(task),
-            WebSearchReasoning = GetWebSearchReasoning(task),
+            SelectionMethod = "LLM-based (via SessionAwareOpenAIService)",
+            WebSearchIncluded = await ShouldIncludeWebSearchAsync(task),
+            WebSearchReasoning = await GetWebSearchReasoningAsync(task),
             
-            TaskCategories = taskAnalysis.Categories,
-            RelevanceFiltering = new
-            {
-                TaskKeywords = taskAnalysis.Keywords,
-                ToolMatchingCriteria = "Keywords, categories, and context-based relevance"
-            }
+            Note = "Tool selection and reasoning now handled by LLM instead of hardcoded logic"
         };
 
         await _activityLogger.LogActivityAsync(
@@ -602,8 +674,54 @@ public class ToolSelector : IToolSelector
     }
 
     /// <summary>
-    /// Analyze task to categorize and extract keywords for tool selection reasoning
+    /// Get LLM-based reasoning for why web search was or wasn't included
     /// </summary>
+    private async Task<string> GetWebSearchReasoningAsync(string task)
+    {
+        if (string.IsNullOrWhiteSpace(task))
+            return "No task provided";
+
+        try
+        {
+            var prompt = $"""
+                Analyze why web search would or would not be needed for this task. Provide a brief explanation.
+                
+                Task: {task}
+                
+                Provide a short reason (1-2 sentences) explaining whether this task needs web search and why.
+                
+                Reasoning:
+                """;
+
+            var request = new ResponsesCreateRequest
+            {
+                Model = _config.SelectionModel,
+                Input = new[] { new { role = "user", content = prompt } },
+                ToolChoice = "none",
+                MaxOutputTokens = 100
+            };
+
+            var response = await _openAi.CreateResponseAsync(request);
+            var outputMessage = response.Output?
+                .OfType<OutputMessage>()
+                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase));
+                
+            var content = ExtractTextFromContent(outputMessage?.Content)?.Trim();
+            
+            return string.IsNullOrEmpty(content) ? "LLM analysis completed" : content;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get LLM reasoning for web search decision");
+            return "Unable to determine reasoning via LLM";
+        }
+    }
+
+    /// <summary>
+    /// [DEPRECATED] Analyze task using hardcoded categorization and keyword extraction.
+    /// This method is deprecated as it uses hardcoded logic instead of LLM analysis.
+    /// </summary>
+    [Obsolete("Hardcoded task analysis is deprecated. Use LLM-based analysis instead.")]
     private TaskAnalysis AnalyzeTaskForToolSelection(string task)
     {
         var taskLower = task.ToLowerInvariant();
@@ -659,16 +777,26 @@ public class ToolSelector : IToolSelector
         {
             Categories = categories,
             Keywords = keywords.Distinct().ToList(),
+#pragma warning disable CS0618 // Type or member is obsolete
             RequiresCurrentInfo = ShouldIncludeWebSearch(task),
+#pragma warning restore CS0618 // Type or member is obsolete
             ComplexityLevel = DetermineTaskComplexity(task)
         };
     }
 
     /// <summary>
-    /// Determine why a tool was selected
+    /// [DEPRECATED] Determine why a tool was selected using hardcoded reasoning.
+    /// This method is deprecated as it relies on hardcoded string matching.
+    /// Tool selection reasoning should be handled by the LLM.
     /// </summary>
+    [Obsolete("Hardcoded tool selection reasoning is deprecated. Use LLM-based analysis instead.")]
     private string DetermineSelectionReason(string toolName, string task, TaskAnalysis analysis)
     {
+        if (_showDeprecationWarnings)
+        {
+            _logger.LogWarning("DetermineSelectionReason uses deprecated hardcoded logic. " +
+                             "Consider using LLM-based tool selection reasoning.");
+        }
         if (_config.EssentialTools.Contains(toolName, StringComparer.OrdinalIgnoreCase))
         {
             return "Essential tool always included";
@@ -701,10 +829,18 @@ public class ToolSelector : IToolSelector
     }
 
     /// <summary>
-    /// Determine why a tool was rejected
+    /// [DEPRECATED] Determine why a tool was rejected using hardcoded reasoning.
+    /// This method is deprecated as it relies on hardcoded string matching.
+    /// Tool selection reasoning should be handled by the LLM.
     /// </summary>
+    [Obsolete("Hardcoded tool rejection reasoning is deprecated. Use LLM-based analysis instead.")]
     private string DetermineRejectionReason(string toolName, string task, TaskAnalysis analysis)
     {
+        if (_showDeprecationWarnings)
+        {
+            _logger.LogWarning("DetermineRejectionReason uses deprecated hardcoded logic. " +
+                             "Consider using LLM-based tool selection reasoning.");
+        }
         var toolLower = toolName.ToLowerInvariant();
         
         // If task requires current info but this isn't web search, prioritize web search
@@ -892,13 +1028,13 @@ public class ToolSelector : IToolSelector
     /// <summary>
     /// Get descriptions of built-in OpenAI tools that could be relevant for the task
     /// </summary>
-    private List<string> GetBuiltInOpenAIToolDescriptions(string task, List<ToolDefinition> alreadySelectedTools)
+    private async Task<List<string>> GetBuiltInOpenAIToolDescriptionsAsync(string task, List<ToolDefinition> alreadySelectedTools)
     {
         var descriptions = new List<string>();
         var alreadySelectedNames = alreadySelectedTools.Select(t => t.Name).ToHashSet();
 
         // Add web search tool if it's not already selected and could be relevant
-        if (!alreadySelectedNames.Contains("web_search_preview") && ShouldIncludeWebSearch(task) && _agentConfig.WebSearch != null)
+        if (!alreadySelectedNames.Contains("web_search_preview") && await ShouldIncludeWebSearchAsync(task) && _agentConfig.WebSearch != null)
         {
             descriptions.Add("- web_search_preview: Search the web for current information and real-time data");
         }

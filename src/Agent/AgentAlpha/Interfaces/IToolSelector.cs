@@ -41,10 +41,19 @@ public interface IToolSelector
     Task<ToolDefinition[]> GetEssentialToolsAsync(IList<IUnifiedTool> availableTools);
     
     /// <summary>
-    /// Determine if web search should be included based on task analysis
+    /// Determine if web search should be included using LLM-based analysis
+    /// </summary>
+    /// <param name="task">The user's task description</param>
+    /// <returns>True if web search tool should be included based on LLM analysis</returns>
+    Task<bool> ShouldIncludeWebSearchAsync(string task);
+    
+    /// <summary>
+    /// [DEPRECATED] Determine if web search should be included based on hardcoded keyword analysis
+    /// Use ShouldIncludeWebSearchAsync instead for LLM-based analysis
     /// </summary>
     /// <param name="task">The user's task description</param>
     /// <returns>True if web search tool should be included</returns>
+    [Obsolete("Use ShouldIncludeWebSearchAsync for LLM-based analysis instead of hardcoded keywords")]
     bool ShouldIncludeWebSearch(string task);
     
     /// <summary>

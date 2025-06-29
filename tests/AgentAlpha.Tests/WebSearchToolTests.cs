@@ -84,7 +84,7 @@ public class WebSearchToolTests
     [InlineData("Read the file contents", false)]
     [InlineData("List directory contents", false)]
     [InlineData("", false)]
-    public void ToolSelector_ShouldIncludeWebSearch_CorrectlyIdentifiesWebSearchTasks(string task, bool expected)
+    public async Task ToolSelector_ShouldIncludeWebSearch_CorrectlyIdentifiesWebSearchTasks(string task, bool expected)
     {
         // Arrange
         var mockOpenAI = new Mock<ISessionAwareOpenAIService>();
@@ -101,7 +101,7 @@ public class WebSearchToolTests
             toolSelectionConfig);
 
         // Act
-        var result = toolSelector.ShouldIncludeWebSearch(task);
+        var result = await toolSelector.ShouldIncludeWebSearchAsync(task);
 
         // Assert
         Assert.Equal(expected, result);
