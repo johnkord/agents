@@ -722,7 +722,13 @@ public class TaskExecutor : ITaskExecutor
                 $"Reached maximum iterations ({config.MaxIterations}).",
                 new { MaxIterations = config.MaxIterations });
         }
-        throw new InvalidOperationException($"Reached maximum iterations ({config.MaxIterations}).");
+        // Do not treat this as a fatal error – return so the caller
+        // can continue normal completion logic (e.g. saving session).
+        _logger.LogWarning(
+            "Reached maximum iterations ({Iterations}) for session {SessionId} – exiting conversation loop gracefully",
+            config.MaxIterations,
+            sessionId ?? "<no-session>");
+        return;
     }
 
     // ---------------- helper ------------------------------------------------
@@ -731,10 +737,19 @@ public class TaskExecutor : ITaskExecutor
         if (_markdownTaskStateManager == null) return;
         try
         {
-            await _markdownTaskStateManager.UpdateTaskMarkdownAsync(sessionId, description, result);
-            
-            // Note: MarkdownTaskStateManager.UpdateTaskMarkdownAsync already persists the markdown to the session
-            // so we don't need to manually save it again here
+            // NEW: ensure a markdown document exists before updating
+            var existingMarkdown = await _markdownTaskStateManager.GetTaskMarkdownAsync(sessionId);
+            if (string.IsNullOrWhiteSpace(existingMarkdown))
+            {
+                // Initialise from the first action/description
+                await _markdownTaskStateManager.InitializeTaskMarkdownAsync(sessionId, description);
+            }
+            else
+            {
+                await _markdownTaskStateManager.UpdateTaskMarkdownAsync(sessionId, description, result);
+            }
+
+            // Note: MarkdownTaskStateManager persists the markdown itself
         }
         catch (Exception ex)
         {
