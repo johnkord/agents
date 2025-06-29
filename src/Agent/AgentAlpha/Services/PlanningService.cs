@@ -9,6 +9,7 @@ using AgentAlpha.Configuration;
 using Common.Models.Session;
 using Common.Interfaces.Session;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AgentAlpha.Services;
 
@@ -95,12 +96,14 @@ public class PlanningService : IPlanningService
             
             var request = new ResponsesCreateRequest
             {
-                Model = _config.Model,
-                Input = new[]
+                Model  = _config.Model,
+                Input  = new[]
                 {
-                    new { role = "system", content = "You are an expert task planning assistant. Create comprehensive markdown-based task plans with clear checklist items for execution tracking." },
-                    new { role = "user", content = markdownPlanPrompt }
+                    new { role = "system", content = "You are an expert task planning assistant." },
+                    new { role = "user",   content = markdownPlanPrompt }
                 },
+                Tools       = new[] { SaveMarkdownPlanTool },      // NEW
+                ToolChoice  = "auto",                              // let the model decide but it must call our tool
                 MaxOutputTokens = 2000
             };
 
@@ -115,20 +118,25 @@ public class PlanningService : IPlanningService
             }
 
             var response = await _openAi.CreateResponseAsync(request);
-            
-            var outputMessage = response.Output?
-                .OfType<OutputMessage>()
-                .FirstOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase));
-            
-            var markdownPlan = ExtractTextFromContent(outputMessage?.Content);
+
+            // NEW – look for the function call output
+            var fnCall = response.Output?
+                             .OfType<FunctionToolCall>()
+                             .FirstOrDefault(fc => fc.Name == SaveMarkdownPlanTool.Name);
+
+            var (markdownPlan, requiredTools) = ParseFunctionCall(fnCall);
 
             if (!string.IsNullOrEmpty(markdownPlan))
             {
-                // NEW – log the raw markdown plan
                 await _activityLogger!.LogActivityAsync(
-                    ActivityTypes.TaskMarkdownUpdate,            // NEW
+                    ActivityTypes.TaskMarkdownUpdate,
                     "Initial markdown task plan",
-                    markdownPlan);                               // raw markdown
+                    markdownPlan);
+
+                await _activityLogger!.LogActivityAsync(
+                    ActivityTypes.TaskPlanning,
+                    "Required tools extracted",
+                    requiredTools);
 
                 _logger.LogInformation("Successfully created markdown task plan for session {SessionId}", sessionId);
                 return markdownPlan;
@@ -163,6 +171,28 @@ public class PlanningService : IPlanningService
         }
     }
 
+    // NEW – single tool definition that the LLM will call
+    private static readonly ToolDefinition SaveMarkdownPlanTool = new()
+    {
+        Type        = "function",
+        Name        = "save_markdown_plan",
+        Description = "Return the generated markdown plan and the list of required tools.",
+        Parameters  = new
+        {
+            type       = "object",
+            properties = new
+            {
+                markdown_plan  = new { type = "string", description = "The markdown task plan." },
+                required_tools = new
+                {
+                    type  = "array",
+                    items = new { type = "string" },
+                    description = "Names of tools required for executing the plan."
+                }
+            },
+            required = new[] { "markdown_plan", "required_tools" }
+        }
+    };
 
     /// <summary>
     /// Creates a markdown planning prompt for LLM task planning
@@ -211,6 +241,12 @@ public class PlanningService : IPlanningService
         prompt.Add("- Include the tool to use if applicable");
         prompt.Add("- Have clear success criteria");
         prompt.Add("- Be granular enough to track progress");
+        prompt.Add("");
+        prompt.Add("When the plan is complete, call the tool " +
+                   $"**{SaveMarkdownPlanTool.Name}** with two arguments:");
+        prompt.Add("1. `markdown_plan`  – the full markdown document");
+        prompt.Add("2. `required_tools` – an array with the tool names that appear in the \"Required Tools\" section.");
+        prompt.Add("Return **nothing else**.");
         
         return string.Join("\n", prompt);
     }
@@ -292,4 +328,69 @@ public class PlanningService : IPlanningService
         sb.AppendLine($"• Available tools: {tools.Count}");
         return sb.ToString();
     }
+
+    // NEW – parse FunctionToolCall to get plan & tools
+    private static (string markdown, string[] tools) ParseFunctionCall(FunctionToolCall? fnCall)
+    {
+        // Return empty result if the function call or its arguments are missing
+        if (fnCall == null || !fnCall.Arguments.HasValue)
+            return ("", Array.Empty<string>());
+
+        // Safely unwrap the nullable JsonElement
+        JsonElement root = fnCall.Arguments.Value;
+
+        // Ensure we are working with a JSON object
+        if (root.ValueKind != JsonValueKind.Object)
+            return ("", Array.Empty<string>());
+
+        var markdown = root.GetProperty("markdown_plan").GetString() ?? "";
+        var toolsArr = root.TryGetProperty("required_tools", out var arr) && arr.ValueKind == JsonValueKind.Array
+            ? arr.EnumerateArray()
+                 .Where(e => e.ValueKind == JsonValueKind.String)
+                 .Select(e => e.GetString()!)
+                 .ToArray()
+            : Array.Empty<string>();
+
+        return (markdown.Trim(), toolsArr);
+    }
+
+        // NEW -----------------------------------------------------------------
+        /// <summary>
+        /// Splits the raw assistant response into markdown (first part) and a
+        /// JSON list of required tools (second part). Returns an empty array if
+        /// no JSON is found or the JSON cannot be parsed.
+        /// </summary>
+        private static (string markdown, string[] tools) SplitMarkdownAndTools(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return ("", Array.Empty<string>());
+
+            // Look for a fenced JSON block ```json … ```
+            var match = Regex.Match(raw, @"```json\s*([\s\S]*?)\s*```", RegexOptions.IgnoreCase);
+            if (!match.Success)
+                return (raw.Trim(), Array.Empty<string>());
+
+            var markdown = raw[..match.Index].TrimEnd();
+            var jsonText = match.Groups[1].Value;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(jsonText);
+                if (doc.RootElement.TryGetProperty("required_tools", out var arr)
+                    && arr.ValueKind == JsonValueKind.Array)
+                {
+                    var tools = arr.EnumerateArray()
+                                   .Where(e => e.ValueKind == JsonValueKind.String)
+                                   .Select(e => e.GetString()!)
+                                   .ToArray();
+                    return (markdown, tools);
+                }
+            }
+            catch
+            {
+                // Ignore JSON errors – return markdown only
+            }
+
+            return (markdown, Array.Empty<string>());
+        }
 }
