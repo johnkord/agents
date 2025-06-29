@@ -46,4 +46,9 @@ public interface ITaskStateManager
     /// Get the context accumulated from completed subtasks
     /// </summary>
     Task<Dictionary<string, object>> GetAccumulatedContextAsync(string sessionId);
+    
+    /// <summary>
+    /// Initialize task state from a task plan and create the initial markdown representation
+    /// </summary>
+    Task<TaskState> InitializeTaskStateAsync(string sessionId, TaskPlan taskPlan);
 }
