@@ -75,7 +75,9 @@ public class TaskStateManager : ITaskStateManager
             });
             
             session.Metadata = taskStateJson;
-            session.LastUpdatedAt = DateTime.UtcNow;
+            
+            // Update task progress information
+            UpdateSessionTaskProgress(session, taskState);
             
             await _sessionManager.SaveSessionAsync(session);
             
@@ -179,5 +181,104 @@ public class TaskStateManager : ITaskStateManager
     {
         var taskState = await GetTaskStateAsync(sessionId);
         return taskState?.AccumulatedContext ?? new Dictionary<string, object>();
+    }
+    
+    /// <summary>
+    /// Update session task progress fields based on task state
+    /// </summary>
+    private void UpdateSessionTaskProgress(AgentSession session, TaskState taskState)
+    {
+        // Update basic task information
+        session.TaskTitle = taskState.Task;
+        session.TotalSteps = taskState.Subtasks.Count;
+        session.CompletedSteps = taskState.GetCompletedCount();
+        
+        // Update task status
+        session.TaskStatus = taskState.Status switch
+        {
+            TaskCompletionStatus.InProgress => TaskExecutionStatus.InProgress,
+            TaskCompletionStatus.Completed => TaskExecutionStatus.Completed,
+            TaskCompletionStatus.Failed => TaskExecutionStatus.Failed,
+            TaskCompletionStatus.Cancelled => TaskExecutionStatus.Cancelled,
+            _ => TaskExecutionStatus.InProgress
+        };
+        
+        // Update current step
+        var currentSubtask = taskState.GetCurrentSubtask();
+        session.CurrentStep = currentSubtask?.StepNumber ?? 0;
+        
+        // If no current subtask but there are completed subtasks, we're done
+        if (currentSubtask == null && taskState.GetCompletedCount() > 0)
+        {
+            session.CurrentStep = session.TotalSteps;
+        }
+        
+        // Update progress percentage
+        if (session.TotalSteps > 0)
+        {
+            session.ProgressPercentage = Math.Round((double)session.CompletedSteps / session.TotalSteps, 3);
+        }
+        
+        // Set task start time if not already set and we have subtasks
+        if (!session.TaskStartedAt.HasValue && session.TotalSteps > 0)
+        {
+            session.TaskStartedAt = taskState.CreatedAt;
+            session.TaskStatus = TaskExecutionStatus.InProgress;
+        }
+        
+        // Set task completion time if completed
+        if (session.TaskStatus == TaskExecutionStatus.Completed && !session.TaskCompletedAt.HasValue)
+        {
+            session.TaskCompletedAt = DateTime.UtcNow;
+            session.ProgressPercentage = 1.0;
+            
+            // Calculate actual duration
+            if (session.TaskStartedAt.HasValue)
+            {
+                session.ActualDuration = (int)(DateTime.UtcNow - session.TaskStartedAt.Value).TotalMinutes;
+            }
+        }
+        
+        // Update task category based on subtask count
+        if (string.IsNullOrEmpty(session.TaskCategory))
+        {
+            session.TaskCategory = session.TotalSteps switch
+            {
+                <= 3 => "Simple",
+                <= 7 => "Medium", 
+                <= 15 => "Complex",
+                _ => "VeryComplex"
+            };
+        }
+        
+        session.LastUpdatedAt = DateTime.UtcNow;
+    }
+    
+    /// <summary>
+    /// Initialize task state from a task plan and update session accordingly
+    /// </summary>
+    public async Task<TaskState> InitializeTaskStateAsync(string sessionId, TaskPlan taskPlan)
+    {
+        var taskState = CreateTaskState(taskPlan);
+        
+        var session = await _sessionManager.GetSessionAsync(sessionId);
+        if (session != null)
+        {
+            // Update session with task information
+            session.UpdateTaskInfo(taskPlan);
+            UpdateSessionTaskProgress(session, taskState);
+            
+            // Store the task plan in CurrentPlan
+            session.SetCurrentPlan(taskPlan);
+            
+            await _sessionManager.SaveSessionAsync(session);
+        }
+        
+        await SaveTaskStateAsync(sessionId, taskState);
+        
+        _logger.LogInformation("Initialized task state for session {SessionId}: {TaskTitle} with {StepCount} steps", 
+            sessionId, taskPlan.Task, taskPlan.Steps.Count);
+        
+        return taskState;
     }
 }
