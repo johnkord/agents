@@ -112,10 +112,14 @@ public class OpenAIRequestLoggingIntegrationTests
         planningService.SetActivityLogger(activityLogger);
         
         // Act
-        var plan = await planningService.CreatePlanAsync("Test planning task", TestHelpers.WrapTools(new List<McpClientTool>()));
+        var planMarkdown = await planningService.InitializeTaskPlanningAsync(
+            session.SessionId,
+            "Test planning task",
+            TestHelpers.WrapTools(new List<McpClientTool>()));
         
         // Assert
-        Assert.NotNull(plan);
+        Assert.NotNull(planMarkdown);
+        Assert.False(string.IsNullOrWhiteSpace(planMarkdown));
         
         var activities = await activityLogger.GetSessionActivitiesAsync();
         

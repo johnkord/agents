@@ -684,21 +684,21 @@ public class TaskExecutor : ITaskExecutor
 
     private async Task SaveSessionIfApplicableAsync(TaskExecutionRequest request)
     {
-        if (string.IsNullOrEmpty(request.SessionId))
+        // no session → nothing to save
+        if (string.IsNullOrWhiteSpace(request.SessionId))
             return;
 
         try
         {
             var session = await _sessionManager.GetSessionAsync(request.SessionId);
-            if (session != null)
-            {
-                var currentMessages = _conversationManager.GetCurrentMessages();
-                session.SetConversationMessages(currentMessages);
-                session.Status = SessionStatus.Active;   // keep session open
+            if (session == null) return;
 
-                await _sessionManager.SaveSessionAsync(session);
-                _logger.LogInformation("Saved session state for {SessionId}", request.SessionId);
-            }
+            // persist latest conversation
+            session.SetConversationMessages(_conversationManager.GetCurrentMessages());
+            session.Status = SessionStatus.Active;
+
+            await _sessionManager.SaveSessionAsync(session);
+            _logger.LogInformation("Saved session state for {SessionId}", request.SessionId);
         }
         catch (Exception ex)
         {

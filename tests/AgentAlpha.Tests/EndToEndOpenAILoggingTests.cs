@@ -75,7 +75,11 @@ public class EndToEndOpenAILoggingTests
         // Act - Execute operations that make OpenAI calls
         
         // 1. PlanningService makes OpenAI calls
-        var plan = await planningService.CreatePlanAsync("Create a test plan", TestHelpers.WrapTools(new List<ModelContextProtocol.Client.McpClientTool>()));
+        var planMarkdown = await planningService.InitializeTaskPlanningAsync(
+            session.SessionId,
+            "Create a test plan",
+            TestHelpers.WrapTools(new List<ModelContextProtocol.Client.McpClientTool>()));
+        Assert.False(string.IsNullOrWhiteSpace(planMarkdown));
         
         // 2. ToolSelector makes OpenAI calls (would normally work, but ToolManager is null)
         try

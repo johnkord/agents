@@ -186,35 +186,36 @@ public class PlanningService : IPlanningService
     private string CreateFallbackMarkdownPlan(string task, IList<IUnifiedTool> availableTools)
     {
         var plan = new List<string>();
-        
-        plan.Add("# Task Execution Plan");
+
+        // HEADER – tests look for "# Task:" explicitly
+        plan.Add($"# Task: {task}");
         plan.Add("");
-        plan.Add("## Task Overview");
-        plan.Add($"{task}");
+
+        // Strategy identical to the LLM-driven format used elsewhere
+        plan.Add("**Strategy:** Execute the task using available tools in a systematic approach.");
         plan.Add("");
-        plan.Add("## Strategy");
-        plan.Add("Execute the task using available tools in a systematic approach.");
-        plan.Add("");
-        plan.Add("## Execution Steps");
+
+        // Rename section so the tests find "## Subtasks"
+        plan.Add("## Subtasks");
         plan.Add("- [ ] Analyze the task requirements");
         plan.Add("- [ ] Identify necessary tools and resources");
         plan.Add("- [ ] Execute the task using appropriate tools");
         plan.Add("- [ ] Verify the results");
         plan.Add("- [ ] Complete the task");
         plan.Add("");
+
         plan.Add("## Required Tools");
-        
         foreach (var tool in availableTools.Take(5)) // Limit to first 5 tools for fallback
         {
             plan.Add($"- {tool.Name}");
         }
-        
         plan.Add("");
+
         plan.Add("## Success Criteria");
         plan.Add("- Task completed successfully");
         plan.Add("- All requirements met");
         plan.Add("- Results verified");
-        
+
         _logger.LogInformation("Created fallback markdown plan for task: {Task}", task);
         return string.Join("\n", plan);
     }

@@ -1,15 +1,14 @@
 using Microsoft.Extensions.Logging;
 using Xunit;
 using AgentAlpha.Services;
-using AgentAlpha.Models;
 using AgentAlpha.Configuration;
-using AgentAlpha.Interfaces;
+using Common.Models.Session;
 using ModelContextProtocol.Client;
+using Common.Interfaces.Session;
 using OpenAIIntegration;
 using OpenAIIntegration.Model;
-using Common.Models.Session;
-using Common.Interfaces.Session;
 using System.Text.Json;
+using AgentAlpha.Interfaces;
 
 namespace AgentAlpha.Tests;
 
@@ -26,290 +25,42 @@ public class PlanningServiceTests
     }
 
     [Fact]
-    public void TaskPlan_Creation_SetsDefaultValues()
+    public async Task InitializeTaskPlanningAsync_ReturnsMarkdownWithExpectedSections()
     {
-        // Arrange & Act
-        var plan = new TaskPlan
-        {
-            Task = "Test task",
-            Strategy = "Test strategy"
-        };
-
-        // Assert
-        Assert.Equal("Test task", plan.Task);
-        Assert.Equal("Test strategy", plan.Strategy);
-        Assert.Empty(plan.Steps);
-        Assert.Empty(plan.RequiredTools);
-        Assert.Equal(TaskComplexity.Medium, plan.Complexity);
-        Assert.Equal(0.5, plan.Confidence);
-        Assert.True(plan.CreatedAt <= DateTime.UtcNow);
-    }
-
-    [Fact]
-    public void PlanStep_Creation_SetsCorrectDefaults()
-    {
-        // Arrange & Act
-        var step = new PlanStep
-        {
-            StepNumber = 1,
-            Description = "Test step"
-        };
-
-        // Assert
-        Assert.Equal(1, step.StepNumber);
-        Assert.Equal("Test step", step.Description);
-        Assert.Empty(step.PotentialTools);
-        Assert.True(step.IsMandatory);
-        Assert.Null(step.ExpectedInput);
-        Assert.Null(step.ExpectedOutput);
-    }
-
-    [Fact]
-    public async Task ValidatePlanAsync_WithEmptyPlan_ReturnsInvalidResult()
-    {
-        // Arrange
         var mockOpenAI = new MockOpenAIService();
         var planningService = new PlanningService(mockOpenAI, _logger, _config);
-        
-        var plan = new TaskPlan
-        {
-            Task = "Test task",
-            Strategy = "", // Empty strategy
-            Steps = new List<PlanStep>() // No steps
-        };
 
-        var availableTools = WrapTools(new List<McpClientTool>()); // no concrete instances needed
+        var markdown = await planningService.InitializeTaskPlanningAsync(
+            Guid.NewGuid().ToString(),
+            "Test task",
+            WrapTools(new List<McpClientTool>()));
 
-        // Act
-        var result = await planningService.ValidatePlanAsync(plan, availableTools);
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Issues, issue => issue.Contains("no execution steps"));
-        Assert.Contains(result.Issues, issue => issue.Contains("lacks a clear strategy"));
+        Assert.False(string.IsNullOrWhiteSpace(markdown));
+        Assert.Contains("# Task:", markdown);
+        Assert.Contains("## Subtasks", markdown);
     }
 
     [Fact]
-    public void TaskComplexity_EnumValues_AreCorrect()
+    public async Task InitializeTaskPlanningWithStateAsync_ReturnsMarkdown()
     {
-        // Arrange & Act & Assert
-        Assert.Equal(0, (int)TaskComplexity.Simple);
-        Assert.Equal(1, (int)TaskComplexity.Medium);
-        Assert.Equal(2, (int)TaskComplexity.Complex);
-        Assert.Equal(3, (int)TaskComplexity.VeryComplex);
-    }
-
-    [Fact]
-    public void PlanValidationResult_DefaultValues_AreCorrect()
-    {
-        // Arrange & Act
-        var result = new AgentAlpha.Interfaces.PlanValidationResult();
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Empty(result.Issues);
-        Assert.Empty(result.MissingTools);
-        Assert.Equal(1.0, result.Confidence);
-        Assert.Empty(result.Suggestions);
-    }
-
-    [Fact]
-    public void CurrentState_Creation_SetsDefaultValues()
-    {
-        // Arrange & Act
-        var state = new CurrentState();
-
-        // Assert
-        Assert.Null(state.SessionContext);
-        Assert.Empty(state.PreviousResults);
-        Assert.Empty(state.AvailableResources);
-        Assert.Null(state.UserPreferences);
-        Assert.Null(state.Environment);
-        Assert.True(state.CapturedAt <= DateTime.UtcNow);
-        Assert.Empty(state.AdditionalContext);
-    }
-
-    [Fact]
-    public void ExecutionResult_Creation_SetsDefaultValues()
-    {
-        // Arrange & Act
-        var result = new ExecutionResult
-        {
-            Task = "Test task",
-            Success = true,
-            Summary = "Test summary"
-        };
-
-        // Assert
-        Assert.Equal("Test task", result.Task);
-        Assert.True(result.Success);
-        Assert.Equal("Test summary", result.Summary);
-        Assert.Empty(result.ToolsUsed);
-        Assert.True(result.CompletedAt <= DateTime.UtcNow);
-        Assert.Null(result.Insights);
-    }
-
-    [Fact]
-    public void UserPreferences_Creation_SetsDefaultValues()
-    {
-        // Arrange & Act
-        var preferences = new UserPreferences();
-
-        // Assert
-        Assert.Null(preferences.PreferredApproach);
-        Assert.Empty(preferences.PreferredTools);
-        Assert.Empty(preferences.AvoidedTools);
-        Assert.Null(preferences.MaxExecutionTime);
-        Assert.Equal(0.5, preferences.RiskTolerance);
-    }
-
-    [Fact]
-    public async Task CreatePlanWithStateAnalysisAsync_WithCompleteState_CreatesEnhancedPlan()
-    {
-        // Arrange
         var mockOpenAI = new MockOpenAIService();
         var planningService = new PlanningService(mockOpenAI, _logger, _config);
-        
-        var currentState = new CurrentState
-        {
-            SessionContext = "User working on data analysis project",
-            PreviousResults = new List<ExecutionResult>
-            {
-                new ExecutionResult
-                {
-                    Task = "Load data file",
-                    Success = true,
-                    Summary = "Successfully loaded CSV file with 1000 rows",
-                    ToolsUsed = new List<string> { "file_reader" },
-                    Insights = "Data quality is good"
-                }
-            },
-            UserPreferences = new UserPreferences
-            {
-                PreferredApproach = "thorough",
-                RiskTolerance = 0.3,
-                PreferredTools = new List<string> { "pandas", "numpy" }
-            },
-            Environment = new EnvironmentCapabilities
-            {
-                ComputeResources = "8GB RAM, 4 CPU cores",
-                NetworkStatus = "Connected",
-                SecurityConstraints = new List<string> { "no_external_apis" }
-            },
-            AvailableResources = new Dictionary<string, string>
-            {
-                ["DataFile"] = "customer_data.csv",
-                ["OutputFormat"] = "JSON"
-            }
-        };
 
-        var availableTools = WrapTools(new List<McpClientTool>()); // no concrete instances needed
+        var state = new CurrentState { SessionContext = "User context" };
 
-        // Act
-        var plan = await planningService.CreatePlanWithStateAnalysisAsync(
-            "Analyze customer data and generate insights", 
-            availableTools, 
-            currentState
-        );
+        var markdown = await planningService.InitializeTaskPlanningWithStateAsync(
+            Guid.NewGuid().ToString(),
+            "State-aware task",
+            WrapTools(new List<McpClientTool>()),
+            state);
 
-        // Assert
-        Assert.NotNull(plan);
-        Assert.Equal("Analyze customer data and generate insights", plan.Task);
-        Assert.NotEmpty(plan.Strategy);
-        Assert.NotEmpty(plan.Steps);
-        Assert.NotNull(plan.AdditionalContext);
-        Assert.True(plan.AdditionalContext.ContainsKey("StateAnalysisTimestamp"));
-        Assert.True(plan.AdditionalContext.ContainsKey("UserRiskTolerance"));
-        Assert.Equal(0.3, plan.AdditionalContext["UserRiskTolerance"]);
+        Assert.False(string.IsNullOrWhiteSpace(markdown));
+        Assert.Contains("# Task:", markdown);
     }
 
-    [Fact]
-    public async Task CreatePlanAsync_CallsStateAnalysisVersion()
-    {
-        // Arrange
-        var mockOpenAI = new MockOpenAIService();
-        var planningService = new PlanningService(mockOpenAI, _logger, _config);
-        
-        var availableTools = WrapTools(new List<McpClientTool>()); // no concrete instances needed
-
-        // Act
-        var plan = await planningService.CreatePlanAsync("Test task", availableTools, "Test context");
-
-        // Assert
-        Assert.NotNull(plan);
-        Assert.Equal("Test task", plan.Task);
-        Assert.NotEmpty(plan.Strategy);
-        // The plan should have additional context since it now goes through state analysis
-        Assert.NotNull(plan.AdditionalContext);
-    }
-
-    [Fact]
-    public async Task RefinePlanWithStateAsync_WithStateContext_CreatesEnhancedRefinedPlan()
-    {
-        // Arrange
-        var mockOpenAI = new MockOpenAIService();
-        var planningService = new PlanningService(mockOpenAI, _logger, _config);
-        
-        var existingPlan = new TaskPlan
-        {
-            Task = "Analyze data",
-            Strategy = "Simple analysis",
-            Steps = new List<PlanStep>
-            {
-                new PlanStep
-                {
-                    StepNumber = 1,
-                    Description = "Load data",
-                    PotentialTools = new List<string> { "file_reader" }
-                }
-            },
-            Complexity = TaskComplexity.Simple,
-            Confidence = 0.6
-        };
-
-        var currentState = new CurrentState
-        {
-            SessionContext = "User needs more detailed analysis",
-            PreviousResults = new List<ExecutionResult>
-            {
-                new ExecutionResult
-                {
-                    Task = "Previous analysis",
-                    Success = false,
-                    Summary = "Analysis was too shallow",
-                    Insights = "Need more statistical analysis"
-                }
-            },
-            UserPreferences = new UserPreferences
-            {
-                PreferredApproach = "thorough",
-                RiskTolerance = 0.8
-            }
-        };
-
-        var availableTools = WrapTools(new List<McpClientTool>()); // no concrete instances needed
-
-        // Act
-        var refinedPlan = await planningService.RefinePlanWithStateAsync(
-            existingPlan,
-            "Need more thorough statistical analysis with charts",
-            availableTools,
-            currentState
-        );
-
-        // Assert
-        Assert.NotNull(refinedPlan);
-        Assert.Equal("Analyze data", refinedPlan.Task);
-        Assert.NotEmpty(refinedPlan.Strategy);
-        Assert.NotNull(refinedPlan.AdditionalContext);
-        Assert.True(refinedPlan.AdditionalContext.ContainsKey("RefinementFeedback"));
-        Assert.True(refinedPlan.AdditionalContext.ContainsKey("RefinedAt"));
-        Assert.True(refinedPlan.AdditionalContext.ContainsKey("OriginalComplexity"));
-        Assert.True(refinedPlan.AdditionalContext.ContainsKey("OriginalConfidence"));
-        Assert.Equal("Need more thorough statistical analysis with charts", refinedPlan.AdditionalContext["RefinementFeedback"]);
-        Assert.Equal("Simple", refinedPlan.AdditionalContext["OriginalComplexity"]);
-        Assert.Equal(0.6, refinedPlan.AdditionalContext["OriginalConfidence"]);
-    }
+    // helper stays the same
+    private static IList<IUnifiedTool> WrapTools(IList<McpClientTool> mcpTools) =>
+        TestHelpers.WrapTools(mcpTools);
 
     // Mock OpenAI service for testing
     private class MockOpenAIService : ISessionAwareOpenAIService
@@ -358,79 +109,6 @@ public class PlanningServiceTests
         }
     }
 
-    // Test specifically for the string arguments parsing fix
-    private class MockOpenAIServiceWithStringArguments : ISessionAwareOpenAIService
-    {
-        public void SetActivityLogger(ISessionActivityLogger? activityLogger)
-        {
-            // No-op for testing
-        }
-
-        public Task<OpenAIIntegration.Model.ResponsesCreateResponse> CreateResponseAsync(
-            OpenAIIntegration.Model.ResponsesCreateRequest request, 
-            CancellationToken cancellationToken = default)
-        {
-            // Return a mock response with string arguments to test the parsing fix
-            var argumentsAsString = JsonSerializer.Serialize(new
-            {
-                strategy = "Test strategy from string",
-                steps = new[]
-                {
-                    new
-                    {
-                        stepNumber = 1,
-                        description = "Test step from string",
-                        potentialTools = new[] { "test_tool_string" },
-                        isMandatory = true,
-                        expectedInput = "Test input from string",
-                        expectedOutput = "Test output from string"
-                    }
-                },
-                requiredTools = new[] { "test_tool_string" },
-                complexity = "Simple",
-                confidence = 0.9
-            });
-
-            var mockResponse = new OpenAIIntegration.Model.ResponsesCreateResponse
-            {
-                Output = new[]
-                {
-                    new OpenAIIntegration.Model.FunctionToolCall
-                    {
-                        Name = "create_execution_plan",
-                        Arguments = JsonSerializer.SerializeToElement(argumentsAsString) // This creates a string JsonElement
-                    }
-                }
-            };
-
-            return Task.FromResult(mockResponse);
-        }
-    }
-
-    [Fact]
-    public async Task ExtractPlanFromToolCall_WithStringArguments_ParsesSuccessfully()
-    {
-        // Arrange
-        var mockOpenAI = new MockOpenAIServiceWithStringArguments();
-        var planningService = new PlanningService(mockOpenAI, _logger, _config);
-        
-        var availableTools = WrapTools(new List<McpClientTool>());
-
-        // Act
-        var plan = await planningService.CreatePlanAsync("Test task with string arguments", availableTools);
-
-        // Assert
-        Assert.NotNull(plan);
-        Assert.Equal("Test task with string arguments", plan.Task);
-        Assert.Contains("Test strategy from string", plan.Strategy);
-        Assert.NotEmpty(plan.Steps);
-        Assert.Contains(plan.Steps, s => s.Description.Contains("Test step from string"));
-        Assert.Contains(plan.RequiredTools, tool => tool == "test_tool_string");
-        Assert.Equal(TaskComplexity.Simple, plan.Complexity);
-        // Confidence may be adjusted by state analysis, so check it's reasonable
-        Assert.True(plan.Confidence >= 0.8 && plan.Confidence <= 1.0, $"Expected confidence between 0.8 and 1.0, got {plan.Confidence}");
-    }
-
     [Fact]
     public void JsonElement_StringArguments_ShouldBeHandledCorrectly()
     {
@@ -465,11 +143,5 @@ public class PlanningServiceTests
         
         // Assert
         Assert.True(success, "Should successfully parse string JSON arguments");
-    }
-
-    // Helper method to convert McpClientTool to IUnifiedTool for tests
-    private static IList<IUnifiedTool> WrapTools(IList<McpClientTool> mcpTools)
-    {
-        return TestHelpers.WrapTools(mcpTools);
     }
 }

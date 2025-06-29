@@ -73,23 +73,37 @@ public class SessionManager : ISessionManager
         while (reader.Read())
         {
             var columnName = reader.GetString(1);
-            if (columnName == "ActivityLog")
+            if (string.Equals(columnName, "ActivityLog", StringComparison.OrdinalIgnoreCase))
                 hasActivityLogColumn = true;
-            if (columnName == "TaskStateMarkdown")
+            if (string.Equals(columnName, "TaskStateMarkdown", StringComparison.OrdinalIgnoreCase))
                 hasTaskStateMarkdownColumn = true;
         }
         reader.Close();
-        
+
+        // helper local to add a column but swallow "duplicate column" race conditions
+        void TryAddColumn(string sql)
+        {
+            try
+            {
+                cmd.CommandText = sql;
+                cmd.ExecuteNonQuery();
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 1 &&
+                                             ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase))
+            {
+                // Another concurrent initializer already added the column – safe to ignore.
+                _logger.LogDebug("Column already exists, skipping: {Sql}", sql);
+            }
+        }
+
         if (!hasActivityLogColumn)
         {
-            cmd.CommandText = "ALTER TABLE AgentSessions ADD COLUMN ActivityLog TEXT NOT NULL DEFAULT ''";
-            cmd.ExecuteNonQuery();
+            TryAddColumn("ALTER TABLE AgentSessions ADD COLUMN ActivityLog TEXT NOT NULL DEFAULT ''");
         }
-        
+
         if (!hasTaskStateMarkdownColumn)
         {
-            cmd.CommandText = "ALTER TABLE AgentSessions ADD COLUMN TaskStateMarkdown TEXT NOT NULL DEFAULT ''";
-            cmd.ExecuteNonQuery();
+            TryAddColumn("ALTER TABLE AgentSessions ADD COLUMN TaskStateMarkdown TEXT NOT NULL DEFAULT ''");
         }
     }
 
