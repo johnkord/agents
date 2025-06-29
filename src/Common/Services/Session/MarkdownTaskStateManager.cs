@@ -189,9 +189,23 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
             
             var response = await _openAiService.CreateResponseAsync(request);
             var updatedMarkdown = ExtractContentFromResponse(response) ?? currentMarkdown;
-            
+
             // Save updated markdown
             await SaveTaskMarkdownToSessionAsync(sessionId, updatedMarkdown);
+
+            var session = await _sessionManager.GetSessionAsync(sessionId);
+            if (session != null)
+            {
+                session.AddActivity(new SessionActivity
+                {
+                    ActivityId   = Guid.NewGuid().ToString(),
+                    Timestamp    = DateTime.UtcNow,
+                    ActivityType = ActivityTypes.TaskMarkdownUpdate,
+                    Description  = $"Task markdown updated after action: {actionDescription}",
+                    Success      = true,
+                    Data         = SessionActivity.TruncateString(updatedMarkdown, 50000)
+                });
+            }
             
             return updatedMarkdown;
         }
