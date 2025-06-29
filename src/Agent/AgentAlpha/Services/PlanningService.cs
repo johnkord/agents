@@ -220,6 +220,8 @@ public class PlanningService : IPlanningService
     {
         var prompt = new List<string>
         {
+            $"*Prompt generated on {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC*", // NEW
+            "",
             "Create a comprehensive markdown-based execution plan for the following task:",
             $"\n**TASK:** {task}\n"
         };

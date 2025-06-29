@@ -226,10 +226,14 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
 
             _logger.LogInformation("Updating task markdown for session {SessionId} with action: {Action}", sessionId, actionDescription);
 
+            var timestampUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");   // NEW
+            
             var prompt = $"""
                 Update the markdown plan below based on the recent action/result.
-                Maintain structure, mark completed subtasks, add new ones as needed, update context.
+                (Timestamp UTC: {timestampUtc})
 
+                Maintain structure, mark completed subtasks, add new ones as needed, update context.
+                
                 ```markdown
                 {currentMarkdown}
                 ```
@@ -380,8 +384,11 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
             
             _logger.LogInformation("Completing subtask in markdown for session {SessionId}: {Subtask}", sessionId, subtaskDescription);
             
+            var timestampUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");   // NEW
+            
             var prompt = $"""
                 Update the following task markdown document to mark a subtask as completed.
+                (Timestamp UTC: {timestampUtc})
                 
                 Current markdown document:
                 ```markdown
@@ -435,8 +442,11 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
             
             _logger.LogInformation("Adding subtask to markdown for session {SessionId}: {Reason}", sessionId, reason);
             
+            var timestampUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");   // NEW
+            
             var prompt = $"""
                 Update the following task markdown document to add new subtasks based on emerging needs.
+                (Timestamp UTC: {timestampUtc})
                 
                 Current markdown document:
                 ```markdown
@@ -491,9 +501,11 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
             
             _logger.LogInformation("Updating plan iteratively for session {SessionId} based on execution feedback", sessionId);
             
+            var timestampUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");   // NEW
+            
             var prompt = $"""
                 Update the following task plan markdown document based on execution feedback and current progress.
-                This is an iterative planning update to refine the approach based on what has been learned during execution.
+                (Timestamp UTC: {timestampUtc})
                 
                 Current markdown document:
                 ```markdown
