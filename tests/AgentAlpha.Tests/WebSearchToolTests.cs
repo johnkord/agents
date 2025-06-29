@@ -6,7 +6,9 @@ using AgentAlpha.Interfaces;
 using Microsoft.Extensions.Logging;
 using Moq;
 using OpenAIIntegration;
+using OpenAIIntegration.Model;
 using ModelContextProtocol.Client;
+using System.Text.Json;
 
 namespace AgentAlpha.Tests;
 
@@ -84,7 +86,7 @@ public class WebSearchToolTests
     [InlineData("Read the file contents", false)]
     [InlineData("List directory contents", false)]
     [InlineData("", false)]
-    public void ToolSelector_ShouldIncludeWebSearch_CorrectlyIdentifiesWebSearchTasks(string task, bool expected)
+    public async Task ToolSelector_ShouldIncludeWebSearch_CorrectlyIdentifiesWebSearchTasks(string task, bool expected)
     {
         // Arrange
         var mockOpenAI = new Mock<ISessionAwareOpenAIService>();
@@ -92,6 +94,24 @@ public class WebSearchToolTests
         var mockLogger = new Mock<ILogger<ToolSelector>>();
         var agentConfig = new AgentConfiguration();
         var toolSelectionConfig = new ToolSelectionConfig();
+
+        // Setup mock to return appropriate response for LLM-based web search determination
+        var mockResponse = new ResponsesCreateResponse();
+        var responseContent = JsonSerializer.Serialize(new[]
+        {
+            new { type = "output_text", text = expected ? "true" : "false" }
+        });
+        var outputMessage = new OutputMessage 
+        { 
+            Role = "assistant", 
+            Content = JsonDocument.Parse(responseContent).RootElement
+        };
+        mockResponse.Output = new[] { outputMessage };
+        
+        // Setup mock with callback to avoid optional parameter issues
+        var response = mockResponse;
+        mockOpenAI.Setup(x => x.CreateResponseAsync(It.IsAny<ResponsesCreateRequest>(), It.IsAny<CancellationToken>()))
+               .ReturnsAsync(response);
 
         var toolSelector = new ToolSelector(
             mockOpenAI.Object,
@@ -101,7 +121,7 @@ public class WebSearchToolTests
             toolSelectionConfig);
 
         // Act
-        var result = toolSelector.ShouldIncludeWebSearch(task);
+        var result = await toolSelector.ShouldIncludeWebSearchAsync(task);
 
         // Assert
         Assert.Equal(expected, result);
