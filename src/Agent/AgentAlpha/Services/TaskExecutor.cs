@@ -210,11 +210,11 @@ public class TaskExecutor : ITaskExecutor
                         
                         try
                         {
-                            // Refine the existing plan for the new task
-                            var discoveredTools = await DiscoverAvailableToolsAsync();
-                            var feedback = $"New task requirement: {request.Task}. Please adapt the existing plan accordingly.";
-                            taskPlan = await _planningService.RefinePlanAsync(existingPlan, feedback, discoveredTools);
-                            await _activityLogger.CompleteActivityAsync(planningActivityId, new { RefinedPlan = taskPlan?.Task });
+                            // TODO: Implement plan refinement with markdown-based planning
+                            // For now, use the existing plan or create a new one
+                            _logger.LogWarning("Plan refinement not yet implemented for markdown-based planning");
+                            taskPlan = existingPlan; // Keep existing plan for now
+                            await _activityLogger.CompleteActivityAsync(planningActivityId, new { Message = "Plan refinement skipped - not yet implemented" });
                         }
                         catch (Exception ex)
                         {
@@ -337,8 +337,8 @@ public class TaskExecutor : ITaskExecutor
                 // Use markdown task state manager to store the plan as markdown
                 if (_markdownTaskStateManager != null)
                 {
-                    await _markdownTaskStateManager.InitializeTaskMarkdownFromPlanAsync(sessionId, plan);
-                    _logger.LogDebug("Saved plan as markdown to session {SessionId}", sessionId);
+                    await _markdownTaskStateManager.InitializeTaskMarkdownAsync(sessionId, plan.Task);
+                    _logger.LogDebug("Initialized markdown task state for session {SessionId}", sessionId);
                 }
                 else
                 {
@@ -403,59 +403,10 @@ public class TaskExecutor : ITaskExecutor
                 }
             }
             
-            // Fallback to traditional plan refinement
-            var refinedPlan = await _planningService.RefinePlanAsync(taskPlan, feedback, availableTools);
-            
-            // Check if the refined plan is significantly different
-            if (IsPlanSignificantlyDifferent(taskPlan, refinedPlan))
-            {
-                Console.WriteLine("🔄 Plan updated based on execution feedback (traditional approach)");
-                
-                // Update the task plan reference (this would need to be passed by reference or managed differently in a real scenario)
-                taskPlan.Strategy = refinedPlan.Strategy;
-                taskPlan.Steps = refinedPlan.Steps;
-                taskPlan.RequiredTools = refinedPlan.RequiredTools;
-                taskPlan.Confidence = refinedPlan.Confidence;
-                taskPlan.CreatedAt = DateTime.UtcNow;
-                
-                // Update the markdown-based plan if we have a markdown manager
-                if (_markdownTaskStateManager != null && currentSession != null)
-                {
-                    try
-                    {
-                        // Update the markdown with the refined plan information
-                        var updateDescription = "Plan refined based on execution feedback";
-                        var updateResult = $"Updated strategy: {taskPlan.Strategy}. " +
-                                         $"Updated steps: {string.Join(", ", taskPlan.Steps.Select(s => $"{s.StepNumber}. {s.Description}"))}";
-                        
-                        await _markdownTaskStateManager.UpdateTaskMarkdownAsync(
-                            currentSession.SessionId, 
-                            updateDescription, 
-                            updateResult, 
-                            "Plan updated based on execution feedback");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to update markdown plan after refinement");
-                    }
-                }
-                
-                // Provide updated plan context to the conversation
-                var updatedPlanContext = $"""
-                    📋 Plan updated based on execution feedback:
-                    New Strategy: {taskPlan.Strategy}
-                    Updated Steps: {string.Join(", ", taskPlan.Steps.Select(s => $"{s.StepNumber}. {s.Description}"))}
-                    
-                    Please follow the updated plan going forward.
-                    """;
-                _conversationManager.AddAssistantMessage(updatedPlanContext);
-                
-                _logger.LogInformation("Plan successfully updated with {StepCount} steps", taskPlan.Steps.Count);
-            }
-            else
-            {
-                _logger.LogDebug("Plan refinement did not result in significant changes");
-            }
+            // TODO: Implement plan refinement with markdown-based planning
+            _logger.LogWarning("Plan refinement not yet implemented for markdown-based planning in ConsiderPlanUpdateAsync");
+            // For now, skip plan refinement
+            return;
         }
         catch (Exception ex)
         {
@@ -487,32 +438,6 @@ public class TaskExecutor : ITaskExecutor
             return true;
             
         return false;
-    }
-
-    public async Task<TaskPlan> CreatePlanAsync(string task)
-    {
-        _logger.LogInformation("Creating plan for task: {Task}", task);
-        
-        try
-        {
-            // Connect to MCP Server to get available tools
-            await ConnectToMcpServerAsync();
-            
-            // Discover all available tools
-            var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
-            var filteredTools = _toolManager.ApplyFiltersToAllTools(allTools, _config.ToolFilter);
-            
-            // Create the plan
-            var plan = await _planningService.CreatePlanAsync(task, filteredTools);
-            
-            _logger.LogInformation("Created plan with {StepCount} steps for task", plan.Steps.Count);
-            return plan;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create plan for task: {Task}", task);
-            throw;
-        }
     }
 
     private AgentConfiguration ApplyRequestOverrides(TaskExecutionRequest request)
@@ -614,32 +539,47 @@ public class TaskExecutor : ITaskExecutor
             var allTools = await _toolManager.DiscoverAllToolsAsync(_connectionManager);
             var filteredTools = _toolManager.ApplyFiltersToAllTools(allTools, _config.ToolFilter);
             
-            // Create the plan using the planning service
-            var plan = await _planningService.CreatePlanAsync(task, filteredTools);
+            // TODO: Use the new markdown-based planning approach
+            // For now, create a simple fallback plan
+            _logger.LogWarning("Using fallback plan creation - markdown-based planning not yet fully integrated");
             
-            // Validate the plan
-            var validationResult = await _planningService.ValidatePlanAsync(plan, filteredTools);
-            
-            if (!validationResult.IsValid)
+            return new TaskPlan
             {
-                _logger.LogWarning("Created plan has validation issues: {Issues}", 
-                    string.Join(", ", validationResult.Issues));
-                
-                // Try to refine the plan if there are issues
-                if (validationResult.Issues.Count > 0)
+                Task = task,
+                Strategy = "Adaptive execution using available tools with markdown-based task management",
+                Steps = new List<PlanStep>
                 {
-                    var feedback = $"Plan validation found issues: {string.Join("; ", validationResult.Issues)}";
-                    plan = await _planningService.RefinePlanAsync(plan, feedback, filteredTools);
-                    Console.WriteLine("⚠️  Plan refined due to validation issues");
-                }
-            }
-            
-            return plan;
+                    new PlanStep
+                    {
+                        StepNumber = 1,
+                        Description = "Analyze task requirements and available tools",
+                        IsMandatory = true,
+                        ExpectedOutput = "Understanding of task and available capabilities"
+                    },
+                    new PlanStep
+                    {
+                        StepNumber = 2,
+                        Description = "Execute task using appropriate tools",
+                        IsMandatory = true,
+                        ExpectedOutput = "Task completion"
+                    },
+                    new PlanStep
+                    {
+                        StepNumber = 3,
+                        Description = "Verify results and provide summary",
+                        IsMandatory = true,
+                        ExpectedOutput = "Verification of task completion"
+                    }
+                },
+                RequiredTools = filteredTools.Select(t => t.Name).Take(5).ToList(), // Limit to first 5 tools
+                Complexity = TaskComplexity.Medium,
+                Confidence = 0.7
+            };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create plan, using fallback approach");
-            Console.WriteLine("⚠️  Planning failed, using adaptive approach");
+            _logger.LogError(ex, "Failed to create plan, using minimal fallback approach");
+            Console.WriteLine("⚠️  Planning failed, using minimal adaptive approach");
             
             // Return a simple fallback plan
             return new TaskPlan
