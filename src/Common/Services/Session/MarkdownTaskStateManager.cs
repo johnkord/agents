@@ -399,6 +399,66 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
         }
     }
     
+    public async Task<string> UpdatePlanIterativelyAsync(string sessionId, string executionFeedback, string? currentContext = null)
+    {
+        try
+        {
+            var currentMarkdown = await GetTaskMarkdownAsync(sessionId);
+            if (string.IsNullOrEmpty(currentMarkdown))
+            {
+                throw new InvalidOperationException($"No task markdown found for session {sessionId}");
+            }
+            
+            _logger.LogInformation("Updating plan iteratively for session {SessionId} based on execution feedback", sessionId);
+            
+            var prompt = $"""
+                Update the following task plan markdown document based on execution feedback and current progress.
+                This is an iterative planning update to refine the approach based on what has been learned during execution.
+                
+                Current markdown document:
+                ```markdown
+                {currentMarkdown}
+                ```
+                
+                Execution feedback: {executionFeedback}
+                {(string.IsNullOrEmpty(currentContext) ? "" : $"Current execution context: {currentContext}")}
+                
+                Please iteratively refine the plan by:
+                1. Analyzing what has been completed and what remains
+                2. Adjusting the strategy based on execution feedback
+                3. Modifying, adding, or reordering subtasks as needed
+                4. Updating progress notes with insights from execution
+                5. Refining the context section with lessons learned
+                6. Maintaining completed subtasks as [x] and uncompleted as [ ]
+                
+                Focus on making the plan more effective based on real execution experience.
+                Return only the updated markdown content.
+                """;
+                
+            var request = new ResponsesCreateRequest
+            {
+                Model = "gpt-4o",
+                Input = prompt,
+                Instructions = "You are an iterative planning assistant. Refine task plans based on execution feedback to improve effectiveness.",
+                MaxOutputTokens = 2000
+            };
+            
+            var response = await _openAiService.CreateResponseAsync(request);
+            var updatedMarkdown = ExtractContentFromResponse(response) ?? currentMarkdown;
+            
+            // Save updated markdown
+            await SaveTaskMarkdownToSessionAsync(sessionId, updatedMarkdown);
+            
+            _logger.LogInformation("Updated plan iteratively for session {SessionId}", sessionId);
+            return updatedMarkdown;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update plan iteratively for session {SessionId}", sessionId);
+            throw;
+        }
+    }
+    
     private async Task SaveTaskMarkdownToSessionAsync(string sessionId, string markdown)
     {
         var session = await _sessionManager.GetSessionAsync(sessionId);

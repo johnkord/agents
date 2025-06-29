@@ -41,6 +41,11 @@ public interface IMarkdownTaskStateManager
     /// Add a new subtask to the markdown document (LLM-driven planning)
     /// </summary>
     Task<string> AddSubtaskToMarkdownAsync(string sessionId, string reason, string? context = null);
+    
+    /// <summary>
+    /// Update the plan iteratively based on execution progress and feedback
+    /// </summary>
+    Task<string> UpdatePlanIterativelyAsync(string sessionId, string executionFeedback, string? currentContext = null);
 }
 
 /// <summary>

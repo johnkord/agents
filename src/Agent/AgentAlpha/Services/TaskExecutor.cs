@@ -364,12 +364,52 @@ public class TaskExecutor : ITaskExecutor
             var feedback = $"Execution issues encountered: {string.Join("; ", executionFeedback)}. " +
                           "Please refine the plan to address these issues and improve execution.";
             
+            // Get current session for markdown updates
+            var currentSession = _activityLogger.GetCurrentSession();
+            
+            // First, try to update the markdown plan iteratively if we have markdown management
+            if (_markdownTaskStateManager != null && currentSession != null)
+            {
+                try
+                {
+                    _logger.LogInformation("Using iterative markdown-based plan update");
+                    
+                    var currentContext = $"Available tools: {string.Join(", ", availableTools.Select(t => t.Name).Take(10))}. " +
+                                       $"Task: {taskPlan.Task}. Strategy: {taskPlan.Strategy}";
+                    
+                    var updatedMarkdown = await _markdownTaskStateManager.UpdatePlanIterativelyAsync(
+                        currentSession.SessionId, 
+                        feedback, 
+                        currentContext);
+                    
+                    Console.WriteLine("🔄 Plan updated iteratively using markdown-based approach");
+                    
+                    // Provide updated plan context to the conversation
+                    var updatedPlanContext = $"""
+                        📋 Plan updated iteratively based on execution feedback:
+                        
+                        {updatedMarkdown}
+                        
+                        Please follow the updated plan going forward.
+                        """;
+                    _conversationManager.AddAssistantMessage(updatedPlanContext);
+                    
+                    _logger.LogInformation("Plan successfully updated iteratively using markdown approach");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to update plan iteratively with markdown, falling back to traditional approach");
+                }
+            }
+            
+            // Fallback to traditional plan refinement
             var refinedPlan = await _planningService.RefinePlanAsync(taskPlan, feedback, availableTools);
             
             // Check if the refined plan is significantly different
             if (IsPlanSignificantlyDifferent(taskPlan, refinedPlan))
             {
-                Console.WriteLine("🔄 Plan updated based on execution feedback");
+                Console.WriteLine("🔄 Plan updated based on execution feedback (traditional approach)");
                 
                 // Update the task plan reference (this would need to be passed by reference or managed differently in a real scenario)
                 taskPlan.Strategy = refinedPlan.Strategy;
@@ -379,7 +419,7 @@ public class TaskExecutor : ITaskExecutor
                 taskPlan.CreatedAt = DateTime.UtcNow;
                 
                 // Update the markdown-based plan if we have a markdown manager
-                if (_markdownTaskStateManager != null)
+                if (_markdownTaskStateManager != null && currentSession != null)
                 {
                     try
                     {
@@ -388,16 +428,11 @@ public class TaskExecutor : ITaskExecutor
                         var updateResult = $"Updated strategy: {taskPlan.Strategy}. " +
                                          $"Updated steps: {string.Join(", ", taskPlan.Steps.Select(s => $"{s.StepNumber}. {s.Description}"))}";
                         
-                        // Get the current session to find the session ID
-                        var currentSession = _activityLogger.GetCurrentSession();
-                        if (currentSession != null)
-                        {
-                            await _markdownTaskStateManager.UpdateTaskMarkdownAsync(
-                                currentSession.SessionId, 
-                                updateDescription, 
-                                updateResult, 
-                                "Plan updated based on execution feedback");
-                        }
+                        await _markdownTaskStateManager.UpdateTaskMarkdownAsync(
+                            currentSession.SessionId, 
+                            updateDescription, 
+                            updateResult, 
+                            "Plan updated based on execution feedback");
                     }
                     catch (Exception ex)
                     {

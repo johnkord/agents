@@ -108,13 +108,43 @@ public class TaskStateManager : ITaskStateManager
         // Re-summarize the markdown document with current task state and new observations
         await RegenerateTaskMarkdownAsync(sessionId, taskState, completionSummary);
         
-        // Also update the markdown-based state if available
+        // Also update the markdown-based state if available, and provide iterative planning feedback
         if (_markdownTaskStateManager != null)
         {
             try
             {
                 var subtaskDescription = taskState.Subtasks.FirstOrDefault(s => s.StepNumber == stepNumber)?.Description ?? $"Step {stepNumber}";
                 await _markdownTaskStateManager.CompleteSubtaskInMarkdownAsync(sessionId, subtaskDescription, completionSummary);
+                
+                // Check if we should provide iterative planning feedback
+                var completedCount = taskState.GetCompletedCount();
+                var totalCount = taskState.Subtasks.Count;
+                
+                // Provide iterative feedback every few subtasks or when we're more than halfway through
+                if (completedCount > 1 && (completedCount % 3 == 0 || completedCount > totalCount / 2))
+                {
+                    var iterativeFeedback = $"Completed subtask {stepNumber}: {completionSummary}. " +
+                                          $"Progress: {completedCount}/{totalCount} subtasks completed. ";
+                    
+                    if (evidence != null)
+                    {
+                        iterativeFeedback += $"Evidence: {evidence}. ";
+                    }
+                    
+                    if (context != null && context.Any())
+                    {
+                        iterativeFeedback += $"Context gained: {string.Join(", ", context.Select(kvp => $"{kvp.Key}: {kvp.Value}").Take(3))}";
+                    }
+                    
+                    // Perform iterative planning update
+                    await _markdownTaskStateManager.UpdatePlanIterativelyAsync(
+                        sessionId, 
+                        iterativeFeedback, 
+                        $"Currently executing: {taskState.Task}. Strategy: {taskState.Strategy}");
+                    
+                    _logger.LogInformation("Performed iterative plan update for session {SessionId} after completing subtask {StepNumber}", 
+                        sessionId, stepNumber);
+                }
             }
             catch (Exception ex)
             {
