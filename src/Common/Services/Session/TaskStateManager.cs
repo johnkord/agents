@@ -222,23 +222,28 @@ public class TaskStateManager : ITaskStateManager
         {
             var taskState = TaskState.FromTaskPlan(taskPlan);
             
-            // Generate initial markdown and store it
-            await RegenerateTaskMarkdownAsync(sessionId, taskState);
-            
-            // Also initialize the markdown-based state if available
+            // Use markdown task state manager if available
             if (_markdownTaskStateManager != null)
             {
                 try
                 {
-                    await _markdownTaskStateManager.InitializeTaskMarkdownAsync(sessionId, taskPlan.Task);
+                    await _markdownTaskStateManager.InitializeTaskMarkdownFromPlanAsync(sessionId, taskPlan);
+                    _logger.LogInformation("Initialized markdown-based task state for session {SessionId}", sessionId);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to initialize markdown task state for session {SessionId}", sessionId);
+                    _logger.LogWarning(ex, "Failed to initialize markdown task state, falling back to traditional state for session {SessionId}", sessionId);
+                    // Fall back to generating markdown from TaskState
+                    await RegenerateTaskMarkdownAsync(sessionId, taskState);
                 }
             }
+            else
+            {
+                // Generate initial markdown and store it
+                await RegenerateTaskMarkdownAsync(sessionId, taskState);
+            }
             
-            // Save the task state
+            // Save the task state in metadata for backward compatibility
             await SaveTaskStateAsync(sessionId, taskState);
             
             _logger.LogInformation("Initialized task state for session {SessionId}: {Task} with {StepCount} steps", 
@@ -278,9 +283,9 @@ public class TaskStateManager : ITaskStateManager
                 markdown += $"- *Updated at: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}*\n";
             }
             
-            // Store the regenerated markdown in the session's CurrentPlan field
-            // This makes the markdown accessible and shows the current task state
-            session.CurrentPlan = markdown;
+            // Store the regenerated markdown in the session's TaskStateMarkdown field
+            // This consolidates plan and state management into a single markdown document
+            session.TaskStateMarkdown = markdown;
             session.LastUpdatedAt = DateTime.UtcNow;
             
             await _sessionManager.SaveSessionAsync(session);

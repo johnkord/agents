@@ -24,6 +24,7 @@ public class TaskExecutor : ITaskExecutor
     private readonly IPlanningService _planningService;
     private readonly ISessionActivityLogger _activityLogger;
     private readonly ITaskStateManager _taskStateManager;
+    private readonly IMarkdownTaskStateManager? _markdownTaskStateManager;
     private readonly AgentConfiguration _config;
     private readonly ILogger<TaskExecutor> _logger;
 
@@ -37,7 +38,8 @@ public class TaskExecutor : ITaskExecutor
         ISessionActivityLogger activityLogger,
         ITaskStateManager taskStateManager,
         AgentConfiguration config,
-        ILogger<TaskExecutor> logger)
+        ILogger<TaskExecutor> logger,
+        IMarkdownTaskStateManager? markdownTaskStateManager = null)
     {
         _connectionManager = connectionManager;
         _toolManager = toolManager;
@@ -47,6 +49,7 @@ public class TaskExecutor : ITaskExecutor
         _planningService = planningService;
         _activityLogger = activityLogger;
         _taskStateManager = taskStateManager;
+        _markdownTaskStateManager = markdownTaskStateManager;
         _config = config;
         _logger = logger;
     }
@@ -159,7 +162,25 @@ public class TaskExecutor : ITaskExecutor
             if (isResumingSession && !string.IsNullOrEmpty(request.SessionId))
             {
                 var session = await _sessionManager.GetSessionAsync(request.SessionId);
-                var existingPlan = session?.GetCurrentPlan();
+                
+                // First try to get markdown-based plan
+                TaskPlan? existingPlan = null;
+                bool hasMarkdownPlan = false;
+                
+                if (!string.IsNullOrEmpty(session?.TaskStateMarkdown))
+                {
+                    Console.WriteLine("📋 Found existing markdown-based plan in session");
+                    hasMarkdownPlan = true;
+                    
+                    // For now, create a simple TaskPlan from markdown for compatibility
+                    // In the future, we could parse the markdown directly
+                    existingPlan = await ExtractPlanFromMarkdownAsync(session.TaskStateMarkdown);
+                }
+                else
+                {
+                    // Fallback to traditional CurrentPlan
+                    existingPlan = session?.GetCurrentPlan();
+                }
                 
                 if (existingPlan != null)
                 {
@@ -167,7 +188,7 @@ public class TaskExecutor : ITaskExecutor
                     await _activityLogger.LogActivityAsync(
                         ActivityTypes.TaskPlanning,
                         "Found existing plan in session",
-                        new { ExistingPlan = existingPlan.Task, NewTask = request.Task });
+                        new { ExistingPlan = existingPlan.Task, NewTask = request.Task, IsMarkdownBased = hasMarkdownPlan });
                     
                     // Check if the existing plan is still relevant for the new task
                     if (IsPlanRelevantForTask(existingPlan, request.Task))
@@ -313,9 +334,19 @@ public class TaskExecutor : ITaskExecutor
             var session = await _sessionManager.GetSessionAsync(sessionId);
             if (session != null)
             {
-                session.SetCurrentPlan(plan);
-                await _sessionManager.SaveSessionAsync(session);
-                _logger.LogDebug("Saved plan to session {SessionId}", sessionId);
+                // Use markdown task state manager to store the plan as markdown
+                if (_markdownTaskStateManager != null)
+                {
+                    await _markdownTaskStateManager.InitializeTaskMarkdownFromPlanAsync(sessionId, plan);
+                    _logger.LogDebug("Saved plan as markdown to session {SessionId}", sessionId);
+                }
+                else
+                {
+                    // Fallback to traditional CurrentPlan storage if markdown manager not available
+                    session.SetCurrentPlan(plan);
+                    await _sessionManager.SaveSessionAsync(session);
+                    _logger.LogDebug("Saved plan to session {SessionId} (fallback mode)", sessionId);
+                }
             }
         }
         catch (Exception ex)
@@ -346,6 +377,33 @@ public class TaskExecutor : ITaskExecutor
                 taskPlan.RequiredTools = refinedPlan.RequiredTools;
                 taskPlan.Confidence = refinedPlan.Confidence;
                 taskPlan.CreatedAt = DateTime.UtcNow;
+                
+                // Update the markdown-based plan if we have a markdown manager
+                if (_markdownTaskStateManager != null)
+                {
+                    try
+                    {
+                        // Update the markdown with the refined plan information
+                        var updateDescription = "Plan refined based on execution feedback";
+                        var updateResult = $"Updated strategy: {taskPlan.Strategy}. " +
+                                         $"Updated steps: {string.Join(", ", taskPlan.Steps.Select(s => $"{s.StepNumber}. {s.Description}"))}";
+                        
+                        // Get the current session to find the session ID
+                        var currentSession = _activityLogger.GetCurrentSession();
+                        if (currentSession != null)
+                        {
+                            await _markdownTaskStateManager.UpdateTaskMarkdownAsync(
+                                currentSession.SessionId, 
+                                updateDescription, 
+                                updateResult, 
+                                "Plan updated based on execution feedback");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to update markdown plan after refinement");
+                    }
+                }
                 
                 // Provide updated plan context to the conversation
                 var updatedPlanContext = $"""
@@ -1699,6 +1757,74 @@ public class TaskExecutor : ITaskExecutor
         {
             await _activityLogger.FailActivityAsync(toolSelectionActivityId, ex.Message);
             throw;
+        }
+    }
+    
+    /// <summary>
+    /// Extract a TaskPlan from markdown content for compatibility purposes
+    /// </summary>
+    private Task<TaskPlan?> ExtractPlanFromMarkdownAsync(string markdown)
+    {
+        try
+        {
+            // Simple extraction for now - this could be improved with better parsing
+            var lines = markdown.Split('\n');
+            var task = "";
+            var strategy = "";
+            var steps = new List<PlanStep>();
+            
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+                
+                // Extract task title
+                if (trimmed.StartsWith("# Task:"))
+                {
+                    task = trimmed.Substring(7).Trim();
+                }
+                // Extract strategy
+                else if (trimmed.StartsWith("**Strategy:**"))
+                {
+                    strategy = trimmed.Substring(13).Trim();
+                }
+                // Extract subtasks
+                else if (trimmed.StartsWith("- [ ]") || trimmed.StartsWith("- [x]"))
+                {
+                    var stepMatch = System.Text.RegularExpressions.Regex.Match(trimmed, @"(?:\*\*)?Step (\d+)(?:\*\*)?: (.+)");
+                    if (stepMatch.Success)
+                    {
+                        if (int.TryParse(stepMatch.Groups[1].Value, out int stepNumber))
+                        {
+                            var description = stepMatch.Groups[2].Value.Trim();
+                            steps.Add(new PlanStep
+                            {
+                                StepNumber = stepNumber,
+                                Description = description,
+                                IsMandatory = true
+                            });
+                        }
+                    }
+                }
+            }
+            
+            if (!string.IsNullOrEmpty(task))
+            {
+                return Task.FromResult<TaskPlan?>(new TaskPlan
+                {
+                    Task = task,
+                    Strategy = strategy,
+                    Steps = steps,
+                    Complexity = TaskComplexity.Medium,
+                    Confidence = 0.8
+                });
+            }
+            
+            return Task.FromResult<TaskPlan?>(null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to extract TaskPlan from markdown");
+            return Task.FromResult<TaskPlan?>(null);
         }
     }
 }
