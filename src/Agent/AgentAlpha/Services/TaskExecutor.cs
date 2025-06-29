@@ -170,7 +170,7 @@ public class TaskExecutor : ITaskExecutor
                     await _activityLogger.LogActivityAsync(
                         ActivityTypes.TaskPlanning,
                         "Found existing markdown plan in session",
-                        new { SessionId = request.SessionId, HasMarkdown = true });
+                        new { SessionId = request.SessionId, HasMarkdown = true, MarkdownPlan = taskMarkdown });
                 }
                 else
                 {
@@ -269,9 +269,9 @@ public class TaskExecutor : ITaskExecutor
             }
 
             await _activityLogger.LogActivityAsync(
-                ActivityTypes.TaskPlanning,
-                "Created new markdown-based plan",
-                new { Task = request.Task, MarkdownLength = taskMarkdown.Length });
+                ActivityTypes.TaskMarkdownUpdate,                // NEW
+                "Initial markdown task plan (executor)",
+                taskMarkdown);                                   // raw markdown
 
             return taskMarkdown;
         }

@@ -55,21 +55,27 @@ public class SessionActivity
         var activity = new SessionActivity
         {
             ActivityType = activityType,
-            Description = description
+            Description  = description
         };
-        
+
         if (data != null)
         {
-            try
+            if (data is string str)              // <-- NEW : keep raw string
             {
-                activity.Data = JsonSerializer.Serialize(data);
+                activity.Data = str;
             }
-            catch
+            else
             {
-                activity.Data = data.ToString() ?? string.Empty;
+                try
+                {
+                    activity.Data = JsonSerializer.Serialize(data);
+                }
+                catch
+                {
+                    activity.Data = data.ToString() ?? string.Empty;
+                }
             }
         }
-        
         return activity;
     }
     
@@ -166,25 +172,4 @@ public class SessionActivity
             
         return input.Substring(0, maxLength - 20) + "... [TRUNCATED]";
     }
-}
-
-/// <summary>
-/// Standard activity types for consistency
-/// </summary>
-public static class ActivityTypes
-{
-    public const string SessionStart = "Session_Start";
-    public const string SessionEnd = "Session_End";
-    public const string TaskPlanning = "Task_Planning";
-    public const string ToolSelection = "Tool_Selection";
-    public const string OpenAIRequest = "OpenAI_Request";
-    public const string OpenAIResponse = "OpenAI_Response";
-    public const string ToolCall = "Tool_Call";
-    public const string ToolResult = "Tool_Result";
-    public const string ConversationIteration = "Conversation_Iteration";
-    public const string Error = "Error";
-    public const string PlanDetails = "Plan_Details";
-    public const string ToolSelectionReasoning = "Tool_Selection_Reasoning";
-    public const string ResponseQualityAssessment = "Response_Quality_Assessment";
-    public const string TaskCompletionEvaluation = "Task_Completion_Evaluation";
 }

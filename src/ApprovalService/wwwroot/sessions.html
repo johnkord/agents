@@ -144,6 +144,9 @@
             overflow-y: auto;
             white-space: pre-wrap;
         }
+        .activity-data.markdown {              /* +NEW */
+            white-space: normal;
+        }
         .activity-duration {
             font-size: 0.8em;
             color: #666;
@@ -203,7 +206,16 @@
         .copy-success.show {
             opacity: 1;
         }
+        .markdown-doc {
+            white-space: pre-wrap;
+            font-family: monospace;
+            background:#fffaf0;
+            padding:10px;
+            border-radius:4px;
+            overflow-x:auto;
+        }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <!-- +NEW -->
 </head>
 <body>
     <div class="container">
@@ -349,11 +361,15 @@
                 
                 let dataHtml = '';
                 if (activity.data) {
-                    try {
-                        const parsedData = JSON.parse(activity.data);
-                        dataHtml = `<div class="activity-data">${JSON.stringify(parsedData, null, 2)}</div>`;
-                    } catch {
-                        dataHtml = `<div class="activity-data">${activity.data}</div>`;
+                    if (activity.activityType === 'TaskMarkdownUpdate') {             // +NEW
+                        dataHtml = `<div class="activity-data markdown">${marked.parse(activity.data)}</div>`;
+                    } else {
+                        try {
+                            const parsedData = JSON.parse(activity.data);
+                            dataHtml = `<div class="activity-data">${JSON.stringify(parsedData, null, 2)}</div>`;
+                        } catch {
+                            dataHtml = `<div class="activity-data">${activity.data}</div>`;
+                        }
                     }
                 }
                 

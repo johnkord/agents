@@ -416,16 +416,29 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
     {
         var session = await _sessionManager.GetSessionAsync(sessionId);
         if (session == null)
-        {
             throw new InvalidOperationException($"Session {sessionId} not found");
+
+        // add activity only when the markdown actually changed
+        if (!string.Equals(session.TaskStateMarkdown, markdown, StringComparison.Ordinal))
+        {
+            session.AddActivity(new SessionActivity
+            {
+                ActivityId  = Guid.NewGuid().ToString(),
+                Timestamp   = DateTime.UtcNow,
+                ActivityType = ActivityTypes.TaskMarkdownUpdate,   // NEW
+                Description  = "Task state markdown updated",
+                Success      = true,
+                // keep full markdown but truncate to avoid over-sized log rows
+                Data         = SessionActivity.TruncateString(markdown, 50000)
+            });
         }
-        
+
         session.TaskStateMarkdown = markdown;
-        session.LastUpdatedAt = DateTime.UtcNow;
-        
+        session.LastUpdatedAt     = DateTime.UtcNow;
         await _sessionManager.SaveSessionAsync(session);
-        
-        _logger.LogDebug("Saved task markdown for session {SessionId}: {Length} characters", sessionId, markdown.Length);
+
+        _logger.LogDebug("Saved task markdown for session {SessionId}: {Length} characters", 
+                         sessionId, markdown.Length);
     }
     
     private string? ExtractContentFromResponse(ResponsesCreateResponse response)

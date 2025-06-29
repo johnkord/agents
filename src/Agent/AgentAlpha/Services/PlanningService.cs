@@ -111,6 +111,12 @@ public class PlanningService : IPlanningService
 
             if (!string.IsNullOrEmpty(markdownPlan))
             {
+                // NEW – log the raw markdown plan
+                await _activityLogger!.LogActivityAsync(
+                    ActivityTypes.TaskMarkdownUpdate,            // NEW
+                    "Initial markdown task plan",
+                    markdownPlan);                               // raw markdown
+
                 _logger.LogInformation("Successfully created markdown task plan for session {SessionId}", sessionId);
                 return markdownPlan;
             }
@@ -123,7 +129,24 @@ public class PlanningService : IPlanningService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to initialize state-aware task planning for session {SessionId}", sessionId);
-            return CreateFallbackMarkdownPlan(task, availableTools);
+            var fallback = CreateFallbackMarkdownPlan(task, availableTools);
+
+            // NEW – still log the fallback plan
+            if (_activityLogger != null)
+            {
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.TaskPlanning,
+                    "Fallback markdown plan created",
+                    new { SessionId = sessionId, Task = task, MarkdownPlan = fallback });
+            }
+
+            // NEW – log the raw fallback markdown plan
+            await _activityLogger!.LogActivityAsync(
+                ActivityTypes.TaskMarkdownUpdate,                // NEW
+                "Initial markdown task plan (fallback)",
+                fallback);                                       // raw markdown
+
+            return fallback;
         }
     }
 
@@ -247,6 +270,7 @@ public class PlanningService : IPlanningService
     /// </summary>
     private static string AnalyzeCurrentState(CurrentState state, IList<IUnifiedTool> tools)
     {
+        // Very lightweight summary – keeps build fast and avoids the heavy analyser previously removed
         if (state == null) return string.Empty;
 
         var sb = new StringBuilder();
