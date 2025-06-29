@@ -27,6 +27,8 @@ public class TaskExecutor : ITaskExecutor
     private readonly AgentConfiguration _config;
     private readonly ILogger<TaskExecutor> _logger;
 
+    private readonly IToolScopeManager _toolScope;                 // NEW
+
     public TaskExecutor(
         IConnectionManager connectionManager,
         IToolManager toolManager,
@@ -38,6 +40,7 @@ public class TaskExecutor : ITaskExecutor
         ITaskStateManager taskStateManager,
         AgentConfiguration config,
         ILogger<TaskExecutor> logger,
+        IToolScopeManager toolScope,                               // NEW
         IMarkdownTaskStateManager? markdownTaskStateManager = null)
     {
         _connectionManager = connectionManager;
@@ -51,6 +54,7 @@ public class TaskExecutor : ITaskExecutor
         _markdownTaskStateManager = markdownTaskStateManager;
         _config = config;
         _logger = logger;
+        _toolScope = toolScope;                                    // NEW
     }
 
     /// <summary>
@@ -257,6 +261,7 @@ public class TaskExecutor : ITaskExecutor
             availableTools,
             state);
 
+        // No local copy needed
         return markdownPlan;
     }
 
@@ -354,7 +359,8 @@ public class TaskExecutor : ITaskExecutor
         }
     }
 
-    private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverAndSelectToolsAsync(TaskExecutionRequest request, bool isResumingSession = false)
+    private async Task<OpenAIIntegration.Model.ToolDefinition[]> DiscoverAndSelectToolsAsync(
+        TaskExecutionRequest request, bool isResumingSession = false)
     {
         var filterConfig = request.ToolFilter ?? _config.ToolFilter;
 
@@ -379,6 +385,37 @@ public class TaskExecutor : ITaskExecutor
                 request.Task,
                 filteredTools,
                 _config.ToolSelection.MaxToolsPerRequest);
+
+            // --- ensure required tools are always included ----------------
+            var required = _toolScope.GetRequiredTools(request.SessionId ?? "");
+            if (required.Length > 0)
+            {
+                var selectedNames = selectedTools.Select(t => t.Name)
+                                                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                var ensured = new List<OpenAIIntegration.Model.ToolDefinition>(selectedTools);
+
+                foreach (var req in required)
+                {
+                    if (selectedNames.Contains(req)) continue;
+
+                    var match = filteredTools.FirstOrDefault(t =>
+                        string.Equals(t.Name, req, StringComparison.OrdinalIgnoreCase));
+
+                    if (match != null)
+                    {
+                        ensured.Add(match.ToToolDefinition());
+                        selectedNames.Add(req);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Required tool '{Tool}' not found among available tools", req);
+                    }
+                }
+
+                selectedTools = ensured.ToArray();
+            }
+            // ----------------------------------------------------------------
 
             var selectionContext = isResumingSession ? "for new task in session" : "for task";
             Console.WriteLine($"🎯 Selected {selectedTools.Length} relevant tools {selectionContext}: " +

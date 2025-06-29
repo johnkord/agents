@@ -21,16 +21,22 @@ public class PlanningService : IPlanningService
     private readonly ISessionAwareOpenAIService _openAi;
     private readonly ILogger<PlanningService> _logger;
     private readonly AgentConfiguration _config;
+    private readonly IToolScopeManager _toolScope;                 // existing
     private ISessionActivityLogger? _activityLogger;
+
+    private string[] _lastRequiredTools = Array.Empty<string>();   // NEW – cache
+    public string[] LastRequiredTools => _lastRequiredTools;       // NEW – interface impl
 
     public PlanningService(
         ISessionAwareOpenAIService openAi,
         ILogger<PlanningService> logger,
-        AgentConfiguration config)
+        AgentConfiguration config,
+        IToolScopeManager toolScope)                               // NEW
     {
-        _openAi = openAi;
-        _logger = logger;
-        _config = config;
+        _openAi   = openAi;
+        _logger   = logger;
+        _config   = config;
+        _toolScope = toolScope;                                    // NEW
     }
 
     /// <summary>
@@ -71,6 +77,7 @@ public class PlanningService : IPlanningService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to initialize task planning for session {SessionId}", sessionId);
+            _lastRequiredTools = Array.Empty<string>();            // NEW
             return CreateFallbackMarkdownPlan(task, availableTools);
         }
     }
@@ -126,6 +133,9 @@ public class PlanningService : IPlanningService
 
             var (markdownPlan, requiredTools) = ParseFunctionCall(fnCall);
 
+            _toolScope.SetRequiredTools(sessionId, requiredTools); // existing
+            _lastRequiredTools = requiredTools;                    // NEW
+            
             if (!string.IsNullOrEmpty(markdownPlan))
             {
                 await _activityLogger!.LogActivityAsync(
@@ -143,6 +153,8 @@ public class PlanningService : IPlanningService
             }
             else
             {
+                _toolScope.Clear(sessionId);                       // existing
+                _lastRequiredTools = Array.Empty<string>();        // NEW
                 _logger.LogWarning("Failed to get valid markdown plan response for session {SessionId}", sessionId);
                 return CreateFallbackMarkdownPlan(task, availableTools);
             }
@@ -166,6 +178,9 @@ public class PlanningService : IPlanningService
                 ActivityTypes.TaskMarkdownUpdate,                // NEW
                 "Initial markdown task plan (fallback)",
                 fallback);                                       // raw markdown
+
+            _toolScope.Clear(sessionId);                           // existing
+            _lastRequiredTools = Array.Empty<string>();            // NEW
 
             return fallback;
         }
@@ -332,18 +347,46 @@ public class PlanningService : IPlanningService
     // NEW – parse FunctionToolCall to get plan & tools
     private static (string markdown, string[] tools) ParseFunctionCall(FunctionToolCall? fnCall)
     {
-        // Return empty result if the function call or its arguments are missing
-        if (fnCall == null || !fnCall.Arguments.HasValue)
+        if (fnCall == null)                         // no call at all
             return ("", Array.Empty<string>());
 
-        // Safely unwrap the nullable JsonElement
-        JsonElement root = fnCall.Arguments.Value;
+        // Try to obtain a JsonElement representing the arguments
+        JsonElement root;
+        if (fnCall.Arguments.HasValue)              // preferred: already a JsonElement
+        {
+            var argElement = fnCall.Arguments.Value;
 
-        // Ensure we are working with a JSON object
+            if (argElement.ValueKind == JsonValueKind.Object)
+            {
+                root = argElement;
+            }
+            else if (argElement.ValueKind == JsonValueKind.String)
+            {
+                // Some SDK versions return a *string* that contains serialized JSON
+                var jsonText = argElement.GetString();
+                if (string.IsNullOrWhiteSpace(jsonText))
+                    return ("", Array.Empty<string>());
+
+                using var doc = JsonDocument.Parse(jsonText);
+                root = doc.RootElement.Clone();
+            }
+            else
+            {
+                return ("", Array.Empty<string>());
+            }
+        }
+        else
+        {
+            // No arguments available
+            return ("", Array.Empty<string>());
+        }
+
+        // From here on we are guaranteed to have a JSON object
         if (root.ValueKind != JsonValueKind.Object)
             return ("", Array.Empty<string>());
 
         var markdown = root.GetProperty("markdown_plan").GetString() ?? "";
+
         var toolsArr = root.TryGetProperty("required_tools", out var arr) && arr.ValueKind == JsonValueKind.Array
             ? arr.EnumerateArray()
                  .Where(e => e.ValueKind == JsonValueKind.String)

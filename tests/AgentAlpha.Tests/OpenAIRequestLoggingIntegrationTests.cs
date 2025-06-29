@@ -106,7 +106,8 @@ public class OpenAIRequestLoggingIntegrationTests
         var planningService = new PlanningService(
             mockOpenAIService,
             loggerFactory.CreateLogger<PlanningService>(),
-            config);
+            config,
+            new ToolScopeManager());                              // NEW ARG
         
         // Set the activity logger
         planningService.SetActivityLogger(activityLogger);

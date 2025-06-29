@@ -62,7 +62,8 @@ public class EndToEndOpenAILoggingTests
         var planningService = new PlanningService(
             mockOpenAIService,
             loggerFactory.CreateLogger<PlanningService>(),
-            config);
+            config,
+            new ToolScopeManager());                              // NEW ARG
         
         // Set activity loggers on all services
         toolSelector.SetActivityLogger(activityLogger);

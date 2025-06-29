@@ -53,6 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IToolSelector, ToolSelector>();
         services.AddSingleton<IConversationManager, ConversationManager>();
         services.AddSingleton<ITaskExecutor, TaskExecutor>();
+        services.AddSingleton<IToolScopeManager, ToolScopeManager>();
         
         // Register OpenAI services
         services.AddSingleton<IOpenAIResponsesService>(provider => new OpenAIResponsesService(configuration.OpenAiApiKey));

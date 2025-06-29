@@ -90,6 +90,24 @@ public class ToolSelector : IToolSelector
                 _logger.LogInformation("Added web search tool for task requiring current information");
             }
             
+            // -----------------------------------------------------------------
+            // FALLBACK: if nothing was selected, use web search only when needed
+            if (selectedTools.Count == 0)
+            {
+                if (ShouldIncludeWebSearch(task))
+                {
+                    var webSearchToolDef = GetWebSearchFallback();
+                    if (webSearchToolDef != null)
+                    {
+                        _logger.LogInformation("Fallback – no tools selected but task requires current information, using WebSearchTool.");
+                        return new[] { webSearchToolDef };
+                    }
+                }
+
+                _logger.LogInformation("No relevant tools selected and task does not require web search – returning empty tool list.");
+                return Array.Empty<ToolDefinition>();
+            }
+            
             stopwatch.Stop();
             
             // Log tool selection reasoning for better activity tracking
@@ -98,13 +116,24 @@ public class ToolSelector : IToolSelector
             _logger.LogInformation("Selected {Count} tools for task in {Duration}ms", 
                 selectedTools.Count, stopwatch.ElapsedMilliseconds);
             
-            return selectedTools.ToArray();
+            return selectedTools.Take(maxToolCount).ToArray();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to select tools for task, falling back to all tools");
-            // Fallback: return all tools converted to OpenAI format
-            return availableTools.Select(t => t.ToToolDefinition()).ToArray();
+            _logger.LogError(ex, "Tool selection failed");
+
+            // Only fall back to web search if the task actually benefits from it
+            if (ShouldIncludeWebSearch(task))
+            {
+                var webSearchToolDef = GetWebSearchFallback();
+                if (webSearchToolDef != null)
+                {
+                    return new[] { webSearchToolDef };
+                }
+            }
+
+            // Otherwise return an empty selection so the caller can decide
+            return Array.Empty<ToolDefinition>();
         }
     }
 
@@ -891,5 +920,21 @@ public class ToolSelector : IToolSelector
             // Future: add other built-in tools
             _ => null
         };
+    }
+
+    // NEW --------------------------------------------------------------------
+    /// <summary>
+    /// Returns the web search tool definition unless it is disabled or missing.
+    /// </summary>
+    private ToolDefinition? GetWebSearchFallback()
+    {
+        if (_agentConfig.WebSearch == null)
+            return null;
+
+        // Respect tool filter: do not include if explicitly black-listed
+        if (!_agentConfig.ToolFilter.ShouldIncludeTool("web_search_preview"))   // FIX
+            return null;
+
+        return _agentConfig.WebSearch.ToToolDefinition();
     }
 }

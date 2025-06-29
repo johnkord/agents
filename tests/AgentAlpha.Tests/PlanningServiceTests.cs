@@ -28,7 +28,9 @@ public class PlanningServiceTests
     public async Task InitializeTaskPlanningAsync_ReturnsMarkdownWithExpectedSections()
     {
         var mockOpenAI = new MockOpenAIService();
-        var planningService = new PlanningService(mockOpenAI, _logger, _config);
+        var toolScope  = new ToolScopeManager();
+        var planningService = new PlanningService(
+            mockOpenAI, _logger, _config, toolScope);
 
         var markdown = await planningService.InitializeTaskPlanningAsync(
             Guid.NewGuid().ToString(),
@@ -44,7 +46,9 @@ public class PlanningServiceTests
     public async Task InitializeTaskPlanningWithStateAsync_ReturnsMarkdown()
     {
         var mockOpenAI = new MockOpenAIService();
-        var planningService = new PlanningService(mockOpenAI, _logger, _config);
+        var toolScope  = new ToolScopeManager();
+        var planningService = new PlanningService(
+            mockOpenAI, _logger, _config, toolScope);
 
         var state = new CurrentState { SessionContext = "User context" };
 

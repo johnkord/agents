@@ -34,4 +34,10 @@ public interface IPlanningService
     /// </summary>
     /// <param name="activityLogger">The activity logger to use for this session</param>
     void SetActivityLogger(ISessionActivityLogger? activityLogger);
+
+    /// <summary>
+    /// Tools that the last call to Initialise* deemed “required”.
+    /// Empty array if no plan has been generated yet or the call failed.
+    /// </summary>
+    string[] LastRequiredTools { get; }
 }
