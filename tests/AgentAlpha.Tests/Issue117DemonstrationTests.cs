@@ -133,8 +133,28 @@ namespace AgentAlpha.Tests
         public class MockSessionAwareOpenAIService : ISessionAwareOpenAIService
         {
             public void SetActivityLogger(Common.Interfaces.Session.ISessionActivityLogger? activityLogger) { }
-            public Task<ResponsesCreateResponse> CreateResponseAsync(ResponsesCreateRequest request, System.Threading.CancellationToken cancellationToken = default) => 
-                Task.FromResult(new ResponsesCreateResponse());
+            public Task<ResponsesCreateResponse> CreateResponseAsync(ResponsesCreateRequest request, System.Threading.CancellationToken cancellationToken = default)
+            {
+                // Mock response for LLM calls - provide proper structure for tool selection
+                var responseContent = JsonSerializer.Serialize(new[]
+                {
+                    new { type = "output_text", text = "true" } // Default response for web search determination
+                });
+                
+                var response = new ResponsesCreateResponse
+                {
+                    Output = new[]
+                    {
+                        new OutputMessage
+                        {
+                            Role = "assistant",
+                            Content = JsonDocument.Parse(responseContent).RootElement
+                        }
+                    }
+                };
+                
+                return Task.FromResult(response);
+            }
         }
 
         public class MockToolManager : IToolManager
