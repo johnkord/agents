@@ -4,6 +4,7 @@ namespace Common.Interfaces.Session;
 
 /// <summary>
 /// Interface for managing task state as markdown documents with LLM-driven planning
+/// Now includes re-planning capabilities each time task state is updated
 /// </summary>
 public interface IMarkdownTaskStateManager
 {
@@ -12,10 +13,8 @@ public interface IMarkdownTaskStateManager
     /// </summary>
     Task<string> InitializeTaskMarkdownAsync(string sessionId, string taskDescription);
     
-
-    
     /// <summary>
-    /// Update the task markdown document based on action results using LLM
+    /// Update the task markdown document based on action results using LLM with re-planning
     /// </summary>
     Task<string> UpdateTaskMarkdownAsync(string sessionId, string actionDescription, string actionResult, string? observations = null);
     
@@ -30,7 +29,7 @@ public interface IMarkdownTaskStateManager
     Task<SubtaskInfo?> GetCurrentSubtaskFromMarkdownAsync(string sessionId);
     
     /// <summary>
-    /// Mark a subtask as completed in the markdown document
+    /// Mark a subtask as completed in the markdown document with re-planning
     /// </summary>
     Task<string> CompleteSubtaskInMarkdownAsync(string sessionId, string subtaskDescription, string completionResult);
     
@@ -43,6 +42,12 @@ public interface IMarkdownTaskStateManager
     /// Update the plan iteratively based on execution progress and feedback
     /// </summary>
     Task<string> UpdatePlanIterativelyAsync(string sessionId, string executionFeedback, string? currentContext = null);
+
+    /// <summary>
+    /// Set the session activity logger for automatic OpenAI request logging
+    /// </summary>
+    /// <param name="activityLogger">The activity logger to use for this session</param>
+    void SetActivityLogger(ISessionActivityLogger? activityLogger);
 }
 
 /// <summary>

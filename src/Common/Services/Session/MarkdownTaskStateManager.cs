@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Linq;
+using System.Text;
 using Common.Models.Session;
 using Common.Interfaces.Session;
 using Common.Interfaces.Tools;                 // NEW – tool scope
@@ -12,6 +13,7 @@ namespace Common.Services.Session;
 
 /// <summary>
 /// Implementation of markdown-based task state management with LLM-driven planning
+/// Each time the task state is updated, re-planning occurs based on what has been accomplished
 /// </summary>
 public class MarkdownTaskStateManager : IMarkdownTaskStateManager
 {
@@ -19,6 +21,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
     private readonly ISessionAwareOpenAIService _openAiService;
     private readonly IToolScopeManager _toolScope;            // NEW
     private readonly ILogger<MarkdownTaskStateManager> _logger;
+    private ISessionActivityLogger? _activityLogger;          // NEW - for activity logging
     
     public MarkdownTaskStateManager(
         ISessionManager sessionManager,
@@ -30,6 +33,17 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
         _openAiService = openAiService;
         _toolScope     = toolScope;                           // NEW
         _logger        = logger;
+    }
+
+    /// <summary>
+    /// Set the session activity logger for automatic OpenAI request logging
+    /// </summary>
+    public void SetActivityLogger(ISessionActivityLogger? activityLogger)
+    {
+        _activityLogger = activityLogger;
+        _openAiService.SetActivityLogger(activityLogger);
+        _logger.LogDebug("Activity logger {Status} for MarkdownTaskStateManager", 
+            activityLogger != null ? "set" : "cleared");
     }
     
     public async Task<string> InitializeTaskMarkdownAsync(string sessionId, string taskDescription)
@@ -228,11 +242,12 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
 
             var timestampUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");   // NEW
             
+            // KEY CHANGE: Re-plan based on what has been accomplished so far
             var prompt = $"""
-                Update the markdown plan below based on the recent action/result.
+                Update the markdown plan below based on the recent action/result, and re-plan based on what has been accomplished so far.
                 (Timestamp UTC: {timestampUtc})
 
-                Maintain structure, mark completed subtasks, add new ones as needed, update context.
+                Maintain structure, mark completed subtasks, add new ones as needed, update context, and adjust the plan based on progress.
                 
                 ```markdown
                 {currentMarkdown}
@@ -242,8 +257,16 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 • Result: {actionResult}
                 {(string.IsNullOrEmpty(observations) ? "" : $"• Observations: {observations}")}
 
+                Please re-plan by:
+                1. Analyzing what has been accomplished based on the action result
+                2. Marking completed subtasks as complete [x] if applicable
+                3. Adjusting remaining subtasks based on new information
+                4. Adding new subtasks if the action revealed additional requirements
+                5. Updating the strategy if needed based on progress
+                6. Identifying tools needed for the next steps
+
                 When done, call the tool {SaveMarkdownPlanTool.Name} with:
-                  - markdown_plan  : the updated markdown
+                  - markdown_plan  : the updated markdown with re-planned tasks
                   - required_tools : array of tools needed for the upcoming subtasks
                 Return nothing else.
                 """;
@@ -269,6 +292,8 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
             {
                 await SaveTaskMarkdownToSessionAsync(sessionId, updatedMarkdown);
                 _toolScope.SetRequiredTools(sessionId, requiredTools);   // NEW
+                
+                _logger.LogInformation("Re-planned task based on progress for session {SessionId}", sessionId);
                 return updatedMarkdown;
             }
 
@@ -386,8 +411,9 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
             
             var timestampUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");   // NEW
             
+            // KEY CHANGE: Re-plan based on subtask completion
             var prompt = $"""
-                Update the following task markdown document to mark a subtask as completed.
+                Update the following task markdown document to mark a subtask as completed and re-plan based on what was accomplished.
                 (Timestamp UTC: {timestampUtc})
                 
                 Current markdown document:
@@ -401,27 +427,80 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 Please:
                 1. Find the subtask that matches the description and mark it as completed (change - [ ] to - [x])
                 2. Add a brief completion note under the completed item if appropriate
-                3. Update the context section with any relevant information from the completion
-                4. Update progress notes with timestamp
-                
-                Return only the updated markdown content.
+                3. Re-plan the remaining tasks based on what was learned from completing this subtask
+                4. Add new subtasks if the completion revealed additional requirements
+                5. Adjust the strategy if needed based on the completion result
+                6. Update the context section with relevant information from the completion
+                7. Update progress notes with timestamp
+                8. Identify tools needed for the next steps
+
+                When done, call the tool {SaveMarkdownPlanTool.Name} with:
+                  - markdown_plan  : the updated markdown with re-planned tasks
+                  - required_tools : array of tools needed for the upcoming subtasks
+                Return nothing else.
                 """;
                 
             var request = new ResponsesCreateRequest
             {
-                Model = "gpt-4.1",
-                Input = prompt,
-                Instructions = "You are a task planning assistant. Update markdown documents to accurately reflect completed subtasks.",
+                Model          = "gpt-4.1",
+                Input          = new[] { new { role = "user", content = prompt } },
+                Tools          = new[] { SaveMarkdownPlanTool },
+                ToolChoice     = "auto",
                 MaxOutputTokens = 2000
             };
             
             var response = await _openAiService.CreateResponseAsync(request);
-            var updatedMarkdown = ExtractContentFromResponse(response) ?? currentMarkdown;
+
+            var fnCall = response.Output?
+                               .OfType<FunctionToolCall>()
+                               .FirstOrDefault(fc => fc.Name == SaveMarkdownPlanTool.Name);
+
+            var (updatedMarkdown, requiredTools) = ParseFunctionCall(fnCall);
+
+            if (!string.IsNullOrWhiteSpace(updatedMarkdown))
+            {
+                await SaveTaskMarkdownToSessionAsync(sessionId, updatedMarkdown);
+                _toolScope.SetRequiredTools(sessionId, requiredTools);   // NEW
+                
+                _logger.LogInformation("Re-planned task based on subtask completion for session {SessionId}", sessionId);
+                return updatedMarkdown;
+            }
+
+            _logger.LogWarning("Function call did not return markdown – falling back to basic update");
+            // Fallback using existing method without re-planning
+            var fallbackRequest = new ResponsesCreateRequest
+            {
+                Model = "gpt-4.1",
+                Input = $"""
+                    Update the following task markdown document to mark a subtask as completed.
+                    
+                    Current markdown document:
+                    ```markdown
+                    {currentMarkdown}
+                    ```
+                    
+                    Subtask to mark as completed: {subtaskDescription}
+                    Completion result: {completionResult}
+                    
+                    Please:
+                    1. Find the subtask that matches the description and mark it as completed (change - [ ] to - [x])
+                    2. Add a brief completion note under the completed item if appropriate
+                    3. Update the context section with any relevant information from the completion
+                    4. Update progress notes with timestamp
+                    
+                    Return only the updated markdown content.
+                    """,
+                Instructions = "You are a task planning assistant. Update markdown documents to accurately reflect completed subtasks.",
+                MaxOutputTokens = 2000
+            };
+            
+            var fallbackResponse = await _openAiService.CreateResponseAsync(fallbackRequest);
+            var fallbackMarkdown = ExtractContentFromResponse(fallbackResponse) ?? currentMarkdown;
             
             // Save updated markdown
-            await SaveTaskMarkdownToSessionAsync(sessionId, updatedMarkdown);
+            await SaveTaskMarkdownToSessionAsync(sessionId, fallbackMarkdown);
             
-            return updatedMarkdown;
+            return fallbackMarkdown;
         }
         catch (Exception ex)
         {
@@ -523,11 +602,39 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 5. Refining the context section with lessons learned
                 6. Maintaining completed subtasks as [x] and uncompleted as [ ]
                 
-                Focus on making the plan more effective based on real execution experience.
-                Return only the updated markdown content.
+                When done, call the tool {SaveMarkdownPlanTool.Name} with:
+                  - markdown_plan  : the updated markdown
+                  - required_tools : array of tools needed for the upcoming subtasks
+                Return nothing else.
                 """;
                 
             var request = new ResponsesCreateRequest
+            {
+                Model          = "gpt-4.1",
+                Input          = new[] { new { role = "user", content = prompt } },
+                Tools          = new[] { SaveMarkdownPlanTool },
+                ToolChoice     = "auto",
+                MaxOutputTokens = 2000
+            };
+            
+            var response = await _openAiService.CreateResponseAsync(request);
+
+            var fnCall = response.Output?
+                               .OfType<FunctionToolCall>()
+                               .FirstOrDefault(fc => fc.Name == SaveMarkdownPlanTool.Name);
+
+            var (updatedMarkdown, requiredTools) = ParseFunctionCall(fnCall);
+
+            if (!string.IsNullOrWhiteSpace(updatedMarkdown))
+            {
+                await SaveTaskMarkdownToSessionAsync(sessionId, updatedMarkdown);
+                _toolScope.SetRequiredTools(sessionId, requiredTools);   // NEW
+                return updatedMarkdown;
+            }
+
+            _logger.LogWarning("Function call did not return markdown – falling back to basic content");
+            // Fallback using existing method
+            var fallbackRequest = new ResponsesCreateRequest
             {
                 Model = "gpt-4.1",
                 Input = prompt,
@@ -535,14 +642,13 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
                 MaxOutputTokens = 2000
             };
             
-            var response = await _openAiService.CreateResponseAsync(request);
-            var updatedMarkdown = ExtractContentFromResponse(response) ?? currentMarkdown;
+            var fallbackResponse = await _openAiService.CreateResponseAsync(fallbackRequest);
+            var fallbackMarkdown = ExtractContentFromResponse(fallbackResponse) ?? currentMarkdown;
             
-            // Save updated markdown
-            await SaveTaskMarkdownToSessionAsync(sessionId, updatedMarkdown);
+            await SaveTaskMarkdownToSessionAsync(sessionId, fallbackMarkdown);
             
             _logger.LogInformation("Updated plan iteratively for session {SessionId}", sessionId);
-            return updatedMarkdown;
+            return fallbackMarkdown;
         }
         catch (Exception ex)
         {
