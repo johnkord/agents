@@ -22,7 +22,6 @@ public class TaskExecutor : ITaskExecutor
     private readonly IToolSelector _toolSelector;
     private readonly IConversationManager _conversationManager;
     private readonly ISessionManager _sessionManager;
-    private readonly MarkdownTaskPlanningService _planningService;
     private readonly ISessionActivityLogger _activityLogger;
     private readonly ITaskStateManager _taskStateManager;
     private readonly IMarkdownTaskStateManager _markdownTaskStateManager;
@@ -37,7 +36,6 @@ public class TaskExecutor : ITaskExecutor
         IToolSelector toolSelector,
         IConversationManager conversationManager,
         ISessionManager sessionManager,
-        MarkdownTaskPlanningService planningService,
         ISessionActivityLogger activityLogger,
         ITaskStateManager taskStateManager,
         AgentConfiguration config,
@@ -50,7 +48,6 @@ public class TaskExecutor : ITaskExecutor
         _toolSelector = toolSelector;
         _conversationManager = conversationManager;
         _sessionManager = sessionManager;
-        _planningService = planningService;
         _activityLogger = activityLogger;
         _taskStateManager = taskStateManager;
         _markdownTaskStateManager = markdownTaskStateManager;
@@ -117,7 +114,7 @@ public class TaskExecutor : ITaskExecutor
 
                     // Set activity logger for all services that need OpenAI request logging
                     _toolSelector.SetActivityLogger(_activityLogger);
-                    _planningService.SetActivityLogger(_activityLogger);
+                    _markdownTaskStateManager.SetActivityLogger(_activityLogger);
 
                     await _activityLogger.LogActivityAsync(
                         ActivityTypes.SessionStart,
@@ -133,7 +130,7 @@ public class TaskExecutor : ITaskExecutor
 
                 // Set activity logger for all services that need OpenAI request logging
                 _toolSelector.SetActivityLogger(_activityLogger);
-                _planningService.SetActivityLogger(_activityLogger);
+                _markdownTaskStateManager.SetActivityLogger(_activityLogger);
 
                 await _activityLogger.LogActivityAsync(
                     ActivityTypes.SessionStart,
@@ -151,7 +148,7 @@ public class TaskExecutor : ITaskExecutor
 
                 // Set activity logger for all services that need OpenAI request logging
                 _toolSelector.SetActivityLogger(_activityLogger);
-                _planningService.SetActivityLogger(_activityLogger);
+                _markdownTaskStateManager.SetActivityLogger(_activityLogger);
 
                 await _activityLogger.LogActivityAsync(
                     ActivityTypes.SessionStart,
@@ -264,20 +261,21 @@ public class TaskExecutor : ITaskExecutor
         // If MarkdownTaskStateManager is available, use it directly for consistent state management
         if (_markdownTaskStateManager != null && !string.IsNullOrEmpty(request.SessionId))
         {
-            return await _markdownTaskStateManager.InitializeTaskMarkdownAsync(request.SessionId, request.Task);
+            // Use the enhanced planning capabilities with tool discovery
+            var availableTools = await DiscoverAvailableToolsAsync();
+            var state = new CurrentState { CapturedAt = DateTime.UtcNow };
+
+            return await _markdownTaskStateManager.InitializeTaskPlanningWithStateAsync(
+                request.SessionId,
+                request.Task,
+                availableTools,
+                state);
         }
 
-        // Use MarkdownTaskPlanningService for initialization
-        var availableTools = await DiscoverAvailableToolsAsync();
-        var state = new CurrentState { CapturedAt = DateTime.UtcNow };
-
-        var markdownPlan = await _planningService.InitializeTaskPlanningWithStateAsync(
+        // Fallback to basic initialization if no session ID
+        return await _markdownTaskStateManager.InitializeTaskMarkdownAsync(
             request.SessionId ?? Guid.NewGuid().ToString(),
-            request.Task,
-            availableTools,
-            state);
-
-        return markdownPlan;
+            request.Task);
     }
 
     private void DisplayMarkdownPlan(string taskMarkdown)

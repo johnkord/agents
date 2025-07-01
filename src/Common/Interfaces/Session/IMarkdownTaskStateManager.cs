@@ -1,4 +1,5 @@
 using Common.Models.Session;
+using ModelContextProtocol.Client;
 
 namespace Common.Interfaces.Session;
 
@@ -12,6 +13,16 @@ public interface IMarkdownTaskStateManager
     /// Initialize a task state markdown document from a task description
     /// </summary>
     Task<string> InitializeTaskMarkdownAsync(string sessionId, string taskDescription);
+    
+    /// <summary>
+    /// Initialize task planning directly into markdown format with available tools
+    /// </summary>
+    Task<string> InitializeTaskPlanningAsync(string sessionId, string task, IList<IUnifiedTool> availableTools);
+    
+    /// <summary>
+    /// Initialize task planning with current state analysis directly into markdown format
+    /// </summary>
+    Task<string> InitializeTaskPlanningWithStateAsync(string sessionId, string task, IList<IUnifiedTool> availableTools, CurrentState currentState);
     
     /// <summary>
     /// Update the task markdown document based on action results using LLM with re-planning
@@ -48,6 +59,11 @@ public interface IMarkdownTaskStateManager
     /// </summary>
     /// <param name="activityLogger">The activity logger to use for this session</param>
     void SetActivityLogger(ISessionActivityLogger? activityLogger);
+    
+    /// <summary>
+    /// Get the last required tools identified during planning
+    /// </summary>
+    string[] LastRequiredTools { get; }
 }
 
 /// <summary>
