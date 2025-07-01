@@ -4,6 +4,7 @@ using Xunit;
 using AgentAlpha.Services;
 using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
+using Common.Interfaces.Tools;
 using AgentAlpha.Models;
 using Common.Services.Session;
 using Common.Interfaces.Session;
@@ -13,7 +14,6 @@ using OpenAIIntegration;
 using OpenAIIntegration.Model;
 using MCPClient;
 using System.Text.Json;
-using Common.Interfaces.Tools;          // NEW
 using CommonToolScope = Common.Interfaces.Tools.IToolScopeManager;   // alias to disambiguate
 
 namespace AgentAlpha.Tests;
@@ -67,18 +67,9 @@ public class TaskExecutorMarkdownIntegrationTest
         var mockConversationManager = new Mock<IConversationManager>();
         var mockTaskStateManager    = new Mock<ITaskStateManager>();
 
-        // Create real MarkdownTaskPlanningService with a mock that supports FunctionToolCall
-        var mockOpenAI = new MockSessionAwareOpenAIService();
-        var toolScope = new ToolScopeManager();
-        var config = new AgentConfiguration { Model = "gpt-4.1-nano" };
-        var planningService = new MarkdownTaskPlanningService(
-            markdownTaskStateManager,
-            mockOpenAI,
-            loggerFactory.CreateLogger<MarkdownTaskPlanningService>(),
-            config,
-            toolScope);
-
         // Setup basic mocks
+        var config = new AgentConfiguration { Model = "gpt-4.1-nano" };
+        
         mockConnectionManager.Setup(x => x.ConnectAsync(
                 It.IsAny<McpTransportType>(), 
                 It.IsAny<string>(), 
@@ -97,13 +88,12 @@ public class TaskExecutorMarkdownIntegrationTest
             mockToolSelector.Object,
             mockConversationManager.Object,
             sessionManager,
-            planningService,
             activityLogger,
             mockTaskStateManager.Object,
             config,
             loggerFactory.CreateLogger<TaskExecutor>(),
-            mockToolScopeManager.Object,                       // AgentAlpha mock
-            markdownTaskStateManager); // This is the key: provide MarkdownTaskStateManager
+            mockToolScopeManager.Object,
+            markdownTaskStateManager);
 
         // Act: Call the InitializeMarkdownPlanAsync workflow
         var session = await sessionManager.CreateSessionAsync("Integration Test Session");
@@ -148,7 +138,7 @@ public class TaskExecutorMarkdownIntegrationTest
         Assert.NotNull(finalSession?.TaskStateMarkdown);
         
         // The markdown should have been updated by MarkdownTaskStateManager
-        // Since we're now using MarkdownTaskPlanningService, we don't need to verify 
+        // Since we're using MarkdownTaskStateManager directly, we don't need to verify 
         // that the old PlanningService wasn't called
     }
 

@@ -11,6 +11,7 @@ using ModelContextProtocol.Client;
 using OpenAIIntegration.Model;
 using System.Reflection;
 using AgentAlpha.Interfaces;
+using Common.Interfaces.Tools;
 using OpenAIIntegration;
 using System.Threading;               // for CancellationToken
 

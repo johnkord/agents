@@ -3,6 +3,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
+using Common.Interfaces.Tools;
 using AgentAlpha.Models;
 using Common.Models.Session;
 using Common.Interfaces.Session;

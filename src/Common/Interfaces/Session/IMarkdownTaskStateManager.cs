@@ -1,5 +1,5 @@
 using Common.Models.Session;
-using ModelContextProtocol.Client;
+using Common.Interfaces.Tools;
 
 namespace Common.Interfaces.Session;
 

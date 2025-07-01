@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using OpenAIIntegration.Model;
 using AgentAlpha.Interfaces;
+using Common.Interfaces.Tools;
 using OpenAIIntegration;
 
 namespace AgentAlpha.Tests

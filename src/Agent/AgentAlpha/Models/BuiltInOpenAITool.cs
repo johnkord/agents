@@ -1,5 +1,5 @@
 using OpenAIIntegration.Model;
-using AgentAlpha.Interfaces;
+using Common.Interfaces.Tools;
 
 namespace AgentAlpha.Models;
 

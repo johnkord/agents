@@ -2,6 +2,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using AgentAlpha.Configuration;
 using OpenAIIntegration.Model;
+using Common.Interfaces.Tools;
 
 namespace AgentAlpha.Interfaces;
 

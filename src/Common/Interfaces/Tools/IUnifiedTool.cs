@@ -1,6 +1,6 @@
 using OpenAIIntegration.Model;
 
-namespace AgentAlpha.Interfaces;
+namespace Common.Interfaces.Tools;
 
 /// <summary>
 /// Types of tools supported by the unified tool management system

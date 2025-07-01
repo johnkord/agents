@@ -836,9 +836,16 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
         
         // Add available tools
         prompt.Add("**AVAILABLE TOOLS:**");
-        foreach (var tool in availableTools)
+        if (availableTools != null)
         {
-            prompt.Add($"- {tool.Name}: {tool.Description}");
+            foreach (var tool in availableTools)
+            {
+                prompt.Add($"- {tool.Name}: {tool.Description}");
+            }
+        }
+        else
+        {
+            prompt.Add("- No tools available");
         }
         prompt.Add("");
         
@@ -893,9 +900,16 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
         plan.Add("");
 
         plan.Add("## Required Tools");
-        foreach (var tool in availableTools.Take(5)) // Limit to first 5 tools for fallback
+        if (availableTools != null)
         {
-            plan.Add($"- {tool.Name}");
+            foreach (var tool in availableTools.Take(5)) // Limit to first 5 tools for fallback
+            {
+                plan.Add($"- {tool.Name}");
+            }
+        }
+        else
+        {
+            plan.Add("- No tools available");
         }
         plan.Add("");
 
@@ -920,7 +934,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
         sb.AppendLine($"• Context provided: {(!string.IsNullOrWhiteSpace(state.SessionContext))}");
         sb.AppendLine($"• Previous results: {state.PreviousResults?.Count ?? 0}");
         sb.AppendLine($"• User prefs set : {state.UserPreferences != null}");
-        sb.AppendLine($"• Available tools: {tools.Count}");
+        sb.AppendLine($"• Available tools: {tools?.Count ?? 0}");
         return sb.ToString();
     }
     

@@ -6,6 +6,7 @@ using AgentAlpha.Services;
 using AgentAlpha.Models;
 using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
+using Common.Interfaces.Tools;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;

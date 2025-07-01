@@ -1,5 +1,6 @@
 using ModelContextProtocol.Client;
 using OpenAIIntegration.Model;
+using Common.Interfaces.Tools;
 using AgentAlpha.Interfaces;
 
 namespace AgentAlpha.Models;

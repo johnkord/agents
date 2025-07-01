@@ -1,3 +1,5 @@
+using Common.Interfaces.Tools;
+
 namespace AgentAlpha.Interfaces;
 
 /// <summary>

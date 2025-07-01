@@ -5,6 +5,7 @@ using ModelContextProtocol.Client;
 using OpenAIIntegration;
 using OpenAIIntegration.Model;
 using AgentAlpha.Interfaces;
+using Common.Interfaces.Tools;
 using AgentAlpha.Models;
 using AgentAlpha.Configuration;
 using Common.Interfaces.Session;

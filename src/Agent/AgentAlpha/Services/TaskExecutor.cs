@@ -3,12 +3,12 @@ using MCPClient;
 using ModelContextProtocol.Client;
 using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
+using Common.Interfaces.Tools;
 using AgentAlpha.Models;
 using Common.Interfaces.Session;
 using Common.Models.Session;
 using System.Text.Json;                 // +NEW
 using System.Linq;                      // make Count() extension available
-using Common.Interfaces.Tools;
 
 namespace AgentAlpha.Services;
 
@@ -273,9 +273,14 @@ public class TaskExecutor : ITaskExecutor
         }
 
         // Fallback to basic initialization if no session ID
-        return await _markdownTaskStateManager.InitializeTaskMarkdownAsync(
-            request.SessionId ?? Guid.NewGuid().ToString(),
-            request.Task);
+        if (_markdownTaskStateManager != null)
+        {
+            return await _markdownTaskStateManager.InitializeTaskMarkdownAsync(
+                request.SessionId ?? Guid.NewGuid().ToString(),
+                request.Task);
+        }
+        
+        throw new InvalidOperationException("MarkdownTaskStateManager is not available");
     }
 
     private void DisplayMarkdownPlan(string taskMarkdown)
