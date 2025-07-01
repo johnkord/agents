@@ -14,7 +14,7 @@ namespace AgentAlpha.Tests;
 public class OpenAIRequestLoggingIntegrationTests
 {
     [Fact]
-    public async Task PlanningService_LogsOpenAIRequests_WhenActivityLoggerIsSet()
+    public async Task MarkdownTaskPlanningService_LogsOpenAIRequests_WhenActivityLoggerIsSet()
     {
         // Arrange
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
