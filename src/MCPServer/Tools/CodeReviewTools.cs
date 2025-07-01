@@ -132,7 +132,6 @@ Provide specific, actionable feedback focusing on:
     }
 
     [McpServerTool(Name = "generate_review_comment"), Description("Generate a contextual review comment for a specific file and line in a pull request.")]
-    [RequiresApproval]
     public static string GenerateReviewComment(
         string filePath,
         string codeSnippet,
@@ -140,6 +139,14 @@ Provide specific, actionable feedback focusing on:
         string description,
         string? suggestion = null)
     {
+        // NEW – approval gate
+        if (!ApprovalServiceClient.EnsureApproved(
+                "generate_review_comment",
+                new() { ["filePath"] = filePath, ["issueType"] = issueType }))
+        {
+            return "Error: request denied by approval service.";
+        }
+
         try
         {
             var result = new StringBuilder();

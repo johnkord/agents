@@ -17,10 +17,17 @@
 
 ## 3. Developer Ergonomics
 ```csharp
-[McpServerTool(Name = "delete_file"), RequiresApproval]
-public static string DeleteFile(string path) { /* ... */ }
+[McpServerTool(Name = "delete_file")]
+public static string DeleteFile(string path)
+{
+    if (!ToolApprovalManager.Instance.EnsureApproved(
+            "delete_file",
+            new() { ["path"] = path }))
+        return "Denied";
+    // ...dangerous work...
+}
 ```
-*Add `RequiresApproval` attribute (default: `Required = true`).*  
+*Explicit approval check replaces the attribute.*  
 No further changes are needed; the runtime intercepts the call.
 
 ## 4. Runtime Flow

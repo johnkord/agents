@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Threading.Tasks;
 using MCPServer.ToolApproval;
 using ModelContextProtocol.Protocol;
@@ -17,74 +16,18 @@ namespace MCPServer.Tests.ToolApproval
     {
         public class TestToolsForEndToEnd
         {
-            [RequiresApproval]
-            public static string RequiresApprovalTool(string operation)
-            {
-                return $"EXECUTED RequiresApprovalTool with operation: {operation}";
-            }
+            // Attributes removed
+            public static string RequiresApprovalTool(string operation) =>
+                $"EXECUTED RequiresApprovalTool with operation: {operation}";
 
             public static string NoApprovalRequiredTool(string operation)
             {
                 return $"EXECUTED NoApprovalRequiredTool with operation: {operation}";
             }
 
-            [RequiresApproval(false)]
-            public static string ExplicitlyNoApprovalTool(string operation)
-            {
-                return $"EXECUTED ExplicitlyNoApprovalTool with operation: {operation}";
-            }
-        }
-
-        [Fact]
-        public void RequiresApproval_ToolIsWrapped_OriginalIsNot()
-        {
-            // Test that the ToolApprovalWrapper correctly identifies which tools need wrapping
-            
-            var requiresApprovalMethod = typeof(TestToolsForEndToEnd).GetMethod(nameof(TestToolsForEndToEnd.RequiresApprovalTool))!;
-            var noApprovalMethod = typeof(TestToolsForEndToEnd).GetMethod(nameof(TestToolsForEndToEnd.NoApprovalRequiredTool))!;
-            var explicitlyNoApprovalMethod = typeof(TestToolsForEndToEnd).GetMethod(nameof(TestToolsForEndToEnd.ExplicitlyNoApprovalTool))!;
-
-            var originalTool1 = McpServerTool.Create(() => "test", new() { Name = "requires_approval" });
-            var originalTool2 = McpServerTool.Create(() => "test", new() { Name = "no_approval" });
-            var originalTool3 = McpServerTool.Create(() => "test", new() { Name = "explicitly_no_approval" });
-
-            // Test wrapping behavior
-            var wrappedTool1 = ToolApprovalWrapper.WrapIfNeeded(originalTool1, requiresApprovalMethod);
-            var wrappedTool2 = ToolApprovalWrapper.WrapIfNeeded(originalTool2, noApprovalMethod);
-            var wrappedTool3 = ToolApprovalWrapper.WrapIfNeeded(originalTool3, explicitlyNoApprovalMethod);
-
-            // RequiresApproval tool should be wrapped (different object)
-            Assert.NotSame(originalTool1, wrappedTool1);
-            
-            // No approval tool should NOT be wrapped (same object)
-            Assert.Same(originalTool2, wrappedTool2);
-            
-            // Explicitly no approval tool should NOT be wrapped (same object)
-            Assert.Same(originalTool3, wrappedTool3);
-        }
-
-        [Fact]
-        public void RequiresApproval_AttributePresenceDetectedCorrectly()
-        {
-            // Verify that our test methods have the expected attributes
-            
-            var requiresApprovalMethod = typeof(TestToolsForEndToEnd).GetMethod(nameof(TestToolsForEndToEnd.RequiresApprovalTool))!;
-            var noApprovalMethod = typeof(TestToolsForEndToEnd).GetMethod(nameof(TestToolsForEndToEnd.NoApprovalRequiredTool))!;
-            var explicitlyNoApprovalMethod = typeof(TestToolsForEndToEnd).GetMethod(nameof(TestToolsForEndToEnd.ExplicitlyNoApprovalTool))!;
-
-            // RequiresApprovalTool should have the attribute with Required = true
-            var attr1 = requiresApprovalMethod.GetCustomAttribute<RequiresApprovalAttribute>();
-            Assert.NotNull(attr1);
-            Assert.True(attr1.Required);
-
-            // NoApprovalRequiredTool should not have the attribute
-            var attr2 = noApprovalMethod.GetCustomAttribute<RequiresApprovalAttribute>();
-            Assert.Null(attr2);
-
-            // ExplicitlyNoApprovalTool should have the attribute with Required = false
-            var attr3 = explicitlyNoApprovalMethod.GetCustomAttribute<RequiresApprovalAttribute>();
-            Assert.NotNull(attr3);
-            Assert.False(attr3.Required);
+            // Attribute removed
+            public static string ExplicitlyNoApprovalTool(string operation) =>
+                $"EXECUTED ExplicitlyNoApprovalTool with operation: {operation}";
         }
 
         [Fact]
@@ -160,26 +103,6 @@ namespace MCPServer.Tests.ToolApproval
             Assert.Contains("EXECUTED RequiresApprovalTool with operation: direct-call", result1);
             Assert.Contains("EXECUTED NoApprovalRequiredTool with operation: direct-call", result2);
             Assert.Contains("EXECUTED ExplicitlyNoApprovalTool with operation: direct-call", result3);
-        }
-
-        [Fact]
-        public void ApprovalSystem_IdentifiesCorrectToolsInRealScenario()
-        {
-            // Test with real tools from the system
-            
-            var shellRunCommandMethod = typeof(MCPServer.Tools.ShellTools).GetMethod("RunCommand");
-            Assert.NotNull(shellRunCommandMethod);
-            
-            var shellAttr = shellRunCommandMethod.GetCustomAttribute<RequiresApprovalAttribute>();
-            Assert.NotNull(shellAttr);
-            Assert.True(shellAttr.Required);
-
-            // Create a dummy tool and verify it gets wrapped
-            var dummyTool = McpServerTool.Create(() => "dummy", new() { Name = "shell_run" });
-            var wrappedShellTool = ToolApprovalWrapper.WrapIfNeeded(dummyTool, shellRunCommandMethod);
-            
-            Assert.NotSame(dummyTool, wrappedShellTool);
-            Assert.Equal("shell_run", wrappedShellTool.ProtocolTool.Name);
         }
     }
 }

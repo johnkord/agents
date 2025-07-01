@@ -10,7 +10,6 @@ namespace MCPServer.Tools;
 public class SystemTools
 {
     [McpServerTool(Name = "get_current_time"), Description("Get the current date and time.")]
-    [RequiresApproval(false)]
     public static string GetCurrentTime()
     {
         ToolLogger.LogStart("get_current_time");
@@ -35,7 +34,6 @@ public class SystemTools
     }
 
     [McpServerTool(Name = "get_system_info"), Description("Get basic system information.")]
-    [RequiresApproval(false)]
     public static string GetSystemInfo()
     {
         ToolLogger.LogStart("get_system_info");
@@ -73,7 +71,6 @@ public class SystemTools
     }
 
     [McpServerTool(Name = "get_environment_variable"), Description("Get the value of an environment variable.")]
-    [RequiresApproval(false)]
     public static string GetEnvironmentVariable(string variableName)
     {
         ToolLogger.LogStart("get_environment_variable");
@@ -98,7 +95,6 @@ public class SystemTools
     }
 
     [McpServerTool(Name = "list_environment_variables"), Description("List all environment variables (or filter by pattern).")]
-    [RequiresApproval(false)]
     public static string ListEnvironmentVariables(string pattern = "")
     {
         ToolLogger.LogStart("list_environment_variables");
@@ -146,7 +142,6 @@ public class SystemTools
     }
 
     [McpServerTool(Name = "get_current_directory"), Description("Get the current working directory.")]
-    [RequiresApproval(false)]
     public static string GetCurrentDirectory()
     {
         ToolLogger.LogStart("get_current_directory");
@@ -167,7 +162,6 @@ public class SystemTools
     }
 
     [McpServerTool(Name = "generate_uuid"), Description("Generate a new UUID/GUID.")]
-    [RequiresApproval(false)]
     public static string GenerateUuid()
     {
         ToolLogger.LogStart("generate_uuid");

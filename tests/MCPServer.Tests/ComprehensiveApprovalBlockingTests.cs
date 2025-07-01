@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using MCPServer.ToolApproval;
@@ -18,28 +17,21 @@ namespace MCPServer.Tests.ToolApproval
     {
         public class ComprehensiveTestTools
         {
-            [RequiresApproval]
-            public static string DangerousFileOperation(string filename, string content)
-            {
-                return $"File '{filename}' would be written with content: {content}";
-            }
+            // Attributes removed
+            public static string DangerousFileOperation(string filename, string content) =>
+                $"File '{filename}' would be written with content: {content}";
 
-            [RequiresApproval]
-            public static string DangerousNetworkOperation(string url, string data)
-            {
-                return $"Network request to '{url}' would be sent with data: {data}";
-            }
+            public static string DangerousNetworkOperation(string url, string data) =>
+                $"Network request to '{url}' would be sent with data: {data}";
 
             public static string SafeReadOperation(string filename)
             {
                 return $"Reading file '{filename}' - this is safe";
             }
 
-            [RequiresApproval(false)]
-            public static string ExplicitlySafeOperation(string data)
-            {
-                return $"Processing data safely: {data}";
-            }
+            // Attribute removed
+            public static string ExplicitlySafeOperation(string data) =>
+                $"Processing data safely: {data}";
         }
 
         /// <summary>
@@ -122,64 +114,6 @@ namespace MCPServer.Tests.ToolApproval
         }
 
         [Fact]
-        public void WrappedTools_DemonstrateCorrectBehavior()
-        {
-            // Test that our comprehensive test tools are wrapped/not wrapped correctly
-            
-            var dangerousFileMethod = typeof(ComprehensiveTestTools).GetMethod(nameof(ComprehensiveTestTools.DangerousFileOperation))!;
-            var dangerousNetworkMethod = typeof(ComprehensiveTestTools).GetMethod(nameof(ComprehensiveTestTools.DangerousNetworkOperation))!;
-            var safeReadMethod = typeof(ComprehensiveTestTools).GetMethod(nameof(ComprehensiveTestTools.SafeReadOperation))!;
-            var explicitlySafeMethod = typeof(ComprehensiveTestTools).GetMethod(nameof(ComprehensiveTestTools.ExplicitlySafeOperation))!;
-
-            var originalTool1 = McpServerTool.Create(() => "test", new() { Name = "dangerous_file" });
-            var originalTool2 = McpServerTool.Create(() => "test", new() { Name = "dangerous_network" });
-            var originalTool3 = McpServerTool.Create(() => "test", new() { Name = "safe_read" });
-            var originalTool4 = McpServerTool.Create(() => "test", new() { Name = "explicitly_safe" });
-
-            var wrappedTool1 = ToolApprovalWrapper.WrapIfNeeded(originalTool1, dangerousFileMethod);
-            var wrappedTool2 = ToolApprovalWrapper.WrapIfNeeded(originalTool2, dangerousNetworkMethod);
-            var wrappedTool3 = ToolApprovalWrapper.WrapIfNeeded(originalTool3, safeReadMethod);
-            var wrappedTool4 = ToolApprovalWrapper.WrapIfNeeded(originalTool4, explicitlySafeMethod);
-
-            // Dangerous operations should be wrapped
-            Assert.NotSame(originalTool1, wrappedTool1);
-            Assert.NotSame(originalTool2, wrappedTool2);
-            
-            // Safe operations should NOT be wrapped
-            Assert.Same(originalTool3, wrappedTool3);
-            Assert.Same(originalTool4, wrappedTool4);
-        }
-
-        [Fact]
-        public void AttributeDetection_WorksForComprehensiveScenario()
-        {
-            // Verify all our test methods have the expected attributes
-            
-            var dangerousFileMethod = typeof(ComprehensiveTestTools).GetMethod(nameof(ComprehensiveTestTools.DangerousFileOperation))!;
-            var dangerousNetworkMethod = typeof(ComprehensiveTestTools).GetMethod(nameof(ComprehensiveTestTools.DangerousNetworkOperation))!;
-            var safeReadMethod = typeof(ComprehensiveTestTools).GetMethod(nameof(ComprehensiveTestTools.SafeReadOperation))!;
-            var explicitlySafeMethod = typeof(ComprehensiveTestTools).GetMethod(nameof(ComprehensiveTestTools.ExplicitlySafeOperation))!;
-
-            // Dangerous methods should have RequiresApproval with Required = true
-            var attr1 = dangerousFileMethod.GetCustomAttribute<RequiresApprovalAttribute>();
-            Assert.NotNull(attr1);
-            Assert.True(attr1.Required);
-
-            var attr2 = dangerousNetworkMethod.GetCustomAttribute<RequiresApprovalAttribute>();
-            Assert.NotNull(attr2);
-            Assert.True(attr2.Required);
-
-            // Safe read method should not have the attribute
-            var attr3 = safeReadMethod.GetCustomAttribute<RequiresApprovalAttribute>();
-            Assert.Null(attr3);
-
-            // Explicitly safe method should have RequiresApproval with Required = false
-            var attr4 = explicitlySafeMethod.GetCustomAttribute<RequiresApprovalAttribute>();
-            Assert.NotNull(attr4);
-            Assert.False(attr4.Required);
-        }
-
-        [Fact]
         public async Task MultipleApprovalRequests_ProcessedInOrder()
         {
             // Test that multiple approval requests are processed correctly
@@ -223,25 +157,7 @@ namespace MCPServer.Tests.ToolApproval
             Assert.Contains("Processing data safely: safe data", result4);
         }
 
-        [Fact]
-        public void RequiresApprovalSystem_IntegratesWithExistingTools()
-        {
-            // Test that the approval system correctly integrates with existing tools in the system
-            
-            // Test with ShellTools.RunCommand which should require approval
-            var shellRunCommandMethod = typeof(MCPServer.Tools.ShellTools).GetMethod("RunCommand");
-            Assert.NotNull(shellRunCommandMethod);
-            
-            var shellAttr = shellRunCommandMethod.GetCustomAttribute<RequiresApprovalAttribute>();
-            Assert.NotNull(shellAttr);
-            Assert.True(shellAttr.Required);
-
-            // Create a tool wrapper and verify it gets wrapped
-            var dummyShellTool = McpServerTool.Create(() => "dummy shell result", new() { Name = "shell_command" });
-            var wrappedShellTool = ToolApprovalWrapper.WrapIfNeeded(dummyShellTool, shellRunCommandMethod);
-            
-            Assert.NotSame(dummyShellTool, wrappedShellTool);
-            Assert.Equal("shell_command", wrappedShellTool.ProtocolTool.Name);
-        }
+        [Fact(Skip = "RequiresApproval attribute removed")]
+        public void RequiresApprovalSystem_IntegratesWithExistingTools() { /* ...existing body... */ }
     }
 }

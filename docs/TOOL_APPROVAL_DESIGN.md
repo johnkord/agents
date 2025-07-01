@@ -16,11 +16,15 @@
 
 ## 3. Developer Ergonomics
 ```csharp
-[McpServerTool(Name = "delete_file", RequiresApproval = true)]
-public static string DeleteFile(string path) { /* ... */ }
+public static string DeleteFile(string path)
+{
+    if (!ToolApprovalManager.Instance.EnsureApproved(
+            "delete_file",
+            new() { ["path"] = path }))
+        return "Denied";
+    // ...dangerous work...
+}
 ```
-*Add `RequiresApproval = true` flag (default: false).*  
-No further changes are needed; the runtime intercepts the call.
 
 ## 4. Runtime Flow
 ```mermaid
@@ -60,7 +64,7 @@ sequenceDiagram
 
 ## 8. Implementation Milestones
 1. **MVP**
-   * Attribute flag + runtime intercept.
+    * Policy-based risk assessment + runtime intercept.
    * File-based queue + CLI prompt driver.
 2. **REST Backend**
    * ASP.NET Core service with SQLite.

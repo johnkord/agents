@@ -1,12 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using MCPServer.ToolApproval;
-using ModelContextProtocol.Protocol;
-using ModelContextProtocol.Server;
 using Xunit;
 
 namespace MCPServer.Tests.ToolApproval
@@ -19,68 +15,21 @@ namespace MCPServer.Tests.ToolApproval
     {
         public class MockTools
         {
-            [RequiresApproval]
+            // Attributes removed
             public static async Task<string> AsyncDangerousOperation(string input)
             {
                 await Task.Delay(10); // Simulate some work
                 return $"Dangerous async operation completed: {input}";
             }
 
-            [RequiresApproval]
-            public static string SyncDangerousOperation(string input)
-            {
-                return $"Dangerous sync operation completed: {input}";
-            }
+            // Attribute removed
+            public static string SyncDangerousOperation(string input) =>
+                $"Dangerous sync operation completed: {input}";
 
             public static string SafeOperation(string input)
             {
                 return $"Safe operation completed: {input}";
             }
-        }
-
-        [Fact]
-        public async Task WrappedTool_WithRequiresApproval_CallsApprovalManager()
-        {
-            // Arrange
-            var dangerousMethod = typeof(MockTools).GetMethod(nameof(MockTools.SyncDangerousOperation))!;
-            
-            // Create the original tool
-            var originalTool = McpServerTool.Create(
-                () => MockTools.SyncDangerousOperation("test-input"),
-                new() { Name = "sync_dangerous" });
-
-            // Wrap the tool
-            var wrappedTool = ToolApprovalWrapper.WrapIfNeeded(originalTool, dangerousMethod);
-
-            // Assert that the tool was wrapped (different instance)
-            Assert.NotSame(originalTool, wrappedTool);
-            Assert.Equal("sync_dangerous", wrappedTool.ProtocolTool.Name);
-
-            // The wrapped tool will call the ToolApprovalManager when invoked
-            // This test verifies that the wrapper is set up correctly
-            await Task.CompletedTask; // Prevent async warning
-        }
-
-        [Fact]
-        public void WrappedTool_WithoutRequiresApproval_DoesNotCallApprovalManager()
-        {
-            // Arrange
-            var safeMethod = typeof(MockTools).GetMethod(nameof(MockTools.SafeOperation))!;
-            
-            // Create the original tool
-            var originalTool = McpServerTool.Create(
-                () => MockTools.SafeOperation("test-input"),
-                new() { Name = "safe_operation" });
-
-            // Wrap the tool
-            var wrappedTool = ToolApprovalWrapper.WrapIfNeeded(originalTool, safeMethod);
-
-            // Assert that the tool was NOT wrapped (same instance)
-            Assert.Same(originalTool, wrappedTool);
-
-            // The safe operation should execute directly without approval
-            var result = MockTools.SafeOperation("test-input");
-            Assert.Contains("Safe operation completed: test-input", result);
         }
 
         [Fact]

@@ -16,11 +16,18 @@ The tool approval system has been redesigned to support remote approval workflow
 ## Quick Start
 
 ### Local Development (Default)
-No changes needed - the system defaults to console-based approval:
+No changes needed – simply call `EnsureApproved` at the start of a dangerous tool:
 
 ```csharp
-[RequiresApproval]
-public static string DangerousTool(string param) { /* ... */ }
+public static string DangerousTool(string param)
+{
+    if (!ToolApprovalManager.Instance.EnsureApproved(
+            "dangerous_tool",
+            new() { ["param"] = param }))
+        return "Denied";
+
+    // ...actual work...
+}
 ```
 
 ### Cloud Deployment with REST Approval

@@ -325,16 +325,30 @@ public class GitHubTools
     }
 
     [McpServerTool(Name = "github_post_pull_request_comment"), Description("Post a comment on a pull request.")]
-    [RequiresApproval]
     public static string PostPullRequestComment(
         string owner,
         string repo,
-        int pullNumber,
+        int    pullNumber,
         string body,
         string? path = null,
-        int? line = null,
+        int?   line = null,
         string? side = "RIGHT")
     {
+        // NEW – approval gate
+        if (!ApprovalServiceClient.EnsureApproved(
+                "github_post_pull_request_comment",
+                new()
+                {
+                    ["owner"]      = owner,
+                    ["repo"]       = repo,
+                    ["pullNumber"] = pullNumber,
+                    ["path"]       = path,
+                    ["line"]       = line
+                }))
+        {
+            return "Error: request denied by approval service.";
+        }
+
         ToolLogger.LogStart("github_post_pull_request_comment");
         try
         {

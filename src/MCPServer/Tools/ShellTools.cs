@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using MCPServer.ToolApproval;
 using MCPServer.Logging;                       // +++
+using System.Collections.Generic;          // + new
 
 namespace MCPServer.Tools;
 
@@ -11,11 +12,18 @@ namespace MCPServer.Tools;
 public class ShellTools
 {
     [McpServerTool(Name = "run_command"), Description("Run a shell command and capture its output.")]
-    [RequiresApproval] // dangerous
     public static string RunCommand(
         string script,
         int timeoutSeconds = 30)
     {
+        // NEW – approval gate
+        if (!ApprovalServiceClient.EnsureApproved(
+                "run_command",
+                new() { ["script"] = script, ["timeoutSeconds"] = timeoutSeconds }))
+        {
+            return "Error: request denied by approval service.";
+        }
+        
         ToolLogger.LogStart("run_command");
         try
         {

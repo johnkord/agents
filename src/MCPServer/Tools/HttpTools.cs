@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using MCPServer.ToolApproval;
 using MCPServer.Logging;                       // +++
+using System.Collections.Generic;              // NEW
 
 namespace MCPServer.Tools;
 
@@ -16,13 +17,17 @@ public static class HttpTools
     };
 
     [McpServerTool(Name = "http_request"), Description("Perform an HTTP request and return status, headers and body.")]
-    [RequiresApproval] // network I/O
     public static string HttpRequest(
         string method,
         string url,
         string body            = "",
         string headersCsv       = "" /* key:value,key:value */ )
     {
+        if (!ToolApprovalManager.Instance.EnsureApproved(
+                "http_request",
+                new Dictionary<string, object?> { ["method"] = method, ["url"] = url }))
+            return "Error: Tool execution was denied by approval system.";
+
         ToolLogger.LogStart("http_request");
         try
         {
