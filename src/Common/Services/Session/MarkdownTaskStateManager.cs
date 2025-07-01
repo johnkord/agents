@@ -45,6 +45,7 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
         _logger.LogDebug("Activity logger {Status} for MarkdownTaskStateManager", 
             activityLogger != null ? "set" : "cleared");
     }
+
     
     public async Task<string> InitializeTaskMarkdownAsync(string sessionId, string taskDescription)
     {

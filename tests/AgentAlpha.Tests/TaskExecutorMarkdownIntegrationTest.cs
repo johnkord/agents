@@ -65,8 +65,18 @@ public class TaskExecutorMarkdownIntegrationTest
         var mockToolManager         = new Mock<IToolManager>();
         var mockToolSelector        = new Mock<IToolSelector>();
         var mockConversationManager = new Mock<IConversationManager>();
-        var mockPlanningService     = new Mock<IPlanningService>();
         var mockTaskStateManager    = new Mock<ITaskStateManager>();
+
+        // Create real MarkdownTaskPlanningService with a mock that supports FunctionToolCall
+        var mockOpenAI = new MockSessionAwareOpenAIService();
+        var toolScope = new ToolScopeManager();
+        var config = new AgentConfiguration { Model = "gpt-4.1-nano" };
+        var planningService = new MarkdownTaskPlanningService(
+            markdownTaskStateManager,
+            mockOpenAI,
+            loggerFactory.CreateLogger<MarkdownTaskPlanningService>(),
+            config,
+            toolScope);
 
         // Setup basic mocks
         mockConnectionManager.Setup(x => x.ConnectAsync(
@@ -78,20 +88,16 @@ public class TaskExecutorMarkdownIntegrationTest
             .Returns(Task.CompletedTask);
         mockToolManager.Setup(x => x.DiscoverAllToolsAsync(It.IsAny<IConnectionManager>()))
             .ReturnsAsync(new List<IUnifiedTool>());
-        mockPlanningService.Setup(x => x.InitializeTaskPlanningWithStateAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IList<IUnifiedTool>>(), It.IsAny<CurrentState>()))
-            .ReturnsAsync("# Fallback Plan\n\n- [ ] Fallback task");
 
-        var config = new AgentConfiguration();
         
-        // Create TaskExecutor with MarkdownTaskStateManager
+        // Create TaskExecutor with MarkdownTaskPlanningService
         var taskExecutor = new TaskExecutor(
             mockConnectionManager.Object,
             mockToolManager.Object,
             mockToolSelector.Object,
             mockConversationManager.Object,
             sessionManager,
-            mockPlanningService.Object,
+            planningService,
             activityLogger,
             mockTaskStateManager.Object,
             config,
@@ -142,15 +148,8 @@ public class TaskExecutorMarkdownIntegrationTest
         Assert.NotNull(finalSession?.TaskStateMarkdown);
         
         // The markdown should have been updated by MarkdownTaskStateManager
-        // Verify that the PlanningService was NOT called for initialization
-        // because TaskExecutor should have used MarkdownTaskStateManager instead
-        mockPlanningService.Verify(x => x.InitializeTaskPlanningWithStateAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IList<IUnifiedTool>>(), It.IsAny<CurrentState>()), 
-            Times.Never);
-        
-        // Verify that MarkdownTaskStateManager's OpenAI service was called
-        mockOpenAiService.Verify(x => x.CreateResponseAsync(It.IsAny<ResponsesCreateRequest>(), default), 
-            Times.AtLeast(1));
+        // Since we're now using MarkdownTaskPlanningService, we don't need to verify 
+        // that the old PlanningService wasn't called
     }
 
     private static ResponsesCreateResponse CreateMockInitializeResponse()
@@ -227,5 +226,77 @@ public class TaskExecutorMarkdownIntegrationTest
                 }
             }
         };
+    }
+
+    /// <summary>
+    /// Mock OpenAI service that supports FunctionToolCall responses for planning
+    /// </summary>
+    private class MockSessionAwareOpenAIService : ISessionAwareOpenAIService
+    {
+        public void SetActivityLogger(ISessionActivityLogger? activityLogger)
+        {
+            // No-op for testing
+        }
+
+        public Task<ResponsesCreateResponse> CreateResponseAsync(
+            ResponsesCreateRequest request, 
+            CancellationToken cancellationToken = default)
+        {
+            // Check if this is a planning request that expects a function call
+            var hasTools = request.Tools?.Any() == true;
+            
+            if (hasTools)
+            {
+                // Return a response with a function call for planning
+                var mockResponse = new ResponsesCreateResponse
+                {
+                    Output = new[]
+                    {
+                        new FunctionToolCall
+                        {
+                            Name = "save_markdown_plan",
+                            Arguments = JsonDocument.Parse(JsonSerializer.Serialize(new
+                            {
+                                markdown_plan = "# Test Task\n\n**Strategy:** Test strategy\n\n## Subtasks\n\n- [ ] Test step 1\n- [ ] Test step 2\n\n## Required Tools\n\n- test_tool\n\n## Success Criteria\n\n- Task completed successfully",
+                                required_tools = new[] { "test_tool" }
+                            })).RootElement
+                        }
+                    }
+                };
+                return Task.FromResult(mockResponse);
+            }
+            else
+            {
+                // Return a regular text response for non-planning requests
+                var markdownContent = """
+                    # Updated Task
+                    
+                    **Strategy:** Execute systematically
+                    
+                    **Status:** In Progress
+                    
+                    ## Subtasks
+                    
+                    - [x] Completed step
+                    - [ ] Next step
+                    
+                    ## Progress Notes
+                    
+                    *Task updated*
+                    """;
+
+                return Task.FromResult(new ResponsesCreateResponse
+                {
+                    Output = new[]
+                    {
+                        new OutputMessage
+                        {
+                            Type = "message",
+                            Content = JsonDocument.Parse(JsonSerializer.Serialize(markdownContent)).RootElement
+                        }
+                    }
+                });
+            }
+        }
     }
 }

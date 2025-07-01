@@ -22,14 +22,14 @@ public class TaskExecutor : ITaskExecutor
     private readonly IToolSelector _toolSelector;
     private readonly IConversationManager _conversationManager;
     private readonly ISessionManager _sessionManager;
-    private readonly IPlanningService _planningService;
+    private readonly MarkdownTaskPlanningService _planningService;
     private readonly ISessionActivityLogger _activityLogger;
     private readonly ITaskStateManager _taskStateManager;
-    private readonly IMarkdownTaskStateManager? _markdownTaskStateManager;
+    private readonly IMarkdownTaskStateManager _markdownTaskStateManager;
     private readonly AgentConfiguration _config;
     private readonly ILogger<TaskExecutor> _logger;
 
-    private readonly IToolScopeManager _toolScope;                 // NEW
+    private readonly IToolScopeManager _toolScope;
 
     public TaskExecutor(
         IConnectionManager connectionManager,
@@ -37,13 +37,13 @@ public class TaskExecutor : ITaskExecutor
         IToolSelector toolSelector,
         IConversationManager conversationManager,
         ISessionManager sessionManager,
-        IPlanningService planningService,
+        MarkdownTaskPlanningService planningService,
         ISessionActivityLogger activityLogger,
         ITaskStateManager taskStateManager,
         AgentConfiguration config,
         ILogger<TaskExecutor> logger,
-        IToolScopeManager toolScope,                               // NEW
-        IMarkdownTaskStateManager? markdownTaskStateManager = null)
+        IToolScopeManager toolScope,
+        IMarkdownTaskStateManager markdownTaskStateManager)
     {
         _connectionManager = connectionManager;
         _toolManager = toolManager;
@@ -56,7 +56,7 @@ public class TaskExecutor : ITaskExecutor
         _markdownTaskStateManager = markdownTaskStateManager;
         _config = config;
         _logger = logger;
-        _toolScope = toolScope;                                    // NEW
+        _toolScope = toolScope;
     }
 
     /// <summary>
@@ -267,7 +267,7 @@ public class TaskExecutor : ITaskExecutor
             return await _markdownTaskStateManager.InitializeTaskMarkdownAsync(request.SessionId, request.Task);
         }
 
-        // Fallback to PlanningService for cases where MarkdownTaskStateManager is not available
+        // Use MarkdownTaskPlanningService for initialization
         var availableTools = await DiscoverAvailableToolsAsync();
         var state = new CurrentState { CapturedAt = DateTime.UtcNow };
 

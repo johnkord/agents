@@ -50,7 +50,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMarkdownTaskStateManager, MarkdownTaskStateManager>();
         services.AddSingleton<IBuiltInToolRegistry, BuiltInToolRegistry>();
         services.AddSingleton<IToolManager, ToolManager>();
-        services.AddSingleton<IPlanningService, PlanningService>();
+        services.AddSingleton<MarkdownTaskPlanningService>();
         services.AddSingleton<IToolSelector, ToolSelector>();
         services.AddSingleton<IConversationManager, ConversationManager>();
         services.AddSingleton<ITaskExecutor, TaskExecutor>();
