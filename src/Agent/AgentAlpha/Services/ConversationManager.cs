@@ -43,38 +43,46 @@ public class ConversationManager : IConversationManager
     {
         _messages.Clear();
         _messages.Add(new { role = "system", content = systemPrompt });
-        _messages.Add(new { role = "user", content = userTask });
         
-        _logger.LogInformation("Initialized conversation with task: {Task}", userTask);
+        // Structure the initial user message to prompt ReAct pattern
+        var structuredTask = $"""
+            Task: {userTask}
+            
+            Please solve this task using the ReAct (Reasoning and Acting) methodology:
+            
+            Start by **REASONING** about this task:
+            - What do you need to accomplish?
+            - What information or capabilities might you need?
+            - What would be a logical first step?
+            
+            Then proceed with your planned **ACTION**.
+            """;
+        
+        _messages.Add(new { role = "user", content = structuredTask });
+        
+        _logger.LogInformation("Initialized ReAct conversation with task: {Task}", userTask);
 
-        // Bootstrap markdown document – now includes instructions for planning & tool-call selection
+        // Bootstrap markdown document with ReAct structure
         _taskMarkdown = $"""
             # Task
             {userTask}
 
-            ## Instructions for the Assistant
-            1. Break the task into a concise **Plan of Action**.
-            2. Derive a clear list of **Proposed Tool Calls** (function names only) that you believe
-               will be necessary to complete the task.  
-               – Base your choices on the full tool catalogue the agent exposes.  
-               – Do **not** execute anything yet – just plan.
-            3. Fill in the **Sub-tasks** checklist accordingly (use `[ ]` for pending).
-            4. Leave **Evidence** and **Results** empty for now – they will be populated iteratively.
-
-            ## Plan of Action
-            *(to be filled by assistant)*
-
-            ## Proposed Tool Calls
-            *(to be filled – one per line, e.g. `read_file`, `search_in_file`)*
-
-            ## Sub-tasks
-            - [ ] *(assistant will list sub-tasks here)*
-
-            ## Evidence
-            *(to be gathered during execution)*
-
-            ## Results
-            *(final detailed results once task is complete)*
+            ## ReAct Methodology Progress
+            
+            ### Reasoning Phase
+            *(LLM reasoning about the task will be captured here)*
+            
+            ### Actions Taken
+            *(Tool calls and their results will be documented here)*
+            
+            ### Observations
+            *(Analysis of results and insights gained)*
+            
+            ### Next Steps
+            *(Planned future actions based on current state)*
+            
+            ### Final Results
+            *(Completed when task is finished)*
             """;
     }
 
@@ -338,14 +346,21 @@ public class ConversationManager : IConversationManager
     {
         var summary = string.Join("\n", toolSummaries);
         
-        // Simplified approach: Add tool results as a single assistant message
-        // This reduces redundancy compared to the previous approach
+        // Add tool results as observation data
         _messages.Add(new { role = "assistant", content = $"Tool results:\n{summary}" });
         
-        // Only add continuation prompt if there are actual results to show
+        // Add ReAct-structured continuation prompt
         if (toolSummaries.Any())
         {
-            _messages.Add(new { role = "user", content = "Please continue or let me know if the task is complete." });
+            _messages.Add(new { role = "user", content = """
+                Now that you have the results from your action, please follow the ReAct pattern:
+                
+                **OBSERVE**: Analyze the results you just received. What do they tell you? Did you get what you expected?
+                
+                **REASON**: Based on these observations, what should be your next step? Are you closer to completing the task?
+                
+                **ACT**: If more work is needed, choose your next action. If the task is complete, clearly state completion.
+                """ });
         }
         
         _logger.LogDebug("Added tool results to conversation: {Summary}", summary);
@@ -356,10 +371,34 @@ public class ConversationManager : IConversationManager
 
     public bool IsTaskComplete(string assistantResponse)
     {
-        // Check for explicit completion marker first
+        // Primary completion detection: Check for explicit completion marker from complete_task tool
         if (assistantResponse.Contains("TASK COMPLETED", StringComparison.OrdinalIgnoreCase))
         {
             return true;
+        }
+
+        // Fallback for backward compatibility: Check for ReAct pattern completion indicators
+        var lowerResponse = assistantResponse.ToLowerInvariant();
+        var reactCompletionPhrases = new[]
+        {
+            "the task is complete",
+            "task completed",
+            "task has been completed",
+            "i have completed the task",
+            "task is now complete",
+            "this completes the task",
+            "task successfully completed",
+            "all required steps completed",
+            "objective accomplished",
+            "goal achieved"
+        };
+
+        foreach (var phrase in reactCompletionPhrases)
+        {
+            if (lowerResponse.Contains(phrase))
+            {
+                return true;
+            }
         }
 
         // Check for natural language completion indicators
@@ -378,6 +417,28 @@ public class ConversationManager : IConversationManager
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Checks if the response contains a completion tool call
+    /// </summary>
+    public bool IsTaskComplete(ConversationResponse response)
+    {
+        // Check if the response contains a call to the complete_task tool
+        if (response.HasToolCalls)
+        {
+            var hasCompletionTool = response.ToolCalls.Any(tc => 
+                tc.Name.Equals("complete_task", StringComparison.OrdinalIgnoreCase));
+            
+            if (hasCompletionTool)
+            {
+                _logger.LogInformation("Task completion detected via complete_task tool call");
+                return true;
+            }
+        }
+
+        // Fallback to text-based detection
+        return IsTaskComplete(response.AssistantText);
     }
 
     public ConversationStatistics GetConversationStatistics()

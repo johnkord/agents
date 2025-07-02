@@ -38,6 +38,11 @@ public interface IConversationManager
     /// Check if the task appears to be completed based on assistant response
     /// </summary>
     bool IsTaskComplete(string assistantResponse);
+    
+    /// <summary>
+    /// Check if the task appears to be completed based on conversation response including tool calls
+    /// </summary>
+    bool IsTaskComplete(ConversationResponse response);
 
     /// <summary>
     /// Get the current markdown document that tracks the overall task state.

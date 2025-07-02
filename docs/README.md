@@ -48,10 +48,19 @@ Error: Cannot divide by zero
 
 ## Documentation Index
 
+### Core Documentation
 - [Getting Started](getting-started.md) - Setup and initial configuration
+- [Architecture](architecture.md) - System architecture and design decisions
+- [AgentAlpha Design Document](agent-alpha-design-doc.md) - **Comprehensive guide on how an AI agent solves tasks using LLMs and MCP Client+Server with tools**
+
+### Component Documentation
 - [MCP Server](mcp-server.md) - MCP Server implementation with comprehensive tools
 - [MCP Client](mcp-client.md) - MCP Client usage and interactive features  
-- [Architecture](architecture.md) - System architecture and design decisions
+
+### Specialized Documentation
+- [AgentAlpha Refactoring Architecture](agent-alpha-refactoring-architecture.md) - Modular architecture details
+- [AgentAlpha Enhancement Plan](agent-alpha-enhancement-plan.md) - Feature roadmap and implementation strategy
+- [Unified Tool Management Design](unified-tool-management-design.md) - Tool system architecture
 - [Tests](../tests/README.md) - Comprehensive testing including AI validation
 
 ## Technology Stack

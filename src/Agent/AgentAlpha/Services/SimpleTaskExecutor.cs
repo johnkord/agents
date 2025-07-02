@@ -189,69 +189,127 @@ public class SimpleTaskExecutor : ITaskExecutor
         var filteredTools = _toolManager.ApplyFilters(availableTools, _config.ToolFilter);
         var selectedTools = await _toolManager.SelectToolsForTaskAsync(task, filteredTools);
 
-        _logger.LogInformation("Starting conversation loop with {ToolCount} tools", selectedTools.Length);
+        _logger.LogInformation("Starting ReAct conversation loop with {ToolCount} tools", selectedTools.Length);
 
         while (iteration < maxIterations)
         {
             iteration++;
-            _logger.LogDebug("Conversation iteration {Iteration}", iteration);
+            _logger.LogDebug("ReAct iteration {Iteration}: Processing reasoning and action phase", iteration);
 
-            // Process one iteration
+            // Process one ReAct iteration
             var response = await _conversationManager.ProcessIterationAsync(selectedTools);
 
             if (!response.HasToolCalls)
             {
-                // No tool calls - check if task is complete
-                if (_conversationManager.IsTaskComplete(response.AssistantText))
+                // No tool calls - check if this is reasoning only or task completion
+                if (_conversationManager.IsTaskComplete(response))
                 {
-                    _logger.LogInformation("Task completed after {Iterations} iterations", iteration);
+                    _logger.LogInformation("Task completed after {Iterations} ReAct iterations", iteration);
                     break;
                 }
                 else
                 {
-                    _logger.LogInformation("Assistant responded without tool calls: {Response}", response.AssistantText);
-                    break;
+                    // This might be a reasoning-only response, which is valid in ReAct pattern
+                    _logger.LogInformation("ReAct iteration {Iteration}: Reasoning phase completed, no immediate action planned", iteration);
+                    
+                    // For reasoning-only responses, we'll continue to the next iteration
+                    // The ReAct pattern allows for pure reasoning phases
+                    if (iteration < maxIterations - 1) // Leave room for final iteration
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("ReAct loop completed without final action in iteration {Iteration}", iteration);
+                        break;
+                    }
                 }
             }
 
-            // Execute tool calls
+            // Execute tool calls (Action phase)
+            _logger.LogDebug("ReAct iteration {Iteration}: Executing {ToolCallCount} actions", iteration, response.ToolCalls.Count);
             var toolResults = new List<string>();
+            bool taskCompletedViaTools = false;
+            
             foreach (var toolCall in response.ToolCalls)
             {
                 try
                 {
                     var result = await _toolManager.ExecuteToolAsync(_connectionManager, toolCall.Name, toolCall.Arguments);
                     toolResults.Add($"[{toolCall.Name}] {result}");
+                    _logger.LogDebug("ReAct iteration {Iteration}: Tool '{ToolName}' executed successfully", iteration, toolCall.Name);
+                    
+                    // Check if this was a completion tool
+                    if (toolCall.Name.Equals("complete_task", StringComparison.OrdinalIgnoreCase))
+                    {
+                        taskCompletedViaTools = true;
+                        _logger.LogInformation("Task completion detected via complete_task tool execution");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Tool execution failed for {ToolName}", toolCall.Name);
+                    _logger.LogError(ex, "ReAct iteration {Iteration}: Tool execution failed for {ToolName}", iteration, toolCall.Name);
                     toolResults.Add($"[{toolCall.Name}] Error: {ex.Message}");
                 }
             }
 
-            // Add tool results to conversation
+            // Add tool results to conversation for observation phase
             _conversationManager.AddToolResults(toolResults);
+            _logger.LogDebug("ReAct iteration {Iteration}: Tool results added, prompting observation phase", iteration);
+            
+            // Check if task was completed via tool execution
+            if (taskCompletedViaTools)
+            {
+                _logger.LogInformation("Task completed via complete_task tool after {Iterations} ReAct iterations", iteration);
+                break;
+            }
         }
 
         if (iteration >= maxIterations)
         {
-            _logger.LogWarning("Conversation loop reached maximum iterations ({MaxIterations})", maxIterations);
+            _logger.LogWarning("ReAct conversation loop reached maximum iterations ({MaxIterations})", maxIterations);
         }
     }
 
     private string CreateSystemPrompt()
     {
         return """
-            You are a helpful AI assistant that can use various tools to complete tasks.
+            You are an AI agent that follows the ReAct (Reasoning and Acting) methodology to solve tasks systematically.
             
-            When given a task:
-            1. Think about what tools you might need
-            2. Use the available tools to gather information or perform actions
-            3. Provide clear updates on your progress
-            4. When the task is complete, call the task_complete tool if available, or clearly state that the task is finished
+            **ReAct Pattern - Follow these steps in each iteration:**
             
-            Be concise but informative in your responses.
+            1. **REASONING**: Think step-by-step about the task
+               - Analyze what you need to accomplish
+               - Consider what information you have vs. what you need
+               - Plan your approach and identify the next logical action
+               - Explain your reasoning clearly
+            
+            2. **ACTING**: Execute a specific action using available tools
+               - Choose the most appropriate tool for your current step
+               - Use precise parameters based on your reasoning
+               - Take only one focused action per iteration
+            
+            3. **OBSERVING**: Analyze the results of your action
+               - Examine what the tool returned
+               - Determine if the result is what you expected
+               - Assess if this moves you closer to task completion
+               - Identify any new information or insights gained
+            
+            4. **ITERATING**: Decide on the next step
+               - If task is complete, use the 'complete_task' tool with comprehensive details
+               - If more work is needed, reason about the next action
+               - If you encounter errors, adjust your approach
+            
+            **Important Guidelines:**
+            - Always start with reasoning before taking action
+            - Take one action at a time and observe the results
+            - Be explicit about your thought process in each phase
+            - Build upon previous observations in your reasoning
+            - If you get stuck, try a different approach
+            - **When the task is finished, ALWAYS use the 'complete_task' tool** instead of just stating completion in text
+            - The 'complete_task' tool should include: summary, reasoning, evidence, deliverables, and key actions taken
+            
+            Follow this ReAct cycle until you call the 'complete_task' tool to formally complete the task.
             """;
     }
 
