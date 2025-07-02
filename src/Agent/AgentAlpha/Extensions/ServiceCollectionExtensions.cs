@@ -46,15 +46,14 @@ public static class ServiceCollectionExtensions
         });
         
         services.AddSingleton<ISessionActivityLogger, SessionActivityLogger>();
-        services.AddSingleton<ITaskStateManager, TaskStateManager>();
-        services.AddSingleton<IMarkdownTaskStateManager, MarkdownTaskStateManager>();
-        services.AddSingleton<IBuiltInToolRegistry, BuiltInToolRegistry>();
-        services.AddSingleton<IToolManager, ToolManager>();
-        services.AddSingleton<IPlanningService, PlanningService>();
-        services.AddSingleton<IToolSelector, ToolSelector>();
+        
+        // Simplified architecture - removed excessive abstractions
+        services.AddSingleton<SimpleToolManager>();
         services.AddSingleton<IConversationManager, ConversationManager>();
-        services.AddSingleton<ITaskExecutor, TaskExecutor>();
-        services.AddSingleton<IToolScopeManager, ToolScopeManager>();
+        services.AddSingleton<SimpleTaskExecutor>();
+        
+        // Keep TaskExecutor interface for backward compatibility but register simplified implementation
+        services.AddSingleton<ITaskExecutor>(provider => provider.GetRequiredService<SimpleTaskExecutor>());
         
         // Register OpenAI services
         services.AddSingleton<IOpenAIResponsesService>(provider => new OpenAIResponsesService(configuration.OpenAiApiKey));
