@@ -74,4 +74,9 @@ public static class ActivityTypes
     public const string ToolSelectionReasoning   = "Tool_Selection_Reasoning";
     public const string ResponseQualityAssessment= "Response_Quality_Assessment";
     public const string TaskCompletionEvaluation = "Task_Completion_Evaluation";
+
+    /// <summary>
+    /// Activity type for session summary generation
+    /// </summary>
+    public const string SessionSummary = "Session_Summary";
 }
