@@ -9,7 +9,7 @@ using System.Collections.Generic;              // NEW
 namespace MCPServer.Tools;
 
 [McpServerToolType]
-public static class HttpTools
+public class HttpTools
 {
     private static readonly HttpClient _client = new()
     {

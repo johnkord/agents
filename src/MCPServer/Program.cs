@@ -69,9 +69,17 @@ namespace MCPServer
                 .WithTools<AzureDevOpsTools>()
                 .WithTools<OpenAIVectorStoreTools>()
                 .WithTools<CodeReviewTools>()
-                //.WithTools<FileTools>()
-                //.WithTools<TextTools>()
-                //.WithTools<SystemTools>()
+                .WithTools<AppInsightsTools>()
+                .WithTools<CosmosDbTools>()
+                .WithTools<ServiceBusTools>()
+                .WithTools<FileTools>()
+                .WithTools<TextTools>()
+                .WithTools<SystemTools>()
+                .WithTools<HttpTools>()
+                .WithTools<EventHubTools>()
+                .WithTools<AzureResourceGroupTools>()
+                .WithTools<AzureFunctionTools>()
+                .WithTools<AzureStorageTools>()
                 ;
 
             var host = builder.Build();
@@ -100,9 +108,17 @@ namespace MCPServer
                 .WithTools<AzureDevOpsTools>()
                 .WithTools<OpenAIVectorStoreTools>()
                 .WithTools<CodeReviewTools>()
-                //.WithTools<FileTools>()
-                //.WithTools<TextTools>()
-                //.WithTools<SystemTools>();
+                .WithTools<AppInsightsTools>()
+                .WithTools<CosmosDbTools>()
+                .WithTools<ServiceBusTools>()
+                .WithTools<FileTools>()
+                .WithTools<TextTools>()
+                .WithTools<SystemTools>()
+                .WithTools<HttpTools>()
+                .WithTools<EventHubTools>()
+                .WithTools<AzureResourceGroupTools>()
+                .WithTools<AzureFunctionTools>()
+                .WithTools<AzureStorageTools>()
                 ;
 
             var app = builder.Build();
