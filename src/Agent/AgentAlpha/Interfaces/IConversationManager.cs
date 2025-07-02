@@ -38,4 +38,16 @@ public interface IConversationManager
     /// Check if the task appears to be completed based on assistant response
     /// </summary>
     bool IsTaskComplete(string assistantResponse);
+
+    /// <summary>
+    /// Get the current markdown document that tracks the overall task state.
+    /// </summary>
+    string GetTaskMarkdown();
+
+    /// <summary>
+    /// Ask the LLM to update the markdown with the latest observations / actions.
+    /// When taskCompleted == true the LLM must finalise the document with all
+    /// evidence, reasoning and detailed results.
+    /// </summary>
+    Task UpdateMarkdownAsync(string iterationSummary, bool taskCompleted = false);
 }

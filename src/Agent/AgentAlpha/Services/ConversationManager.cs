@@ -21,6 +21,9 @@ public class ConversationManager : IConversationManager
     private readonly ISessionActivityLogger? _activityLogger;
     private readonly List<object> _messages;
     private readonly List<string> _recentAssistantResponses;
+    private string _taskMarkdown = "";             // <-- new
+    private const int MaxMarkdownTokens = 400; // ~1600 chars
+    private const string RevisionToolName = "revise_plan"; // NEW
 
     public ConversationManager(
         IOpenAIResponsesService openAi,
@@ -43,6 +46,36 @@ public class ConversationManager : IConversationManager
         _messages.Add(new { role = "user", content = userTask });
         
         _logger.LogInformation("Initialized conversation with task: {Task}", userTask);
+
+        // Bootstrap markdown document – now includes instructions for planning & tool-call selection
+        _taskMarkdown = $"""
+            # Task
+            {userTask}
+
+            ## Instructions for the Assistant
+            1. Break the task into a concise **Plan of Action**.
+            2. Derive a clear list of **Proposed Tool Calls** (function names only) that you believe
+               will be necessary to complete the task.  
+               – Base your choices on the full tool catalogue the agent exposes.  
+               – Do **not** execute anything yet – just plan.
+            3. Fill in the **Sub-tasks** checklist accordingly (use `[ ]` for pending).
+            4. Leave **Evidence** and **Results** empty for now – they will be populated iteratively.
+
+            ## Plan of Action
+            *(to be filled by assistant)*
+
+            ## Proposed Tool Calls
+            *(to be filled – one per line, e.g. `read_file`, `search_in_file`)*
+
+            ## Sub-tasks
+            - [ ] *(assistant will list sub-tasks here)*
+
+            ## Evidence
+            *(to be gathered during execution)*
+
+            ## Results
+            *(final detailed results once task is complete)*
+            """;
     }
 
     public void InitializeFromSession(AgentSession session, string newUserTask)
@@ -68,16 +101,39 @@ public class ConversationManager : IConversationManager
         return _messages.ToList(); // Return a copy to avoid external modification
     }
 
+    private string GetCondensedMarkdown()
+    {
+        if (string.IsNullOrWhiteSpace(_taskMarkdown)) return "";
+        // crude “token” trim (≈4 chars per token)
+        var maxLen = MaxMarkdownTokens * 4;
+        return _taskMarkdown.Length <= maxLen
+            ? _taskMarkdown
+            : _taskMarkdown[..maxLen] + "\n\n<!-- trimmed -->";
+    }
+
     public async Task<ConversationResponse> ProcessIterationAsync(
         OpenAIIntegration.Model.ToolDefinition[] availableTools)
     {
+        // --- inject markdown context ---------------------------
+        var mdSnapshot = GetCondensedMarkdown();
+        var contextMessages = new List<object>(_messages);
+        if (!string.IsNullOrWhiteSpace(mdSnapshot))
+        {
+            contextMessages.Add(new
+            {
+                role    = "system",
+                content = $"Current task markdown (trimmed):\n\n{mdSnapshot}"
+            });
+        }
+        // --------------------------------------------------------
+        
         var toolList = (availableTools ?? Array.Empty<ToolDefinition>()).ToList();
 
         var request = new ResponsesCreateRequest
         {
-            Model = _config.Model,
-            Input = _messages.ToArray(),
-            Tools = toolList.ToArray(),
+            Model      = _config.Model,
+            Input      = contextMessages.ToArray(),
+            Tools      = toolList.ToArray(),
             ToolChoice = "auto"
         };
 
@@ -196,6 +252,18 @@ public class ConversationManager : IConversationManager
 
             // Extract tool calls
             var toolCalls = ExtractToolCalls(response);
+
+            // ------- MARKDOWN UPDATE HOOK ‑----
+            var summaryLines = new List<string>();
+            if (!string.IsNullOrWhiteSpace(assistantText))
+                summaryLines.Add($"Assistant said:\n{assistantText}");
+            if (toolCalls.Count > 0)
+                summaryLines.Add($"Planned tool calls:\n{string.Join(", ", toolCalls.Select(c => c.Name))}");
+            var summary = string.Join("\n\n", summaryLines);
+
+            var taskCompleted = IsTaskComplete(assistantText);
+            await UpdateMarkdownAsync(summary, taskCompleted);
+            // ----------------------------------
 
             return new ConversationResponse(assistantText, toolCalls, toolCalls.Count > 0);
         }
@@ -665,5 +733,111 @@ public class ConversationManager : IConversationManager
     public bool WouldBeRepetitive(string response)
     {
         return IsProvidingRepetitiveResponses(response);
+    }
+
+    public string GetTaskMarkdown() => _taskMarkdown;
+
+    public async Task UpdateMarkdownAsync(string iterationSummary, bool taskCompleted = false)
+    {
+        // Build a short prompt so that the LLM updates the markdown doc
+        var prompt = $"""
+            You are maintaining a markdown document that tracks a complex task.
+            Current markdown is enclosed in <doc></doc>. Update it so that it
+            reflects the latest information in <summary></summary>.
+            Preserve existing content, mark any finished sub-tasks with [x] and
+            add new sub-tasks if needed. When `complete=true`, finalise the
+            document by adding all evidence, your reasoning and detailed results.
+
+            <doc>
+            {_taskMarkdown}
+            </doc>
+
+            <summary complete="{taskCompleted}">
+            {iterationSummary}
+            </summary>
+
+            Return ONLY the updated markdown.
+            """;
+
+        // ----------- NEW: define expected tool -----------------------------
+        var revisionTool = new ToolDefinition
+        {
+            Type = "function",
+            Name = RevisionToolName,
+            Description = "Updates the task markdown and proposes useful tool calls.",
+            Parameters = new
+            {
+                type = "object",
+                properties = new
+                {
+                    markdown = new { type = "string", description = "Full revised markdown document." },
+                    tools    = new
+                    {
+                        type  = "array",
+                        description = "List of tool names that would be useful next.",
+                        items = new { type = "string" }
+                    }
+                },
+                required = new[] { "markdown", "tools" }
+            }
+        };
+        // -------------------------------------------------------------------
+
+        var mdRequest = new ResponsesCreateRequest
+        {
+            Model      = _config.Model,
+            Input      = new[] { new { role = "user", content = prompt } },
+            Tools      = new[] { revisionTool },    // NEW
+            ToolChoice = "auto"                     // NEW
+        };
+
+        try
+        {
+            var mdResponse = await _openAi.CreateResponseAsync(mdRequest);
+
+            // ----------- NEW: extract tool call result ---------------------
+            var planCall = mdResponse.Output?
+                .OfType<FunctionToolCall>()
+                .FirstOrDefault(fc => fc.Name == RevisionToolName);
+
+            if (planCall != null && planCall.Arguments.HasValue)
+            {
+                var args = planCall.Arguments.Value;
+                if (args.TryGetProperty("markdown", out var mdElem) &&
+                    mdElem.ValueKind == JsonValueKind.String)
+                {
+                    _taskMarkdown = mdElem.GetString() ?? _taskMarkdown;
+                }
+
+                if (args.TryGetProperty("tools", out var toolsElem) &&
+                    toolsElem.ValueKind == JsonValueKind.Array)
+                {
+                    var recommended = toolsElem.EnumerateArray()
+                                               .Where(e => e.ValueKind == JsonValueKind.String)
+                                               .Select(e => e.GetString())
+                                               .Where(s => !string.IsNullOrWhiteSpace(s))
+                                               .Distinct()
+                                               .ToArray();
+                    _logger.LogInformation("LLM recommends tools: {Tools}",
+                        string.Join(", ", recommended));
+                    // (optional) persist for later selection
+                }
+            }
+            // ----------------------------------------------------------------
+            else
+            {
+                // fallback: old behaviour (assistant returned plain markdown)
+                var newMd = mdResponse.Output?
+                    .OfType<OutputMessage>()
+                    .FirstOrDefault()?.Content?.ToString();
+
+                if (!string.IsNullOrWhiteSpace(newMd))
+                    _taskMarkdown = newMd!;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update markdown, keeping previous version");
+        }
     }
 }

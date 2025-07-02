@@ -79,6 +79,10 @@ public class SimpleTaskExecutor : ITaskExecutor
             await ExecuteConversationLoopAsync(request.Task);
 
             _logger.LogInformation("Task completed successfully");
+
+            // Persist / show final markdown
+            var md = _conversationManager.GetTaskMarkdown();
+            _logger.LogInformation("Final task markdown:\n{Markdown}", md);
         }
         catch (Exception ex)
         {
