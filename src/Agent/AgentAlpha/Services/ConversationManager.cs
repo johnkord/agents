@@ -156,14 +156,19 @@ public class ConversationManager : IConversationManager
                     Model = request.Model,
                     MessageCount = _messages.Count,
                     ToolCount = toolList.Count,
-                    ToolNames = toolList.Select(t => t.Name).ToArray(),
+                    ToolNames = toolList.Select(t => 
+                        string.IsNullOrEmpty(t.Name) ? $"[{t.Type}]" : t.Name).ToArray(),
                     ToolChoice = request.ToolChoice,
                     // Include full request details for comprehensive audit trail
                     FullRequest = new
                     {
                         Model = request.Model,
                         Messages = _messages.Take(_config.ActivityLogging.MaxMessagesInLog).ToArray(),
-                        Tools = toolList.Select(t => new { t.Name, t.Description, ParameterCount = t.Parameters?.ToString()?.Length ?? 0 }).ToArray(),
+                        Tools = toolList.Select(t => new { 
+                            Name = string.IsNullOrEmpty(t.Name) ? $"[{t.Type}]" : t.Name, 
+                            t.Description, 
+                            ParameterCount = t.Parameters?.ToString()?.Length ?? 0 
+                        }).ToArray(),
                         ToolChoice = request.ToolChoice
                     }
                 };
@@ -184,7 +189,8 @@ public class ConversationManager : IConversationManager
                         Model = request.Model,
                         MessageCount = _messages.Count,
                         ToolCount = toolList.Count,
-                        ToolNames = toolList.Select(t => t.Name).ToArray()
+                        ToolNames = toolList.Select(t => 
+                            string.IsNullOrEmpty(t.Name) ? $"[{t.Type}]" : t.Name).ToArray()
                     });
             }
         }
