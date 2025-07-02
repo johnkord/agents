@@ -71,11 +71,6 @@ public class AgentConfiguration
     public ToolFilterConfig ToolFilter { get; set; } = new();
     
     /// <summary>
-    /// Tool selection configuration for context optimization
-    /// </summary>
-    public ToolSelectionConfig ToolSelection { get; set; } = new();
-    
-    /// <summary>
     /// Maximum number of messages to keep in conversation history (0 = unlimited)
     /// </summary>
     public int MaxConversationMessages { get; set; } = 0;
@@ -135,9 +130,6 @@ public class AgentConfiguration
 
         config.ToolFilter = ToolFilterConfig.FromEnvironment();
         
-        // Parse tool selection configuration from environment with validation
-        ParseToolSelectionConfig(config);
-        
         // Parse MaxConversationMessages from environment with validation
         ParseMaxConversationMessages(config);
         
@@ -158,12 +150,6 @@ public class AgentConfiguration
         if (config.Transport == McpTransportType.Http && string.IsNullOrEmpty(config.ServerUrl))
         {
             throw new InvalidOperationException("MCP_SERVER_URL is required when using HTTP transport");
-        }
-
-        // Validate tool selection settings
-        if (config.ToolSelection.MaxToolsPerRequest <= 0)
-        {
-            throw new InvalidOperationException($"MaxToolsPerRequest must be positive, got: {config.ToolSelection.MaxToolsPerRequest}");
         }
 
         // Validate conversation message limits
@@ -189,37 +175,6 @@ public class AgentConfiguration
         }
         
         throw new InvalidOperationException($"Invalid AGENT_MODEL value: '{model}'. Supported models: {string.Join(", ", validModels)}");
-    }
-
-    /// <summary>
-    /// Parses tool selection configuration with validation
-    /// </summary>
-    /// <param name="config">Configuration to update</param>
-    /// <exception cref="InvalidOperationException">Thrown when values are invalid</exception>
-    private static void ParseToolSelectionConfig(AgentConfiguration config)
-    {
-        if (int.TryParse(Environment.GetEnvironmentVariable("MAX_TOOLS_PER_REQUEST"), out var maxTools))
-        {
-            if (maxTools > 0)
-            {
-                config.ToolSelection.MaxToolsPerRequest = maxTools;
-            }
-            else
-            {
-                throw new InvalidOperationException($"MAX_TOOLS_PER_REQUEST must be positive, got: {maxTools}");
-            }
-        }
-        
-        if (bool.TryParse(Environment.GetEnvironmentVariable("USE_LLM_TOOL_SELECTION"), out var useLLM))
-        {
-            config.ToolSelection.UseLLMSelection = useLLM;
-        }
-        
-        var selectionModel = Environment.GetEnvironmentVariable("TOOL_SELECTION_MODEL");
-        if (!string.IsNullOrEmpty(selectionModel))
-        {
-            config.ToolSelection.SelectionModel = ValidateModel(selectionModel);
-        }
     }
 
     /// <summary>

@@ -5,7 +5,7 @@ using Common.Models.Session;
 namespace AgentAlpha.Interfaces;
 
 /// <summary>
-/// Manages OpenAI conversations and message flow
+/// Simplified interface for managing OpenAI conversations and message flow
 /// </summary>
 public interface IConversationManager
 {
@@ -27,19 +27,7 @@ public interface IConversationManager
     /// <summary>
     /// Process one iteration of the conversation
     /// </summary>
-    Task<ConversationResponse> ProcessIterationAsync(OpenAIIntegration.Model.ToolDefinition[] availableTools);
-    
-    /// <summary>
-    /// Process one iteration with dynamic tool expansion capability
-    /// </summary>
-    Task<ConversationResponse> ProcessIterationWithExpansionAsync(
-        OpenAIIntegration.Model.ToolDefinition[] currentTools,
-        Func<Task<OpenAIIntegration.Model.ToolDefinition[]>> getAdditionalTools);
-    
-    /// <summary>
-    /// Add an assistant message to the conversation
-    /// </summary>
-    void AddAssistantMessage(string content);
+    Task<ConversationResponse> ProcessIterationAsync(ToolDefinition[] availableTools);
     
     /// <summary>
     /// Add tool execution results to the conversation
@@ -50,14 +38,4 @@ public interface IConversationManager
     /// Check if the task appears to be completed based on assistant response
     /// </summary>
     bool IsTaskComplete(string assistantResponse);
-    
-    /// <summary>
-    /// Get conversation statistics for monitoring
-    /// </summary>
-    ConversationStatistics GetConversationStatistics();
-    
-    /// <summary>
-    /// Check if a response would be repetitive before adding it to conversation
-    /// </summary>
-    bool WouldBeRepetitive(string response);
 }

@@ -1,8 +1,8 @@
 using AgentAlpha.Configuration;
-using AgentAlpha.Interfaces;
-using AgentAlpha.Models;
-using ModelContextProtocol.Client;
-using OpenAIIntegration.Model;
+using AgentAlpha.Services;
+using Microsoft.Extensions.Logging;
+using Common.Interfaces.Session;
+using OpenAIIntegration;
 
 namespace AgentAlpha.Tests;
 
@@ -12,26 +12,22 @@ namespace AgentAlpha.Tests;
 public static class TestHelpers
 {
     /// <summary>
-    /// Convert a list of McpClientTool to IUnifiedTool for tests
+    /// Create a mock simple tool manager for testing
     /// </summary>
-    public static IList<IUnifiedTool> WrapTools(IList<McpClientTool> mcpTools)
+    public static SimpleToolManager CreateMockToolManager(ILogger<SimpleToolManager>? logger = null)
     {
-        var mockToolManager = new MockToolManager();
-        return mcpTools.Select(tool => new McpUnifiedTool(tool, mockToolManager) as IUnifiedTool).ToList();
+        logger ??= new Microsoft.Extensions.Logging.Abstractions.NullLogger<SimpleToolManager>();
+        var config = new AgentConfiguration();
+        var mockOpenAI = new MockSessionAwareOpenAIService();
+        return new SimpleToolManager(logger, config, mockOpenAI);
     }
 
     /// <summary>
-    /// Mock implementation of IToolManager for tests
+    /// Mock implementation of ISessionAwareOpenAIService for tests
     /// </summary>
-    private class MockToolManager : IToolManager
+    private class MockSessionAwareOpenAIService : ISessionAwareOpenAIService
     {
-        public Task<IList<McpClientTool>> DiscoverToolsAsync(IConnectionManager connection) => throw new NotImplementedException();
-        public IList<McpClientTool> ApplyFilters(IList<McpClientTool> tools, ToolFilterConfig filter) => throw new NotImplementedException();
-        public ToolDefinition CreateOpenAiToolDefinition(McpClientTool mcpTool) => new ToolDefinition { Name = mcpTool.Name, Description = mcpTool.Description };
-        public Task<string> ExecuteToolAsync(IConnectionManager connection, string toolName, Dictionary<string, object?> arguments) => throw new NotImplementedException();
-        public Task<IList<IUnifiedTool>> DiscoverAllToolsAsync(IConnectionManager connection) => throw new NotImplementedException();
-        public IList<IUnifiedTool> ApplyFiltersToAllTools(IList<IUnifiedTool> tools, ToolFilterConfig filter) => throw new NotImplementedException();
-        public Task<string> ExecuteUnifiedToolAsync(IUnifiedTool tool, IConnectionManager connection, Dictionary<string, object?> arguments) => throw new NotImplementedException();
-        public ToolDefinition[] ConvertToToolDefinitions(IList<IUnifiedTool> tools) => throw new NotImplementedException();
+        public void SetActivityLogger(ISessionActivityLogger? activityLogger) { }
+        public Task<OpenAIIntegration.Model.ResponsesCreateResponse> CreateResponseAsync(OpenAIIntegration.Model.ResponsesCreateRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     }
 }
