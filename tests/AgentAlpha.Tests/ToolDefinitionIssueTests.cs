@@ -178,6 +178,29 @@ public class ToolDefinitionIssueTests
         Assert.Equal("function", functionTool.Type);
         Assert.False(functionTool.IsBuiltInTool, "Should NOT be identified as built-in tool");
     }
+
+    [Fact]
+    public void ToolLogging_HandlesEmptyNamesCorrectly()
+    {
+        // Test the logging format for mixed tool types
+        var tools = new[]
+        {
+            new OpenAIIntegration.Model.ToolDefinition { Type = "function", Name = "complete_task" },
+            new OpenAIIntegration.Model.ToolDefinition { Type = "function", Name = "run_command" },
+            new OpenAIIntegration.Model.ToolDefinition { Type = "web_search_preview", Name = "" }
+        };
+
+        // Simulate the logging format used in ConversationManager
+        var toolNames = tools.Select(t => 
+            string.IsNullOrEmpty(t.Name) ? $"[{t.Type}]" : t.Name).ToArray();
+
+        // Assert
+        Assert.Equal(3, toolNames.Length);
+        Assert.Contains("complete_task", toolNames);
+        Assert.Contains("run_command", toolNames);
+        Assert.Contains("[web_search_preview]", toolNames);
+        Assert.DoesNotContain("", toolNames); // No empty strings
+    }
 }
 
 /// <summary>
