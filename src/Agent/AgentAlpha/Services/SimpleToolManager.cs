@@ -134,11 +134,23 @@ public class SimpleToolManager
         var selectedTools = new List<ToolDefinition>();
         var taskLower = task.ToLowerInvariant();
 
-        // Add essential tools first (e.g., task completion)
-        var essentialTool = availableTools.FirstOrDefault(t => t.Name == "task_complete");
-        if (essentialTool != null)
+        // Add essential MCP tools first - these should always be available
+        var essentialToolNames = new[] { "complete_task", "run_command" };
+        var alreadySelected = new HashSet<string>();
+        
+        foreach (var toolName in essentialToolNames)
         {
-            selectedTools.Add(CreateOpenAiToolDefinition(essentialTool));
+            var essentialTool = availableTools.FirstOrDefault(t => t.Name == toolName);
+            if (essentialTool != null)
+            {
+                selectedTools.Add(CreateOpenAiToolDefinition(essentialTool));
+                alreadySelected.Add(essentialTool.Name);
+                _logger.LogDebug("Added essential tool: {ToolName}", toolName);
+            }
+            else
+            {
+                _logger.LogWarning("Essential tool not found: {ToolName}", toolName);
+            }
         }
 
         // Simple keyword-based selection for remaining tools
@@ -153,8 +165,6 @@ public class SimpleToolManager
             [new[] { "system", "environment", "variable" }] = 
                 new[] { "get_env_var", "system_info" }
         };
-
-        var alreadySelected = selectedTools.Select(t => t.Name).ToHashSet();
 
         foreach (var (keywords, toolNames) in keywordMappings)
         {
@@ -207,7 +217,8 @@ public class SimpleToolManager
         }
 
         _logger.LogInformation("Selected {Count} tools for task: {Tools}", 
-            selectedTools.Count, string.Join(", ", selectedTools.Select(t => t.Name)));
+            selectedTools.Count, string.Join(", ", selectedTools.Select(t => 
+                string.IsNullOrEmpty(t.Name) ? $"[{t.Type}]" : t.Name)));
 
         return Task.FromResult(selectedTools.ToArray());
     }
@@ -218,7 +229,11 @@ public class SimpleToolManager
         var webSearchKeywords = new[]
         {
             "web", "search", "internet", "online", "news", "current", "latest", "recent", 
-            "today", "real-time", "live", "browse", "website", "url", "google", "find"
+            "today", "real-time", "live", "browse", "website", "url", "google", "find",
+            "what's happening", "breaking", "update", "trending", "available", "which", 
+            "what", "list", "models", "options", "versions", "supported", "offerings", 
+            "plans", "pricing", "features", "capabilities", "services", "apis", "endpoints", 
+            "status", "working", "active"
         };
 
         return webSearchKeywords.Any(keyword => taskLower.Contains(keyword));
