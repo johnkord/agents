@@ -13,7 +13,7 @@ namespace AgentAlpha.Services;
 /// <summary>
 /// Simplified tool management that consolidates tool discovery, filtering, and basic selection
 /// </summary>
-public class SimpleToolManager : IToolManager
+public class SimpleToolManager
 {
     private readonly ILogger<SimpleToolManager> _logger;
     private readonly AgentConfiguration _config;
@@ -224,24 +224,24 @@ public class SimpleToolManager : IToolManager
         return webSearchKeywords.Any(keyword => taskLower.Contains(keyword));
     }
 
-    // Unified tool management methods (simplified implementations)
-    public Task<IList<IUnifiedTool>> DiscoverAllToolsAsync(IConnectionManager connection)
-    {
-        // Simplified - just return MCP tools wrapped as unified tools
-        throw new NotImplementedException("Simplified architecture removes unified tool abstraction");
-    }
-
-    public IList<IUnifiedTool> ApplyFiltersToAllTools(IList<IUnifiedTool> tools, ToolFilterConfig filter)
+    // Simplified tool management methods - these throw NotImplementedException as they're not needed
+    // in the simplified architecture but kept for potential interface compatibility
+    public Task<IList<object>> DiscoverAllToolsAsync(IConnectionManager connection)
     {
         throw new NotImplementedException("Simplified architecture removes unified tool abstraction");
     }
 
-    public Task<string> ExecuteUnifiedToolAsync(IUnifiedTool tool, IConnectionManager connection, Dictionary<string, object?> arguments)
+    public IList<object> ApplyFiltersToAllTools(IList<object> tools, ToolFilterConfig filter)
     {
         throw new NotImplementedException("Simplified architecture removes unified tool abstraction");
     }
 
-    public ToolDefinition[] ConvertToToolDefinitions(IList<IUnifiedTool> tools)
+    public Task<string> ExecuteUnifiedToolAsync(object tool, IConnectionManager connection, Dictionary<string, object?> arguments)
+    {
+        throw new NotImplementedException("Simplified architecture removes unified tool abstraction");
+    }
+
+    public ToolDefinition[] ConvertToToolDefinitions(IList<object> tools)
     {
         throw new NotImplementedException("Simplified architecture removes unified tool abstraction");
     }

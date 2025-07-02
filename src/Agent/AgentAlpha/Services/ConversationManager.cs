@@ -11,7 +11,7 @@ using Common.Interfaces.Tools;
 namespace AgentAlpha.Services;
 
 /// <summary>
-/// Implementation of OpenAI conversation and message flow management
+/// Simplified implementation of OpenAI conversation and message flow management
 /// </summary>
 public class ConversationManager : IConversationManager
 {
@@ -19,23 +19,19 @@ public class ConversationManager : IConversationManager
     private readonly ILogger<ConversationManager> _logger;
     private readonly AgentConfiguration _config;
     private readonly ISessionActivityLogger? _activityLogger;
-    private readonly IToolScopeManager? _toolScope;        // NEW
     private readonly List<object> _messages;
     private readonly List<string> _recentAssistantResponses;
-    private string? _sessionId;                            // NEW
 
     public ConversationManager(
         IOpenAIResponsesService openAi,
         ILogger<ConversationManager> logger,
         AgentConfiguration config,
-        ISessionActivityLogger? activityLogger = null,
-        IToolScopeManager? toolScope = null)               // NEW optional arg
+        ISessionActivityLogger? activityLogger = null)
     {
         _openAi      = openAi;
         _logger      = logger;
         _config      = config;
         _activityLogger = activityLogger;
-        _toolScope   = toolScope;                          // NEW
         _messages    = new List<object>();
         _recentAssistantResponses = new List<string>();
     }
@@ -43,7 +39,6 @@ public class ConversationManager : IConversationManager
     public void InitializeConversation(string systemPrompt, string userTask)
     {
         _messages.Clear();
-        _sessionId = null;                                 // NEW: no scoped tools yet
         _messages.Add(new { role = "system", content = systemPrompt });
         _messages.Add(new { role = "user", content = userTask });
         
@@ -53,7 +48,6 @@ public class ConversationManager : IConversationManager
     public void InitializeFromSession(AgentSession session, string newUserTask)
     {
         _messages.Clear();
-        _sessionId = session.SessionId;                    // NEW: remember session
         
         // Load existing conversation messages from session
         var existingMessages = session.GetConversationMessages();
@@ -78,24 +72,6 @@ public class ConversationManager : IConversationManager
         OpenAIIntegration.Model.ToolDefinition[] availableTools)
     {
         var toolList = (availableTools ?? Array.Empty<ToolDefinition>()).ToList();
-
-        if (_sessionId != null && _toolScope != null)
-        {
-            foreach (var req in _toolScope.GetRequiredTools(_sessionId))
-            {
-                if (!toolList.Any(t => string.Equals(t.Name, req, StringComparison.OrdinalIgnoreCase)
-                                     || string.Equals(t.Type, req, StringComparison.OrdinalIgnoreCase)))
-                {
-                    // Minimal placeholder definition – LLM knows the signature
-                    toolList.Add(new ToolDefinition
-                    {
-                        Name = req,            // function-style tools
-                        Type = "function"
-                    });
-                }
-            }
-        }
-        // ------------------------------------------------------------------
 
         var request = new ResponsesCreateRequest
         {
