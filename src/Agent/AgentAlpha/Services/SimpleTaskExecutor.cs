@@ -202,7 +202,7 @@ public class SimpleTaskExecutor : ITaskExecutor
             if (!response.HasToolCalls)
             {
                 // No tool calls - check if this is reasoning only or task completion
-                if (_conversationManager.IsTaskComplete(response.AssistantText))
+                if (_conversationManager.IsTaskComplete(response))
                 {
                     _logger.LogInformation("Task completed after {Iterations} ReAct iterations", iteration);
                     break;
@@ -229,6 +229,7 @@ public class SimpleTaskExecutor : ITaskExecutor
             // Execute tool calls (Action phase)
             _logger.LogDebug("ReAct iteration {Iteration}: Executing {ToolCallCount} actions", iteration, response.ToolCalls.Count);
             var toolResults = new List<string>();
+            bool taskCompletedViaTools = false;
             
             foreach (var toolCall in response.ToolCalls)
             {
@@ -237,6 +238,13 @@ public class SimpleTaskExecutor : ITaskExecutor
                     var result = await _toolManager.ExecuteToolAsync(_connectionManager, toolCall.Name, toolCall.Arguments);
                     toolResults.Add($"[{toolCall.Name}] {result}");
                     _logger.LogDebug("ReAct iteration {Iteration}: Tool '{ToolName}' executed successfully", iteration, toolCall.Name);
+                    
+                    // Check if this was a completion tool
+                    if (toolCall.Name.Equals("complete_task", StringComparison.OrdinalIgnoreCase))
+                    {
+                        taskCompletedViaTools = true;
+                        _logger.LogInformation("Task completion detected via complete_task tool execution");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -248,6 +256,13 @@ public class SimpleTaskExecutor : ITaskExecutor
             // Add tool results to conversation for observation phase
             _conversationManager.AddToolResults(toolResults);
             _logger.LogDebug("ReAct iteration {Iteration}: Tool results added, prompting observation phase", iteration);
+            
+            // Check if task was completed via tool execution
+            if (taskCompletedViaTools)
+            {
+                _logger.LogInformation("Task completed via complete_task tool after {Iterations} ReAct iterations", iteration);
+                break;
+            }
         }
 
         if (iteration >= maxIterations)
@@ -281,7 +296,7 @@ public class SimpleTaskExecutor : ITaskExecutor
                - Identify any new information or insights gained
             
             4. **ITERATING**: Decide on the next step
-               - If task is complete, clearly state completion
+               - If task is complete, use the 'complete_task' tool with comprehensive details
                - If more work is needed, reason about the next action
                - If you encounter errors, adjust your approach
             
@@ -291,9 +306,10 @@ public class SimpleTaskExecutor : ITaskExecutor
             - Be explicit about your thought process in each phase
             - Build upon previous observations in your reasoning
             - If you get stuck, try a different approach
-            - When complete, clearly state that the task is finished
+            - **When the task is finished, ALWAYS use the 'complete_task' tool** instead of just stating completion in text
+            - The 'complete_task' tool should include: summary, reasoning, evidence, deliverables, and key actions taken
             
-            Follow this ReAct cycle until the task is successfully completed.
+            Follow this ReAct cycle until you call the 'complete_task' tool to formally complete the task.
             """;
     }
 

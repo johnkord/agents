@@ -371,13 +371,13 @@ public class ConversationManager : IConversationManager
 
     public bool IsTaskComplete(string assistantResponse)
     {
-        // Check for explicit completion marker first
+        // Primary completion detection: Check for explicit completion marker from complete_task tool
         if (assistantResponse.Contains("TASK COMPLETED", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        // Check for ReAct pattern completion indicators
+        // Fallback for backward compatibility: Check for ReAct pattern completion indicators
         var lowerResponse = assistantResponse.ToLowerInvariant();
         var reactCompletionPhrases = new[]
         {
@@ -417,6 +417,28 @@ public class ConversationManager : IConversationManager
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Checks if the response contains a completion tool call
+    /// </summary>
+    public bool IsTaskComplete(ConversationResponse response)
+    {
+        // Check if the response contains a call to the complete_task tool
+        if (response.HasToolCalls)
+        {
+            var hasCompletionTool = response.ToolCalls.Any(tc => 
+                tc.Name.Equals("complete_task", StringComparison.OrdinalIgnoreCase));
+            
+            if (hasCompletionTool)
+            {
+                _logger.LogInformation("Task completion detected via complete_task tool call");
+                return true;
+            }
+        }
+
+        // Fallback to text-based detection
+        return IsTaskComplete(response.AssistantText);
     }
 
     public ConversationStatistics GetConversationStatistics()
