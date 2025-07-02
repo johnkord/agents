@@ -239,7 +239,7 @@ public class SessionSummaryServiceTests
 
     private List<SessionActivity> CreateTestActivities()
     {
-        return new List<SessionActivity>
+        var activities = new List<SessionActivity>
         {
             SessionActivity.Create(ActivityTypes.SessionStart, "Session started"),
             SessionActivity.Create(ActivityTypes.ToolCall, "Called github_get_pull_request", 
@@ -253,6 +253,15 @@ public class SessionSummaryServiceTests
             SessionActivity.Create(ActivityTypes.TaskComplete, "Task completed with warnings"),
             SessionActivity.Create(ActivityTypes.SessionEnd, "Session ended")
         };
+
+        // Set the Success property on the failed tool call
+        activities[3].Success = false;
+        activities[3].ErrorMessage = "File permission error";
+        
+        // Set the Success property on the error activity
+        activities[4].Success = false;
+
+        return activities;
     }
 
     private List<SessionActivity> CreateTestActivitiesWithTimestamps()

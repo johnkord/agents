@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
         });
         
         services.AddSingleton<ISessionActivityLogger, SessionActivityLogger>();
+        services.AddSingleton<ISessionSummaryService, SessionSummaryService>();
         
         // Simplified architecture - removed excessive abstractions
         services.AddSingleton<SimpleToolManager>();
