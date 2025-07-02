@@ -77,7 +77,7 @@ public class ConversationManager : IConversationManager
         {
             Model = _config.Model,
             Input = _messages.ToArray(),
-            Tools = toolList.ToArray(),                    // UPDATED
+            Tools = toolList.ToArray(),
             ToolChoice = "auto"
         };
 

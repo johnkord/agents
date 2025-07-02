@@ -49,9 +49,17 @@ public class SimpleTaskExecutor : ITaskExecutor
 
     public async Task ExecuteAsync(TaskExecutionRequest request)
     {
-        var sessionName = !string.IsNullOrEmpty(request.SessionName) ? request.SessionName : 
-                         !string.IsNullOrEmpty(request.SessionId) ? $"session-{request.SessionId}" : 
-                         "simple-agent-session";
+        // ------------------------------------------------------------------
+        // Ensure the request always contains a unique session name
+        // ------------------------------------------------------------------
+        if (string.IsNullOrEmpty(request.SessionName) && string.IsNullOrEmpty(request.SessionId))
+        {
+            request.SessionName = $"session-{DateTime.UtcNow:yyyyMMdd_HHmmss}";
+        }
+
+        var sessionName = !string.IsNullOrEmpty(request.SessionName)
+            ? request.SessionName
+            : $"session-{request.SessionId}"; // SessionId is not null/empty here
 
         try
         {
@@ -60,7 +68,10 @@ public class SimpleTaskExecutor : ITaskExecutor
 
             // Get or create session
             var session = await GetOrCreateSessionAsync(request, sessionName);
-            
+
+            // >>> INFORM ACTIVITY LOGGER ABOUT THE CURRENT SESSION <<<
+            _activityLogger.SetCurrentSession(session);
+
             // Set up conversation
             await SetupConversationAsync(session, request);
 
