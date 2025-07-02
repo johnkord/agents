@@ -7,6 +7,7 @@ using OpenAIIntegration.Model;
 using OpenAIIntegration;
 using System.Text.Json;
 using Common.Interfaces.Session;
+using Common.Models.Session;
 
 namespace AgentAlpha.Services;
 
@@ -97,31 +98,159 @@ public class SimpleToolManager
 
     public async Task<string> ExecuteToolAsync(IConnectionManager connection, string toolName, Dictionary<string, object?> arguments)
     {
+        string? activityId = null;
+        
+        // Log tool call start
+        if (_activityLogger != null)
+        {
+            var toolCallData = new 
+            {
+                ToolName = toolName,
+                Arguments = arguments,
+                FullInput = new
+                {
+                    ToolName = toolName,
+                    ArgumentCount = arguments?.Count ?? 0,
+                    ArgumentKeys = arguments?.Keys.ToArray() ?? Array.Empty<string>(),
+                    ArgumentValues = arguments?.ToDictionary(
+                        kvp => kvp.Key, 
+                        kvp => kvp.Value?.ToString() ?? "null") ?? new Dictionary<string, string>()
+                }
+            };
+            
+            activityId = _activityLogger.StartActivity(
+                ActivityTypes.ToolCall, 
+                $"Executing tool: {toolName}", 
+                toolCallData);
+        }
+
         try
         {
-            var result = await connection.CallToolAsync(toolName, arguments);
+            var result = await connection.CallToolAsync(toolName, arguments ?? new Dictionary<string, object?>());
             
             if (result.IsError)
             {
                 var errorText = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? "Unknown error";
                 _logger.LogWarning("Tool {ToolName} returned error: {Error}", toolName, errorText);
+                
+                // Log tool result with error
+                if (_activityLogger != null)
+                {
+                    var errorResultData = new
+                    {
+                        ToolName = toolName,
+                        Success = false,
+                        IsError = true,
+                        ErrorMessage = errorText,
+                        FullOutput = new
+                        {
+                            ResultText = $"Error executing {toolName}: {errorText}",
+                            ContentBlocks = result.Content.Select(c => new 
+                            { 
+                                Type = c.GetType().Name, 
+                                Content = c is TextContentBlock tc ? tc.Text : c.ToString() 
+                            }).ToArray(),
+                            IsError = true,
+                            Metadata = "{\"execution_status\": \"error\"}"
+                        }
+                    };
+                    
+                    if (activityId != null)
+                    {
+                        await _activityLogger.FailActivityAsync(activityId, errorText, errorResultData);
+                    }
+                    else
+                    {
+                        await _activityLogger.LogFailedActivityAsync(
+                            ActivityTypes.ToolResult, 
+                            $"Tool result with error: {toolName}", 
+                            errorText, 
+                            errorResultData);
+                    }
+                }
+                
                 return $"Error executing {toolName}: {errorText}";
             }
 
             var textBlocks = result.Content.OfType<TextContentBlock>().ToList();
-            if (textBlocks.Count == 0)
-            {
-                return $"Tool {toolName} completed successfully (no text output)";
-            }
-
-            var output = string.Join("\n", textBlocks.Select(tb => tb.Text));
-            _logger.LogDebug("Tool {ToolName} executed successfully, output length: {Length}", toolName, output.Length);
+            var output = textBlocks.Count == 0 
+                ? $"Tool {toolName} completed successfully (no text output)"
+                : string.Join("\n", textBlocks.Select(tb => tb.Text));
             
+            // Log successful tool result
+            if (_activityLogger != null)
+            {
+                var successResultData = new
+                {
+                    ToolName = toolName,
+                    Success = true,
+                    ResultLength = output.Length,
+                    HasContent = textBlocks.Count > 0,
+                    FullOutput = new
+                    {
+                        ResultText = output,
+                        ContentBlocks = result.Content.Select(c => new 
+                        { 
+                            Type = c.GetType().Name, 
+                            Content = c is TextContentBlock tc ? tc.Text : c.ToString() 
+                        }).ToArray(),
+                        IsError = false,
+                        Metadata = "{\"execution_status\": \"success\"}"
+                    }
+                };
+                
+                if (activityId != null)
+                {
+                    await _activityLogger.CompleteActivityAsync(activityId, successResultData);
+                }
+                
+                // Always log a separate ToolResult activity for comprehensive audit trail
+                await _activityLogger.LogActivityAsync(
+                    ActivityTypes.ToolResult, 
+                    $"Tool result: {toolName}", 
+                    successResultData);
+            }
+            
+            _logger.LogDebug("Tool {ToolName} executed successfully, output length: {Length}", toolName, output.Length);
             return output;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to execute tool {ToolName}", toolName);
+            
+            // Log tool execution exception
+            if (_activityLogger != null)
+            {
+                var exceptionResultData = new
+                {
+                    ToolName = toolName,
+                    Success = false,
+                    IsError = true,
+                    ErrorMessage = ex.Message,
+                    ExceptionType = ex.GetType().Name,
+                    FullOutput = new
+                    {
+                        ResultText = $"Error executing {toolName}: {ex.Message}",
+                        ContentBlocks = new object[0],
+                        IsError = true,
+                        Metadata = $"{{\"execution_status\": \"exception\", \"exception_type\": \"{ex.GetType().Name}\"}}"
+                    }
+                };
+                
+                if (activityId != null)
+                {
+                    await _activityLogger.FailActivityAsync(activityId, ex.Message, exceptionResultData);
+                }
+                else
+                {
+                    await _activityLogger.LogFailedActivityAsync(
+                        ActivityTypes.ToolResult, 
+                        $"Tool execution failed: {toolName}", 
+                        ex.Message, 
+                        exceptionResultData);
+                }
+            }
+            
             return $"Error executing {toolName}: {ex.Message}";
         }
     }

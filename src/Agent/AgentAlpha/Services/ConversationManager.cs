@@ -359,7 +359,7 @@ public class ConversationManager : IConversationManager
         if (toolSummaries.Any())
         {
             _messages.Add(new { role = "user", content = """
-                Now that you have the results from your action, please follow the ReAct pattern:
+                Now that you have the results from your action, please continue following the ReAct pattern:
                 
                 **OBSERVE**: Analyze the results you just received. What do they tell you? Did you get what you expected?
                 
