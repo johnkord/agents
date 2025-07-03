@@ -64,6 +64,9 @@ public static class ServiceCollectionExtensions
             return new SessionAwareOpenAIService(innerService, logger);
         });
         
+        // Register planning service
+        services.AddSingleton<PlanningService>();
+        
         return services;
     }
 }
