@@ -52,6 +52,7 @@ Error: Cannot divide by zero
 - [Getting Started](getting-started.md) - Setup and initial configuration
 - [Architecture](architecture.md) - System architecture and design decisions
 - [AgentAlpha Design Document](agent-alpha-design-doc.md) - **Comprehensive guide on how an AI agent solves tasks using LLMs and MCP Client+Server with tools**
+- [Agent Design Patterns](agent-design-patterns.md) - **Comprehensive guide to AI agent design patterns for building effective agents**
 
 ### Component Documentation
 - [MCP Server](mcp-server.md) - MCP Server implementation with comprehensive tools
