@@ -4,13 +4,14 @@ using OpenAIIntegration;
 using OpenAIIntegration.Model;
 using Common.Interfaces.Session;
 using System.Text.Json;
+using AgentAlpha.Interfaces;
 
 namespace AgentAlpha.Services;
 
 /// <summary>
 /// Service responsible for creating task execution plans using OpenAI reasoning models
 /// </summary>
-public class PlanningService
+public class PlanningService : IPlanner
 {
     private readonly AgentConfiguration _config;
     private readonly ISessionAwareOpenAIService _openAiService;

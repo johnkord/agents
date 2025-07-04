@@ -9,11 +9,6 @@ namespace AgentAlpha.Interfaces;
 public interface ITaskExecutor
 {
     /// <summary>
-    /// Execute a task from start to finish using markdown-based task management
-    /// </summary>
-    Task ExecuteAsync(string task);
-    
-    /// <summary>
     /// Execute a task with full request parameters using markdown-based task management
     /// </summary>
     Task ExecuteAsync(TaskExecutionRequest request);

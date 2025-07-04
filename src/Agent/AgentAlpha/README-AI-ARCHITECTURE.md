@@ -44,6 +44,26 @@ Individual Services (ConnectionManager, ToolManager, etc.)
 - **Implementation**: `src/Agent/AgentAlpha/Services/ConversationManager.cs`
 - **Key Methods**: `InitializeConversation()`, `ProcessIterationAsync()`
 
+### IPlanner          <!-- NEW -->
+- **Purpose**: Abstraction over all planning strategies  
+- **Location**: `src/Agent/AgentAlpha/Interfaces/IPlanner.cs`  
+- **Implementations**:  
+  - `PlanningService` (single-shot)  
+  - `ChainedPlanner` (prompt-chaining, enabled when `USE_CHAINED_PLANNER=true`)  
+
+### ChainedPlanner    <!-- NEW -->
+- **Purpose**: Three-stage Analyse → Outline → Detail prompt chain  
+- **Location**: `src/Agent/AgentAlpha/Services/ChainedPlanner.cs`  
+- **Feature Flag**: `USE_CHAINED_PLANNER=true`
+
+#### New Environment Variables
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USE_CHAINED_PLANNER` | `false` | Switch between `PlanningService` and `ChainedPlanner` |
+| `CHAINED_PLANNER_MODEL` | `gpt-4.1-nano` | Model for Analyse / Outline stages |
+| `CHAINED_PLANNER_DETAIL_MODEL` | `gpt-4.1` | Model for Detail stage |
+| `CHAINED_PLANNER_MAX_TOKENS` | `2048` | Token limit per stage |
+
 ## Configuration System
 
 ### AgentConfiguration

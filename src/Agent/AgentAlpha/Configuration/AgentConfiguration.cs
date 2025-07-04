@@ -95,6 +95,16 @@ public class AgentConfiguration
     /// Enable router for task routing and fast-path execution
     /// </summary>
     public bool EnableRouter => true;
+
+    /// <summary>
+    /// Enable the use of a chained planner for complex task handling
+    /// </summary>
+    public bool UseChainedPlanner { get; set; } = false;
+
+    /// <summary>
+    /// Configuration for the chained planner's behavior and model usage
+    /// </summary>
+    public ChainedPlannerConfig ChainedPlanner { get; set; } = new();
     
     /// <summary>
     /// Create configuration from environment variables
@@ -150,7 +160,28 @@ public class AgentConfiguration
         
         // Parse MaxConversationMessages from environment with validation
         ParseMaxConversationMessages(config);
-        
+
+        config.UseChainedPlanner = 
+            (Environment.GetEnvironmentVariable("USE_CHAINED_PLANNER") ?? "false")
+                .Equals("true", StringComparison.OrdinalIgnoreCase);
+
+        // Parse chained planner specific env vars (optional)
+        config.ChainedPlanner.AnalyseModel =
+            Environment.GetEnvironmentVariable("CHAINED_PLANNER_MODEL")
+                ?? config.ChainedPlanner.AnalyseModel;
+
+        config.ChainedPlanner.OutlineModel = config.ChainedPlanner.AnalyseModel;
+
+        config.ChainedPlanner.DetailModel =
+            Environment.GetEnvironmentVariable("CHAINED_PLANNER_DETAIL_MODEL")
+                ?? config.ChainedPlanner.DetailModel;
+
+        if (int.TryParse(Environment.GetEnvironmentVariable("CHAINED_PLANNER_MAX_TOKENS"),
+                         out var maxTok) && maxTok > 0)
+        {
+            config.ChainedPlanner.MaxTokens = maxTok;
+        }
+
         // Validate the complete configuration
         ValidateConfiguration(config);
         

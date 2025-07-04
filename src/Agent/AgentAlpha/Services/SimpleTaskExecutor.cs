@@ -4,6 +4,9 @@ using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
 using Common.Interfaces.Session;
 using MCPClient;
+using ModelContextProtocol.Client;
+using System.Collections.Generic;
+using Common.Models.Session;              // ← explicit for Dictionary
 
 namespace AgentAlpha.Services;
 
@@ -19,6 +22,7 @@ public class SimpleTaskExecutor : ITaskExecutor
     private readonly ISessionActivityLogger _activityLogger;
     private readonly AgentConfiguration _config;
     private readonly ILogger<SimpleTaskExecutor> _logger;
+    private readonly IPlanner _planner;          // was PlanningService
 
     public SimpleTaskExecutor(
         IConnectionManager connectionManager,
@@ -27,7 +31,8 @@ public class SimpleTaskExecutor : ITaskExecutor
         ISessionManager sessionManager,
         ISessionActivityLogger activityLogger,
         AgentConfiguration config,
-        ILogger<SimpleTaskExecutor> logger)
+        ILogger<SimpleTaskExecutor> logger,
+        IPlanner planner)                       // << inject abstraction
     {
         _connectionManager = connectionManager;
         _toolManager = toolManager;
@@ -36,6 +41,7 @@ public class SimpleTaskExecutor : ITaskExecutor
         _activityLogger = activityLogger;
         _config = config;
         _logger = logger;
+        _planner = planner;
 
         // Set up activity logging
         _toolManager.SetActivityLogger(_activityLogger);
@@ -75,8 +81,39 @@ public class SimpleTaskExecutor : ITaskExecutor
             // Set up conversation
             await SetupConversationAsync(session, request);
 
+            /* ---------- NEW: generate and log execution plan ---------------- */
+            // Discover & filter tools once (also reused later)
+            var availableTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
+            var filteredTools  = _toolManager.ApplyFilters(availableTools, _config.ToolFilter);
+            var plan           = await BuildExecutionPlanAsync(
+                                      request.Task,
+                                      filteredTools.Select(t => t.Name).ToList(),
+                                      session.SessionId);
+
+            _logger.LogInformation("Generated execution plan:\n{Plan}", plan);
+
+            // Persisting into session.Metadata was causing a type mismatch (string vs object). 
+            // For now we just attach it as a session activity for traceability.
+            await _sessionManager.AddSessionActivityAsync(session.SessionId, new()
+            {
+                ActivityId   = Guid.NewGuid().ToString(),
+                SessionId    = session.SessionId,
+                Timestamp    = DateTime.UtcNow,
+                ActivityType = ActivityTypes.Planning,
+                Description  = "Initial execution plan generated",
+                Success      = true,
+                Data         = plan
+            });
+            /* ---------------------------------------------------------------- */
+
+            // Discover tools only once for the conversation loop
+            var selectedTools = await _toolManager.SelectToolsForTaskAsync(
+                                     request.Task, filteredTools);                     // ✅ correct overload
+             _logger.LogInformation("Starting ReAct conversation loop with {ToolCount} tools", 
+                                    selectedTools.Length);
+
             // Execute main conversation loop
-            await ExecuteConversationLoopAsync(request.Task);
+            await ExecuteConversationLoopAsync(request.Task, availableTools, filteredTools);
 
             _logger.LogInformation("Task completed successfully");
 
@@ -166,15 +203,18 @@ public class SimpleTaskExecutor : ITaskExecutor
         return Task.CompletedTask;
     }
 
-    private async Task ExecuteConversationLoopAsync(string task)
+    /* -------------------- SIGNATURE CHANGE ------------------------------ */
+    private async Task ExecuteConversationLoopAsync(
+        string task,
+        IList<McpClientTool> availableTools,       // ← pass pre-computed lists
+        IList<McpClientTool> filteredTools)
     {
         const int maxIterations = 10;
         var iteration = 0;
 
-        // Get available tools and select relevant ones
-        var availableTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
-        var filteredTools = _toolManager.ApplyFilters(availableTools, _config.ToolFilter);
-        var selectedTools = await _toolManager.SelectToolsForTaskAsync(task, filteredTools);
+        // Get relevant tools only once
+        var selectedTools = await _toolManager.SelectToolsForTaskAsync(
+                                     task, filteredTools);                     // ✅ correct overload
 
         _logger.LogInformation("Starting ReAct conversation loop with {ToolCount} tools", selectedTools.Length);
 
@@ -301,4 +341,10 @@ public class SimpleTaskExecutor : ITaskExecutor
     }
 
     private McpTransportType GetMcpTransportType() => McpTransportType.Http;
+
+    private async Task<string> BuildExecutionPlanAsync(
+        string task, IList<string> toolNames, string? sessionId)
+    {
+        return await _planner.CreatePlanAsync(task, toolNames, sessionId); // use abstraction
+    }
 }

@@ -66,6 +66,14 @@ public static class ServiceCollectionExtensions
         
         // Register planning service
         services.AddSingleton<PlanningService>();
+        services.AddSingleton<ChainedPlanner>();
+        services.AddSingleton<IPlanner>(sp =>
+        {
+            var cfg = sp.GetRequiredService<AgentConfiguration>();
+            return cfg.UseChainedPlanner
+                ? sp.GetRequiredService<ChainedPlanner>()
+                : sp.GetRequiredService<PlanningService>();
+        });
         
         // Register routing & fast-path (deduplicated)
         services.AddSingleton<ITaskRouter, TaskRouter>();
