@@ -54,6 +54,10 @@ public class ChainedPlanner : IPlanner
         }
     }
 
+    public async Task<string> RefinePlanAsync(
+        string existingPlan, string feedback, string? sessionId = null)
+        => await _fallback.RefinePlanAsync(existingPlan, feedback, sessionId);
+
     /* ---------------- helper methods ---------------------------------- */
 
     private async Task<string> CallStageAsync(

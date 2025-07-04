@@ -6,10 +6,18 @@ namespace AgentAlpha.Interfaces;
 public interface IPlanner
 {
     /// <summary>
-    /// Create an execution plan for the given task.
+    /// Create a first-pass execution plan.
     /// </summary>
     Task<string> CreatePlanAsync(
         string task,
         IList<string>? availableTools = null,
+        string? sessionId = null);
+
+    /// <summary>
+    /// Refine an existing plan based on evaluator feedback.
+    /// </summary>
+    Task<string> RefinePlanAsync(
+        string existingPlan,
+        string feedback,
         string? sessionId = null);
 }

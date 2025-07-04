@@ -78,6 +78,8 @@ public static class ServiceCollectionExtensions
         // Register routing & fast-path (deduplicated)
         services.AddSingleton<ITaskRouter, TaskRouter>();
         services.AddSingleton<IFastPathExecutor, FastPathExecutor>();
+        services.AddSingleton<IPlanEvaluator, PlanEvaluator>();
+        services.AddSingleton<PlanRefinementLoop>();
 
         return services;
     }

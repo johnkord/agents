@@ -107,6 +107,12 @@ public class AgentConfiguration
     public ChainedPlannerConfig ChainedPlanner { get; set; } = new();
     
     /// <summary>
+    /// Desired quality level for generated plans, between 0 (low quality) and 1 (high quality)
+    /// </summary>
+    public double PlanQualityTarget   { get; set; } = 0.8;
+    public int    MaxPlanRefinements  { get; set; } = 3;
+
+    /// <summary>
     /// Create configuration from environment variables
     /// </summary>
     /// <returns>Validated configuration instance</returns>
@@ -182,9 +188,17 @@ public class AgentConfiguration
             config.ChainedPlanner.MaxTokens = maxTok;
         }
 
+        // Parse plan-evaluator settings
+        if (double.TryParse(Environment.GetEnvironmentVariable("PLAN_QUALITY_TARGET"),
+                            out var tgt) && tgt is >= 0 and <= 1)
+            config.PlanQualityTarget = tgt;
+
+        if (int.TryParse(Environment.GetEnvironmentVariable("MAX_PLAN_REFINEMENTS"),
+                         out var maxRef) && maxRef >= 0)
+            config.MaxPlanRefinements = maxRef;
+
         // Validate the complete configuration
         ValidateConfiguration(config);
-        
         return config;
     }
 
@@ -215,6 +229,10 @@ public class AgentConfiguration
         {
             throw new InvalidOperationException($"MaxConversationMessages cannot be negative, got: {config.MaxConversationMessages}");
         }
+
+        // Validate new settings
+        if (config.PlanQualityTarget is < 0 or > 1)
+            throw new InvalidOperationException("PLAN_QUALITY_TARGET must be between 0 and 1.");
     }
 
     /// <summary>

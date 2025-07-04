@@ -7,6 +7,7 @@ using MCPClient;
 using ModelContextProtocol.Client;
 using System.Collections.Generic;
 using Common.Models.Session;              // ← explicit for Dictionary
+using System.Linq;                               // NEW
 
 namespace AgentAlpha.Services;
 
@@ -23,6 +24,7 @@ public class SimpleTaskExecutor : ITaskExecutor
     private readonly AgentConfiguration _config;
     private readonly ILogger<SimpleTaskExecutor> _logger;
     private readonly IPlanner _planner;          // was PlanningService
+    private readonly PlanRefinementLoop _planRefiner;     // NEW
 
     public SimpleTaskExecutor(
         IConnectionManager connectionManager,
@@ -32,7 +34,8 @@ public class SimpleTaskExecutor : ITaskExecutor
         ISessionActivityLogger activityLogger,
         AgentConfiguration config,
         ILogger<SimpleTaskExecutor> logger,
-        IPlanner planner)                       // << inject abstraction
+        IPlanner planner,
+        PlanRefinementLoop planRefiner)    // NEW
     {
         _connectionManager = connectionManager;
         _toolManager = toolManager;
@@ -42,6 +45,7 @@ public class SimpleTaskExecutor : ITaskExecutor
         _config = config;
         _logger = logger;
         _planner = planner;
+        _planRefiner = planRefiner;                       // NEW
 
         // Set up activity logging
         _toolManager.SetActivityLogger(_activityLogger);
@@ -85,10 +89,12 @@ public class SimpleTaskExecutor : ITaskExecutor
             // Discover & filter tools once (also reused later)
             var availableTools = await _toolManager.DiscoverToolsAsync(_connectionManager);
             var filteredTools  = _toolManager.ApplyFilters(availableTools, _config.ToolFilter);
-            var plan           = await BuildExecutionPlanAsync(
-                                      request.Task,
-                                      filteredTools.Select(t => t.Name).ToList(),
-                                      session.SessionId);
+
+            // convert to names ↓↓↓
+            var toolNames      = filteredTools.Select(t => t.Name).ToList();
+
+            var plan           = await _planner.CreatePlanAsync(request.Task, toolNames);
+            plan               = await _planRefiner.RefinePlanAsync(plan, request.Task); // NEW
 
             _logger.LogInformation("Generated execution plan:\n{Plan}", plan);
 
@@ -302,49 +308,46 @@ public class SimpleTaskExecutor : ITaskExecutor
     {
         return """
             You are an AI agent that follows the ReAct (Reasoning and Acting) methodology to solve tasks systematically.
-            
+
             **ReAct Pattern - Follow these steps in each iteration:**
-            
+
             1. **REASONING**: Think step-by-step about the task
                - Analyze what you need to accomplish
                - Consider what information you have vs. what you need
                - Plan your approach and identify the next logical action
                - Explain your reasoning clearly
-            
+
             2. **ACTING**: Execute a specific action using available tools
                - Choose the most appropriate tool for your current step
                - Use precise parameters based on your reasoning
                - Take only one focused action per iteration
-            
+
             3. **OBSERVING**: Analyze the results of your action
                - Examine what the tool returned
                - Determine if the result is what you expected
                - Assess if this moves you closer to task completion
                - Identify any new information or insights gained
-            
+
             4. **ITERATING**: Decide on the next step
                - If task is complete, use the 'complete_task' tool with comprehensive details
                - If more work is needed, reason about the next action
                - If you encounter errors, adjust your approach
-            
-            **Important Guidelines:**
+
+            **Important Guidelines**
             - Always start with reasoning before taking action
             - Take one action at a time and observe the results
-            - Be explicit about your thought process in each phase
-            - Build upon previous observations in your reasoning
-            - If you get stuck, try a different approach
-            - **When the task is finished, ALWAYS use the 'complete_task' tool** instead of just stating completion in text
-            - The 'complete_task' tool should include: summary, reasoning, evidence, deliverables, and key actions taken
-            
-            Follow this ReAct cycle until you call the 'complete_task' tool to formally complete the task.
+            - Be explicit about your thought process
+            - Build upon previous observations
+            - If stuck, adjust your approach
+            - When finished, ALWAYS use the 'complete_task' tool; include summary, reasoning, evidence, deliverables, key actions.
+
+            Follow this cycle until you formally complete the task with 'complete_task'.
             """;
     }
 
-    private McpTransportType GetMcpTransportType() => McpTransportType.Http;
+    private static McpTransportType GetMcpTransportType() => McpTransportType.Http;
 
     private async Task<string> BuildExecutionPlanAsync(
         string task, IList<string> toolNames, string? sessionId)
-    {
-        return await _planner.CreatePlanAsync(task, toolNames, sessionId); // use abstraction
-    }
+        => await _planner.CreatePlanAsync(task, toolNames, sessionId);
 }
