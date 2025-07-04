@@ -281,13 +281,15 @@ Agent patterns represent systems where LLMs dynamically direct their own process
 
 ### Autonomous Agents
 
-**Pattern Description**: Agents operate independently with environmental feedback, making dynamic decisions about tools and approaches.
+**Pattern Description**: Agents operate independently with environmental feedback, making dynamic decisions about tools and approaches. This pattern implements the ReAct (Reasoning and Acting) methodology, where agents alternate between reasoning about problems and taking actions to solve them.
 
 ```
 Task → [Agent Planning] → [Tool Selection] → [Action Execution] → [Environment Feedback]
          ↑                                                              ↓
          ← [Plan Adjustment] ← [Result Evaluation] ← [Observation Processing]
 ```
+
+> **Note**: The existing AgentAlpha implementation in this repository follows this autonomous agent pattern using the ReAct methodology.
 
 #### Implementation Structure
 - Dynamic planning and replanning capabilities
@@ -462,6 +464,8 @@ Start with simple patterns and progressively add complexity:
 - Pluggable pattern implementations
 - Shared infrastructure for common operations
 - Configuration-driven pattern selection
+
+> **Implementation Reference**: The AgentAlpha codebase in this repository demonstrates a modular architecture with interfaces like `ITaskExecutor`, `IConversationManager`, `IToolManager`, and `IConnectionManager` that can serve as a foundation for implementing these patterns.
 
 #### State Management
 - Session persistence across pattern executions
