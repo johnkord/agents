@@ -55,4 +55,9 @@ public interface IConversationManager
     /// evidence, reasoning and detailed results.
     /// </summary>
     Task UpdateMarkdownAsync(string iterationSummary, bool taskCompleted = false);
+
+    /* P5 – Worker Sub-Conversations */
+    Task<WorkerResult> SpawnWorkerAsync(string subTask,
+                                        Common.Models.Session.AgentSession parentSession,
+                                        CancellationToken ct = default);
 }

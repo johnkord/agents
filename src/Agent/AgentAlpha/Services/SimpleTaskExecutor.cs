@@ -8,6 +8,8 @@ using ModelContextProtocol.Client;
 using System.Collections.Generic;
 using Common.Models.Session;              // ← explicit for Dictionary
 using System.Linq;                               // NEW
+using System.Text.RegularExpressions;    // NEW
+using System.Text.Json;                 // + ADD
 
 namespace AgentAlpha.Services;
 
@@ -110,6 +112,56 @@ public class SimpleTaskExecutor : ITaskExecutor
                 Success      = true,
                 Data         = plan
             });
+            /* ---------------------------------------------------------------- */
+
+            /* ---------- P5: detect and run worker sub-tasks ----------------- */
+            var subTasks = ExtractSubTasks(plan);
+            if (subTasks.Count > 0)
+            {
+                _logger.LogInformation("P5: spawning {Count} worker(s)", subTasks.Count);
+                var workerResults = new List<WorkerResult>();
+
+                foreach (var st in subTasks)
+                {
+                    try
+                    {
+                        var wr = await _conversationManager.SpawnWorkerAsync(st, session);
+                        workerResults.Add(wr);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Worker for sub-task '{SubTask}' failed", st);
+                        workerResults.Add(new WorkerResult($"Worker failed: {ex.Message}",
+                                                           Array.Empty<ToolCall>(),
+                                                           new UsageStats()));
+                    }
+                }
+
+                // Aggregate summaries into markdown
+                var combined = string.Join("\n\n", workerResults.Select(
+                                (r, i) => $"### Worker {i + 1}\n{r.Summary}"));
+                await _conversationManager.UpdateMarkdownAsync($"Worker summaries:\n{combined}");
+
+                // Capture simple metrics
+                try
+                {
+                    var stats = new
+                    {
+                        Total     = workerResults.Count,
+                        Failures  = workerResults.Count(r => r.Summary.StartsWith("Worker failed")),
+                        AvgTokens = workerResults.Count == 0
+                                   ? 0
+                                   : workerResults.Average(r => r.TokensUsed.TotalTokens)
+                    };
+
+                    // Persist as JSON string since session.Metadata is a string field
+                    session.Metadata = JsonSerializer.Serialize(new { WorkerStats = stats });
+                }
+                catch
+                {
+                    /* best-effort – do not fail task execution on metrics persistence issues */
+                }
+            }
             /* ---------------------------------------------------------------- */
 
             // Discover tools only once for the conversation loop
@@ -350,4 +402,17 @@ public class SimpleTaskExecutor : ITaskExecutor
     private async Task<string> BuildExecutionPlanAsync(
         string task, IList<string> toolNames, string? sessionId)
         => await _planner.CreatePlanAsync(task, toolNames, sessionId);
+
+    /* ---------- NEW: helper to extract bullet-list subtasks ------------ */
+    private static List<string> ExtractSubTasks(string plan)
+    {
+        var subs = new List<string>();
+        foreach (var line in plan.Split('\n'))
+        {
+            var m = Regex.Match(line.Trim(), @"^- \[.\]\s*(.+)$");
+            if (m.Success)
+                subs.Add(m.Groups[1].Value.Trim());
+        }
+        return subs;
+    }
 }

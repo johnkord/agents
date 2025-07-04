@@ -26,7 +26,7 @@ Weaknesses: every task incurs full ReAct overhead; lack of fine-tuned control pa
 | **Routing** | new `TaskRouter` (inside `TaskExecutor`) | Quickly route “simple” tasks (e.g. single tool call) to fast path, heavy tasks to ReAct pipeline. |
 | **Parallelization (Sectioning)** | new `ParallelToolRunner` | Allow independent tool calls (e.g. file-info on many files) to execute concurrently. |
 | **Evaluator-Optimizer** | new `PlanEvaluator` service | Iteratively refine plans or outputs when evaluation criteria indicate deficiencies. |
-| **Orchestrator-Workers** | existing `TaskExecutor` (orchestrator) + lightweight *worker* LLM calls via `ConversationManager` | Enables decomposition of complex tasks into sub-conversations executed in parallel and aggregated. |
+| **Orchestrator-Workers** | existing `TaskExecutor` (orchestrator) + lightweight *worker* LLM calls via `ConversationManager` | Enables decomposition of complex tasks into sub-conversations executed and aggregated. Sequential for now; parallelisation postponed to P4. |
 | **Autonomous Agent (ReAct)** | `ConversationManager` + `SimpleToolManager` (status-quo) | Retained for open-ended problems requiring exploration. |
 
 ## 4. Target Architecture (v1.x)
@@ -76,7 +76,13 @@ flowchart TD
 
 ### Global Implementation Guidelines
 1. Routing is **always enabled**; the previous `ENABLE_ROUTER` environment flag has been removed.
-2. **Model choice**: use `gpt-4.1-nano` for any light-weight or classification prompt unless a more capable model is explicitly required.  
+2. **Model choice policy**  
+   • Use **`gpt-4.1-nano`** for *light-weight* jobs (classification, routing, short helper prompts).  
+   • Use **`gpt-4.1`** for *all other* reasoning or generation steps.  
+   • Both defaults are **configurable**:  
+     - `AgentConfiguration.Model` (heavy/primary) → `AGENT_MODEL` env var  
+     - `AgentConfiguration.FastModel` (light)     → `AGENT_LIGHT_MODEL` env var  
+   • Service-specific configs (e.g. `ChainedPlannerConfig.AnalyseModel`) inherit from these unless explicitly set.
 3. **Metrics storage**: capture per-phase statistics in the active
    `AgentSession` (e.g. `Session.Metadata.RoutingStats`) rather than exporting
    them to Prometheus or external systems.  

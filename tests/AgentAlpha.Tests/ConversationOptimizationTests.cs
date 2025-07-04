@@ -19,8 +19,9 @@ public class ConversationOptimizationTests
             Model = "gpt-4.1",
             MaxConversationMessages = 5 // Small limit for testing
         };
+        var nullActivityLogger = new NullSessionActivityLogger();
         
-        var conversationManager = new ConversationManager(nullOpenAI, nullLogger, config);
+        var conversationManager = new ConversationManager(nullOpenAI, nullLogger, config, nullActivityLogger);
         
         // Act
         conversationManager.InitializeConversation("You are a helpful assistant", "Task 1");
@@ -50,8 +51,9 @@ public class ConversationOptimizationTests
             Model = "gpt-4.1",
             MaxConversationMessages = 0 // No limit
         };
+        var nullActivityLogger = new NullSessionActivityLogger();
         
-        var conversationManager = new ConversationManager(nullOpenAI, nullLogger, config);
+        var conversationManager = new ConversationManager(nullOpenAI, nullLogger, config, nullActivityLogger);
         
         // Act
         conversationManager.InitializeConversation("You are a helpful assistant", "Task 1");
@@ -75,8 +77,9 @@ public class ConversationOptimizationTests
         var nullOpenAI = new NullOpenAIResponsesService();
         var nullLogger = NullLogger<ConversationManager>.Instance;
         var config = new AgentConfiguration { Model = "gpt-4.1" };
+        var nullActivityLogger = new NullSessionActivityLogger();
         
-        var conversationManager = new ConversationManager(nullOpenAI, nullLogger, config);
+        var conversationManager = new ConversationManager(nullOpenAI, nullLogger, config, nullActivityLogger);
         
         // Act
         conversationManager.InitializeConversation("System prompt", "User task");
@@ -99,8 +102,9 @@ public class ConversationOptimizationTests
         var nullOpenAI = new NullOpenAIResponsesService();
         var nullLogger = NullLogger<ConversationManager>.Instance;
         var config = new AgentConfiguration { Model = "gpt-4.1" };
+        var nullActivityLogger = new NullSessionActivityLogger();
         
-        var conversationManager = new ConversationManager(nullOpenAI, nullLogger, config);
+        var conversationManager = new ConversationManager(nullOpenAI, nullLogger, config, nullActivityLogger);
         conversationManager.InitializeConversation("System prompt", "User task");
         
         // Act

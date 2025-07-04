@@ -50,6 +50,7 @@ public static class ServiceCollectionExtensions
         // Simplified architecture - removed excessive abstractions
         services.AddSingleton<SimpleToolManager>();
         services.AddSingleton<IConversationManager, ConversationManager>();
+        services.AddTransient<WorkerConversation>();            // P5 – new instance per worker
         services.AddSingleton<SimpleTaskExecutor>();
         
         // Keep TaskExecutor interface for backward compatibility but register simplified implementation

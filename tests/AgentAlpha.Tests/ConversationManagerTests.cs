@@ -1,5 +1,7 @@
 using AgentAlpha.Configuration;
 using AgentAlpha.Services;
+using Common.Interfaces.Session;
+using Common.Models.Session;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAIIntegration;
@@ -17,6 +19,19 @@ public class NullOpenAIResponsesService : IOpenAIResponsesService
     }
 }
 
+public class NullSessionActivityLogger : ISessionActivityLogger
+{
+    public Task LogActivityAsync(string activityType, string description, object? data = null) => Task.CompletedTask;
+    public Task LogTimedActivityAsync(string activityType, string description, long durationMs, object? data = null) => Task.CompletedTask;
+    public Task LogFailedActivityAsync(string activityType, string description, string errorMessage, object? data = null) => Task.CompletedTask;
+    public string StartActivity(string activityType, string description, object? data = null) => Guid.NewGuid().ToString();
+    public Task CompleteActivityAsync(string activityId, object? additionalData = null) => Task.CompletedTask;
+    public Task FailActivityAsync(string activityId, string errorMessage, object? additionalData = null) => Task.CompletedTask;
+    public void SetCurrentSession(AgentSession session) { }
+    public AgentSession? GetCurrentSession() => null;
+    public Task<List<SessionActivity>> GetSessionActivitiesAsync() => Task.FromResult(new List<SessionActivity>());
+}
+
 public class ConversationManagerTests
 {
     private readonly ConversationManager _conversationManager;
@@ -27,8 +42,9 @@ public class ConversationManagerTests
         var nullOpenAI = new NullOpenAIResponsesService();
         var nullLogger = NullLogger<ConversationManager>.Instance;
         var config = new AgentConfiguration { Model = "gpt-4.1" };
+        var nullActivityLogger = new NullSessionActivityLogger();
         
-        _conversationManager = new ConversationManager(nullOpenAI, nullLogger, config);
+        _conversationManager = new ConversationManager(nullOpenAI, nullLogger, config, nullActivityLogger);
     }
 
     [Fact]

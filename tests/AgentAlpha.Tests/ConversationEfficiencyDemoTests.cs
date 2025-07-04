@@ -22,14 +22,15 @@ public class ConversationEfficiencyDemoTests
         // Arrange
         var nullOpenAI = new NullOpenAIResponsesService();
         var nullLogger = NullLogger<ConversationManager>.Instance;
+        var nullActivityLogger = new NullSessionActivityLogger();
         
         // Test without optimization (unlimited messages)
         var unlimitedConfig = new AgentConfiguration { Model = "gpt-4.1", MaxConversationMessages = 0 };
-        var unlimitedManager = new ConversationManager(nullOpenAI, nullLogger, unlimitedConfig);
+        var unlimitedManager = new ConversationManager(nullOpenAI, nullLogger, unlimitedConfig, nullActivityLogger);
         
         // Test with optimization (limit to 8 messages)
         var optimizedConfig = new AgentConfiguration { Model = "gpt-4.1", MaxConversationMessages = 8 };
-        var optimizedManager = new ConversationManager(nullOpenAI, nullLogger, optimizedConfig);
+        var optimizedManager = new ConversationManager(nullOpenAI, nullLogger, optimizedConfig, nullActivityLogger);
 
         // Simulate the same conversation in both managers
         var interactions = new[]
@@ -85,7 +86,8 @@ public class ConversationEfficiencyDemoTests
         var nullOpenAI = new NullOpenAIResponsesService();
         var nullLogger = NullLogger<ConversationManager>.Instance;
         var config = new AgentConfiguration { Model = "gpt-4.1" };
-        var manager = new ConversationManager(nullOpenAI, nullLogger, config);
+        var nullActivityLogger = new NullSessionActivityLogger();
+        var manager = new ConversationManager(nullOpenAI, nullLogger, config, nullActivityLogger);
 
         // Act
         manager.InitializeConversation("You are a helpful assistant", "Execute some tools");

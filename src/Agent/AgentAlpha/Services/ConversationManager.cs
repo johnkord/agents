@@ -8,6 +8,7 @@ using AgentAlpha.Models;
 using Common.Models.Session;
 using Common.Interfaces.Session;
 using Common.Interfaces.Tools;
+using Microsoft.Extensions.DependencyInjection;          // NEW
 namespace AgentAlpha.Services;
 
 /// <summary>
@@ -24,17 +25,25 @@ public class ConversationManager : IConversationManager
     private string _taskMarkdown = "";             // <-- new
     private const int MaxMarkdownTokens = 400; // ~1600 chars
     private const string RevisionToolName = "revise_plan"; // NEW
+    private readonly IServiceProvider _serviceProvider;   // NEW
 
     public ConversationManager(
         IOpenAIResponsesService openAi,
         ILogger<ConversationManager> logger,
         AgentConfiguration config,
-        ISessionActivityLogger? activityLogger = null)
+        ISessionActivityLogger activityLogger,
+        IServiceProvider? serviceProvider = null)           // <-- nullable + default
     {
-        _openAi      = openAi;
-        _logger      = logger;
-        _config      = config;
+        _openAi         = openAi;
+        _logger         = logger;
+        _config         = config;
         _activityLogger = activityLogger;
+
+        // create lightweight provider when unit tests pass null
+        _serviceProvider = serviceProvider
+                           ?? new ServiceCollection()
+                                  .BuildServiceProvider();   // <-- NEW fallback
+
         _messages    = new List<object>();
         _recentAssistantResponses = new List<string>();
     }
@@ -776,14 +785,14 @@ public class ConversationManager : IConversationManager
             var commonWords = currentWords.Intersect(recentWords).Count();
             var totalWords = currentWords.Union(recentWords).Count();
             
-            // If more than 80% of words are the same, consider it repetitive
+            // If more than 80% of the words are the same, consider it repetitive
             if (totalWords > 0 && (double)commonWords / totalWords > 0.8)
             {
                 similarResponseCount++;
             }
         }
 
-        // If 2 or more of the last 3 responses are very similar to current response
+        // If 2 or more of the last 3 responses are very similar to the current response
         var isRepetitive = similarResponseCount >= 2;
         
         if (isRepetitive)
@@ -802,9 +811,13 @@ public class ConversationManager : IConversationManager
         return IsProvidingRepetitiveResponses(response);
     }
 
-    public string GetTaskMarkdown() => _taskMarkdown;
+    /* -----------------------------------------------------------
+       Public helpers – can be overridden by lightweight variants
+       ----------------------------------------------------------- */
+    public virtual string GetTaskMarkdown() => _taskMarkdown;
 
-    public async Task UpdateMarkdownAsync(string iterationSummary, bool taskCompleted = false)
+    public virtual async Task UpdateMarkdownAsync(                     // ← was non-virtual
+        string iterationSummary, bool taskCompleted = false)
     {
         // Build a short prompt so that the LLM updates the markdown doc
         var prompt = $"""
@@ -906,5 +919,49 @@ public class ConversationManager : IConversationManager
         {
             _logger.LogWarning(ex, "Failed to update markdown, keeping previous version");
         }
+    }
+
+    /* -----------------------------------------------------------
+       P5 – Worker Sub-Conversations
+       ----------------------------------------------------------- */
+    public virtual async Task<WorkerResult> SpawnWorkerAsync(string subTask,
+                                                             AgentSession parentSession,
+                                                             CancellationToken ct = default)
+    {
+        // Resolve a fresh WorkerConversation instance
+        var worker = _serviceProvider.GetRequiredService<WorkerConversation>();
+
+        // Minimal system prompt for a helper agent
+        var systemPrompt = """
+            You are a helper agent. Complete the following sub-task as concisely
+            as possible. When done, clearly indicate completion.
+            """;
+
+        worker.InitializeConversation(systemPrompt, subTask);
+
+        // For the first cut we do not expose any tools to workers – they can still reason.
+        var dummyTools = Array.Empty<OpenAIIntegration.Model.ToolDefinition>();
+
+        var allToolCalls = new List<ToolCall>();
+        string? lastAssistantText = null;
+        const int maxWorkerIterations = 4;
+        for (var i = 0; i < maxWorkerIterations; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var resp = await worker.ProcessIterationAsync(dummyTools);
+            allToolCalls.AddRange(resp.ToolCalls);
+            lastAssistantText = resp.AssistantText;
+
+            if (worker.IsTaskComplete(resp))
+                break;
+        }
+
+        var result = new WorkerResult(
+            Summary    : lastAssistantText ?? "(no response)",
+            ToolOutputs: allToolCalls,
+            TokensUsed : new UsageStats(0, 0, 0)  // TODO: pipe real usage later
+        );
+
+        return result;
     }
 }
