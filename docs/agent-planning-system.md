@@ -16,9 +16,12 @@ Defines the contract for planning functionality:
 
 #### 2. PlanningService Implementation
 LLM-powered service that analyzes tasks and creates executable plans:
-- Uses GPT-3.5-turbo for fast plan generation
+- Uses configurable planning model (defaults to conversation model)
+- **Supports OpenAI reasoning models** (o1, o1-preview, o3, o3-mini) for enhanced planning capabilities
 - Validates plans against available tools
 - Supports plan refinement based on execution feedback
+- Provides fallback plans for error scenarios
+- Configurable via `PLANNING_MODEL` environment variable
 
 #### 3. TaskPlan Model
 Represents a complete execution plan:
@@ -157,9 +160,16 @@ The plan is validated and refined:
 ## Configuration Options
 
 ### Planning Model Selection
-- Default: GPT-3.5-turbo (fast, cost-effective)
-- Alternative: GPT-4 (higher quality, slower)
-- Temperature: 0.3 (structured output)
+The planning system supports separate model configuration for optimal performance:
+- **Default**: Uses the main conversation model (GPT-4.1 by default)
+- **Reasoning Models**: Can be configured to use specialized OpenAI reasoning models:
+  - **o1**: Advanced reasoning for complex planning scenarios
+  - **o1-mini**: Faster reasoning for simpler planning tasks
+  - **o1-preview**: Preview version of o1 reasoning model
+  - **o3**: Latest reasoning model for sophisticated analysis
+  - **o3-mini**: Efficient version of o3 for routine planning
+- **Standard Models**: GPT-4, GPT-4-turbo for general planning
+- **Temperature**: 0.2 (structured output optimized for planning)
 
 ### Plan Validation
 - Tool availability checking
@@ -175,17 +185,36 @@ The plan is validated and refined:
 
 ## Usage Examples
 
-### Basic Planning
+### Basic Planning with Reasoning Model
 ```csharp
-var plan = await taskExecutor.CreatePlanAsync("Calculate the fibonacci sequence up to 100");
-// Returns: Strategy, steps, required tools, complexity assessment
+// Configure separate models
+var config = new AgentConfiguration
+{
+    Model = "gpt-4.1",              // For conversation
+    PlanningModel = "o1-preview"    // For planning
+};
+
+var planningService = new PlanningService(config, openAiService, logger);
+var plan = await planningService.CreatePlanAsync("Analyze Q4 sales data and create insights");
+```
+
+### Environment Variable Configuration
+```bash
+# Set conversation model
+export AGENT_MODEL="gpt-4.1"
+
+# Set specialized planning model
+export PLANNING_MODEL="o1-preview"
+
+# Or use o3 for more advanced reasoning
+export PLANNING_MODEL="o3"
 ```
 
 ### Plan-Driven Execution
 ```csharp
 var request = TaskExecutionRequest.FromTask("Analyze sales data from Q3 report");
 await taskExecutor.ExecuteAsync(request);
-// Automatically creates plan, validates, and executes
+// Automatically creates plan using configured planning model, validates, and executes
 ```
 
 ### Plan Refinement
@@ -338,10 +367,19 @@ var refinedPlan = await planningService.RefinePlanWithStateAsync(
 ## Configuration
 
 ### Model Selection
-The enhanced planning system supports different LLM models:
-- **GPT-3.5-turbo**: Fast planning for most scenarios
-- **GPT-4**: More sophisticated analysis for complex tasks
-- **Custom Models**: Support for specialized planning models
+The enhanced planning system supports different LLM models with separate configuration:
+- **Conversation Model**: Used for iterative conversation and general tasks
+  - Default: GPT-4.1 
+  - Configurable via `AGENT_MODEL` environment variable
+- **Planning Model**: Used specifically for task planning and reasoning
+  - Default: Falls back to conversation model if not specified
+  - Configurable via `PLANNING_MODEL` environment variable
+  - **Recommended**: OpenAI reasoning models (o1, o1-mini, o3, o3-mini) for superior planning capabilities
+- **Configuration**: 
+  ```bash
+  export AGENT_MODEL="gpt-4.1"          # For conversation
+  export PLANNING_MODEL="o1-preview"    # For planning tasks
+  ```
 
 ### Confidence Thresholds
 Configure when to use enhanced planning:

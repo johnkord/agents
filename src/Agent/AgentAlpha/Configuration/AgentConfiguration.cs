@@ -46,9 +46,15 @@ public class AgentConfiguration
     public string OpenAiApiKey { get; set; } = "";
     
     /// <summary>
-    /// OpenAI model to use
+    /// OpenAI model to use for conversation and general tasks
     /// </summary>
     public string Model { get; set; } = "gpt-4.1";
+    
+    /// <summary>
+    /// OpenAI model to use for planning tasks (reasoning models like o1, o3, etc.)
+    /// If not specified, falls back to the main Model
+    /// </summary>
+    public string? PlanningModel { get; set; }
     
     /// <summary>
     /// Maximum number of conversation iterations
@@ -114,6 +120,13 @@ public class AgentConfiguration
             config.Model = ValidateModel(model);
         }
 
+        // Parse and validate planning model name
+        var planningModel = Environment.GetEnvironmentVariable("PLANNING_MODEL");
+        if (!string.IsNullOrEmpty(planningModel))
+        {
+            config.PlanningModel = ValidateModel(planningModel);
+        }
+
         // Parse and validate max iterations
         var maxIterationsStr = Environment.GetEnvironmentVariable("MAX_ITERATIONS");
         if (!string.IsNullOrEmpty(maxIterationsStr))
@@ -137,6 +150,15 @@ public class AgentConfiguration
         ValidateConfiguration(config);
         
         return config;
+    }
+
+    /// <summary>
+    /// Gets the model to use for planning tasks, falling back to the main model if no planning model is specified
+    /// </summary>
+    /// <returns>The model name to use for planning</returns>
+    public string GetPlanningModel()
+    {
+        return PlanningModel ?? Model;
     }
 
     /// <summary>
@@ -167,14 +189,19 @@ public class AgentConfiguration
     /// <exception cref="InvalidOperationException">Thrown when model name is invalid</exception>
     private static string ValidateModel(string model)
     {
-        var validModels = new[] { "gpt-4.1", "gpt-4", "gpt-4-turbo", "gpt-4.1-nano", "gpt-4.1-mini" };
+        var validModels = new[] { 
+            // Standard GPT models
+            "gpt-4.1", "gpt-4", "gpt-4-turbo", "gpt-4.1-nano", "gpt-4.1-mini",
+            // OpenAI reasoning models
+            "o1", "o1-mini", "o1-preview", "o3", "o3-mini"
+        };
         
         if (validModels.Contains(model, StringComparer.OrdinalIgnoreCase))
         {
             return model;
         }
         
-        throw new InvalidOperationException($"Invalid AGENT_MODEL value: '{model}'. Supported models: {string.Join(", ", validModels)}");
+        throw new InvalidOperationException($"Invalid model value: '{model}'. Supported models: {string.Join(", ", validModels)}");
     }
 
     /// <summary>
