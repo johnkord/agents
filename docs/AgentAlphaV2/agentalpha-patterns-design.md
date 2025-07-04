@@ -71,6 +71,16 @@ flowchart TD
 | **P5 – Worker Sub-Conversations** | Sub-conversation support in `ConversationManager` | • New method `SpawnWorkerAsync(taskSegment)`<br>• Aggregate results via orchestrator |
 | **P6 – Metrics & Roll-out** | Success metrics | • Add counters (latency, token cost, success rate) |
 
+### Global Implementation Guidelines  <!-- NEW -->
+1. **Model choice**: use `gpt-4.1-nano` for any light-weight or classification
+   prompt unless a more capable model is explicitly required.  
+2. **Metrics storage**: capture per-phase statistics in the active
+   `AgentSession` (e.g. `Session.Metadata.RoutingStats`) rather than exporting
+   them to Prometheus or external systems.  
+3. **Documentation scope**: avoid separate “Success-Criteria” or “Roll-out”
+   sections; keep plans implementation-focused.  
+4. These guidelines apply to **all roadmap phases (P1-P6)** and future docs.
+
 ## 6. Risk Mitigation
 - **Complexity creep**: roll back to simpler routing when needed.  
 - **Cost increase**: track `Usage` tokens; abort long loops.  
@@ -99,3 +109,23 @@ flowchart TD
     Conversation --> ParallelRunner
     ParallelRunner --> ToolManager
 ```
+
+## 8. Additional Enhancement Opportunities
+
+> The items below are not committed to the current roadmap but are worth
+> evaluating as AgentAlpha matures.
+
+| Theme | Idea | Rationale |
+|-------|------|-----------|
+| **Memory Layer** | Introduce a persistent vector-store backed memory service (e.g. Milvus, Qdrant) | Preserves long-term context, enables quicker recall of past tasks and reduces token usage. |
+| **Reflection Pattern** | Add a lightweight “self-critique” pass before executing tool calls | Catches obvious mistakes early, lowering error-handling overhead in later stages. |
+| **Guardrails & Alignment** | Integrate policy engines (OpenAI Guardrails, Rebuff) | Ensures tool calls remain within allowed scope, improving safety and reliability. |
+| **Streaming Execution** | Adopt streaming partial outputs to the console/UI | Improves perceived latency and allows early cancellation when answers are obvious. |
+| **Caching** | Response & tool-result caching with semantic hashing | Cuts cost for repeated or similar prompts and tool invocations. |
+| **Observability** | Export structured metrics to Prometheus / OpenTelemetry | Enables production-grade monitoring of latency, cost, success rates and error classes. |
+| **Plug-in Sandbox** | Run high-risk tools inside a restricted OS sandbox or container | Limits blast-radius of unsafe commands and supports untrusted third-party tools. |
+| **Model Routing** | Dynamically choose between “cheap” and “expensive” LLMs per step | Balances cost vs. accuracy by delegating simple queries to smaller models. |
+| **Multimodal Tools** | Add vision / audio tool interfaces | Positions the agent for tasks that span beyond plain text (e.g. screenshot analysis). |
+
+*These enhancements can be scheduled after P6 once the core pattern-driven
+architecture is stable.*
