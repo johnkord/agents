@@ -58,16 +58,19 @@ flowchart TD
 2. **Fast path** – one-shot LLM or direct tool call when possible.  
 3. **Chained planning** – three serial prompts improve plan structure before execution.  
 4. **Evaluation loop** – run evaluator after each major stage; stop when success conditions are met.  
-5. **Parallel tool runner** – batches independent tool invocations to cut latency.  
+5. **Parallel tool runner (Deferred)** – will batch independent tool invocations once re-prioritised.  
 
 ## 5. Implementation Plan
+
+> **Notice (2024-05-14)** – Phase **P4 – Parallel Tool Runner** is **deferred**.  
+> The roadmap now skips directly from P3 to P5; P4 will be revisited in a later planning cycle.
 
 | Phase | Milestones | Code Changes |
 |-------|------------|--------------|
 | **P1 – Routing & Fast Path** | `TaskRouter`, `IFastPathExecutor` | • New interface & implementation<br>• Update `Program` DI registration **(router now always active – no `ENABLE_ROUTER` env flag)**<br>• Unit tests for routing logic |
 | **P2 – Prompt Chaining Planner** | `ChainedPlanner` service | • Split `PlanningService` into analyser / outliner / detailer prompts<br>• Retain existing service for fallback |
 | **P3 – Plan Evaluation Loop** | `PlanEvaluator` + iteration policy | • Add evaluation request/response schema<br>• Integrate into `TaskExecutor` after planning |
-| **P4 – Parallel Tool Runner** | `ParallelToolRunner` | • Wrap `SimpleToolManager.ExecuteToolAsync` in `Task.WhenAll` where safe<br>• Configurable concurrency level |
+| ~~**P4 – Parallel Tool Runner**~~ (**Deferred**) | — | _Deferred; no implementation work scheduled in this cycle_ |
 | **P5 – Worker Sub-Conversations** | Sub-conversation support in `ConversationManager` | • New method `SpawnWorkerAsync(taskSegment)`<br>• Aggregate results via orchestrator |
 | **P6 – Metrics & Roll-out** | Success metrics | • Add counters (latency, token cost, success rate) |
 

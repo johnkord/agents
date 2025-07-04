@@ -1,4 +1,7 @@
-# P4 – Parallel Tool Runner
+# P4 – Parallel Tool Runner *(Deferred)*
+
+> **STATUS: Deferred** – Work on this feature is postponed until a later planning cycle (earliest revisit: Q4 2024).  
+> Implementation MUST NOT start before the design is re-approved.
 
 ## Goal
 Execute independent tool calls concurrently to cut latency.
