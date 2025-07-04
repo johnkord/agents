@@ -1,4 +1,4 @@
-# P6 – Metrics & Roll-out
+# P6 – Metrics & Roll-out - Deferred until later, not planned for implementation until future
 
 ## Objectives
 Collect latency, token usage, success-rate metrics and implement gradual enablement flags for P1-P5 features.
