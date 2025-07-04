@@ -115,4 +115,8 @@ var taskExecutor = new TaskExecutor(mockConnectionManager.Object, ...);
 - Include context about what operation was being performed
 - Graceful degradation where possible
 
+## Task Routing (P1)
+A lightweight `ITaskRouter` decides whether a request is handled by the new
+`IFastPathExecutor` (single-shot) or the classic ReAct `ITaskExecutor`.
+
 This architecture makes the codebase highly maintainable for both human developers and AI coding assistants.

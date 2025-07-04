@@ -41,9 +41,7 @@ public class ConnectionManager : IConnectionManager
             }
             else
             {
-                var cmd = command ?? "dotnet";
-                var arguments = args ?? ["run", "--project", "../../MCPServer/MCPServer.csproj"];
-                await _mcpClient.ConnectAsync(McpTransportType.Stdio, serverName, cmd, arguments);
+                throw new InvalidOperationException("Stdio transport is no longer supported; please use HTTP/SSE.");
             }
 
             _logger.LogInformation("Successfully connected to MCP server using {Transport}", transport);

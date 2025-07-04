@@ -92,6 +92,11 @@ public class AgentConfiguration
     public WebSearchTool WebSearch { get; set; } = new();
     
     /// <summary>
+    /// Enable router for task routing and fast-path execution
+    /// </summary>
+    public bool EnableRouter => true;
+    
+    /// <summary>
     /// Create configuration from environment variables
     /// </summary>
     /// <returns>Validated configuration instance</returns>

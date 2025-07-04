@@ -64,22 +64,22 @@ flowchart TD
 
 | Phase | Milestones | Code Changes |
 |-------|------------|--------------|
-| **P1 – Routing & Fast Path** | `TaskRouter`, `IFastPathExecutor` | • New interface & implementation<br>• Update `Program` DI registration<br>• Unit tests for routing logic |
+| **P1 – Routing & Fast Path** | `TaskRouter`, `IFastPathExecutor` | • New interface & implementation<br>• Update `Program` DI registration **(router now always active – no `ENABLE_ROUTER` env flag)**<br>• Unit tests for routing logic |
 | **P2 – Prompt Chaining Planner** | `ChainedPlanner` service | • Split `PlanningService` into analyser / outliner / detailer prompts<br>• Retain existing service for fallback |
 | **P3 – Plan Evaluation Loop** | `PlanEvaluator` + iteration policy | • Add evaluation request/response schema<br>• Integrate into `TaskExecutor` after planning |
 | **P4 – Parallel Tool Runner** | `ParallelToolRunner` | • Wrap `SimpleToolManager.ExecuteToolAsync` in `Task.WhenAll` where safe<br>• Configurable concurrency level |
 | **P5 – Worker Sub-Conversations** | Sub-conversation support in `ConversationManager` | • New method `SpawnWorkerAsync(taskSegment)`<br>• Aggregate results via orchestrator |
 | **P6 – Metrics & Roll-out** | Success metrics | • Add counters (latency, token cost, success rate) |
 
-### Global Implementation Guidelines  <!-- NEW -->
-1. **Model choice**: use `gpt-4.1-nano` for any light-weight or classification
-   prompt unless a more capable model is explicitly required.  
-2. **Metrics storage**: capture per-phase statistics in the active
+### Global Implementation Guidelines
+1. Routing is **always enabled**; the previous `ENABLE_ROUTER` environment flag has been removed.
+2. **Model choice**: use `gpt-4.1-nano` for any light-weight or classification prompt unless a more capable model is explicitly required.  
+3. **Metrics storage**: capture per-phase statistics in the active
    `AgentSession` (e.g. `Session.Metadata.RoutingStats`) rather than exporting
    them to Prometheus or external systems.  
-3. **Documentation scope**: avoid separate “Success-Criteria” or “Roll-out”
+4. **Documentation scope**: avoid separate “Success-Criteria” or “Roll-out”
    sections; keep plans implementation-focused.  
-4. These guidelines apply to **all roadmap phases (P1-P6)** and future docs.
+5. These guidelines apply to **all roadmap phases (P1-P6)** and future docs.
 
 ## 6. Risk Mitigation
 - **Complexity creep**: roll back to simpler routing when needed.  

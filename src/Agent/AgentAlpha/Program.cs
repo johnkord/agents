@@ -25,16 +25,16 @@ internal class Program
 
         // Create host with dependency injection
         var host = CreateHost();
-        
+
         // Parse command-line arguments
         var commandLineParser = new CommandLineParser();
         var request = commandLineParser.ParseArguments(args);
-        
+
         if (string.IsNullOrWhiteSpace(request.Task)) return;
 
         var agentConfig = host.Services.GetRequiredService<AgentConfiguration>();
         var logger = host.Services.GetRequiredService<ILogger<Program>>();
-        
+
         if (string.IsNullOrEmpty(agentConfig.OpenAiApiKey))
         {
             if (request.Task.Equals("test", StringComparison.OrdinalIgnoreCase))
@@ -42,15 +42,26 @@ internal class Program
                 await TestMcpConnection(host.Services.GetRequiredService<ILoggerFactory>());
                 return;
             }
-            Console.WriteLine("OPENAI_API_KEY not set."); 
+            Console.WriteLine("OPENAI_API_KEY not set.");
             return;
         }
 
-        // Execute the task using dependency injection
-        try
+        try                                            // <<< restored try wrapper
         {
-            var taskExecutor = host.Services.GetRequiredService<ITaskExecutor>();
-            await taskExecutor.ExecuteAsync(request);
+            // Router is always enabled
+            var router = host.Services.GetRequiredService<ITaskRouter>();
+            var (route, _) = await router.RouteAsync(request);
+
+            if (route == TaskRoute.FastPath)
+            {
+                await host.Services.GetRequiredService<IFastPathExecutor>()
+                                   .ExecuteAsync(request);
+                return;
+            }
+
+            // Fallback to full ReAct executor
+            await host.Services.GetRequiredService<ITaskExecutor>()
+                                .ExecuteAsync(request);
         }
         catch (HttpRequestException httpEx) when (httpEx.Message.Contains("api.openai.com"))
         {
@@ -79,7 +90,7 @@ internal class Program
     private static IHost CreateHost()
     {
         var agentConfig = AgentConfiguration.FromEnvironment();
-        
+
         return Host.CreateDefaultBuilder()
             .ConfigureLogging(logging =>
             {
@@ -138,7 +149,7 @@ internal class Program
             Console.WriteLine($"✅ Tools: {string.Join(", ", tools.Select(t => t.Name))}");
 
             var addRes = await mcp.CallToolAsync("add", new Dictionary<string, object?> { ["a"] = 2, ["b"] = 3 });
-            var txt    = addRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text;
+            var txt = addRes.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text;
             Console.WriteLine(addRes.IsError ? $"❌ add failed: {txt}" : $"✅ add(2,3) = {txt}");
 
             Console.WriteLine("✅ MCP connection test completed.");
@@ -149,10 +160,5 @@ internal class Program
         }
     }
 
-    internal static McpTransportType GetMcpTransportType()
-        => (Environment.GetEnvironmentVariable("MCP_TRANSPORT") ?? "stdio").ToLowerInvariant() switch
-        {
-            "http" or "sse" => McpTransportType.Http,
-            _               => McpTransportType.Stdio
-        };
+    internal static McpTransportType GetMcpTransportType() => McpTransportType.Http;
 }

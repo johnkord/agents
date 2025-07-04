@@ -100,22 +100,9 @@ public class SimpleTaskExecutor : ITaskExecutor
 
     private async Task ConnectToMcpServerAsync()
     {
-        var transport = GetMcpTransportType();
-        if (transport == McpTransportType.Http)
-        {
-            var url = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
-            await _connectionManager.ConnectAsync(McpTransportType.Http, "MCP Server", serverUrl: url);
-        }
-        else
-        {
-            await _connectionManager.ConnectAsync(
-                McpTransportType.Stdio,
-                "MCP Server",
-                command: "dotnet",
-                args: ["run", "--project", "../../MCPServer/MCPServer.csproj"]);
-        }
-
-        _logger.LogInformation("Connected to MCP server using {Transport}", transport);
+        var url = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
+        await _connectionManager.ConnectAsync(McpTransportType.Http, "MCP Server", serverUrl: url);
+        _logger.LogInformation("Connected to MCP server using HTTP (SSE) at {Url}", url);
     }
 
     private async Task<Common.Models.Session.AgentSession> GetOrCreateSessionAsync(TaskExecutionRequest request, string sessionName)
@@ -313,12 +300,5 @@ public class SimpleTaskExecutor : ITaskExecutor
             """;
     }
 
-    private McpTransportType GetMcpTransportType()
-    {
-        return (Environment.GetEnvironmentVariable("MCP_TRANSPORT") ?? "stdio").ToLowerInvariant() switch
-        {
-            "http" or "sse" => McpTransportType.Http,
-            _ => McpTransportType.Stdio
-        };
-    }
+    private McpTransportType GetMcpTransportType() => McpTransportType.Http;
 }

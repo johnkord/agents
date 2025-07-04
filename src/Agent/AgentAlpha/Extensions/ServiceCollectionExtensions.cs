@@ -67,6 +67,10 @@ public static class ServiceCollectionExtensions
         // Register planning service
         services.AddSingleton<PlanningService>();
         
+        // Register routing & fast-path (deduplicated)
+        services.AddSingleton<ITaskRouter, TaskRouter>();
+        services.AddSingleton<IFastPathExecutor, FastPathExecutor>();
+
         return services;
     }
 }
