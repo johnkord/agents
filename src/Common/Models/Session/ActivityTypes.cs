@@ -75,4 +75,45 @@ public static class ActivityTypes
     public const string ResponseQualityAssessment= "Response_Quality_Assessment";
     public const string TaskCompletionEvaluation = "Task_Completion_Evaluation";
     public const string Planning                 = "Planning";
+
+    // ---------- added from AgentAlpha ActivityTypes ----------
+    /// <summary>
+    /// Activity type for fast-path execution results
+    /// </summary>
+    public const string FastPathResult = "FastPathResult";
+
+    /// <summary>
+    /// Activity type for plan creation events
+    /// </summary>
+    public const string PlanCreated = "PlanCreated";
+
+    /// <summary>
+    /// Activity type for plan refinement events
+    /// </summary>
+    public const string PlanRefined = "PlanRefined";
+
+    /// <summary>
+    /// Activity type for worker spawning events
+    /// </summary>
+    public const string WorkerSpawned = "WorkerSpawned";
+
+    /// <summary>
+    /// Activity type for worker completion events
+    /// </summary>
+    public const string WorkerCompleted = "WorkerCompleted";
+
+    /// <summary>
+    /// Activity type for routing decision events
+    /// </summary>
+    public const string RouteDecision = "RouteDecision";
+
+    /// <summary>
+    /// Activity type for conversation step events
+    /// </summary>
+    public const string ConversationStep = "ConversationStep";
+
+    /// <summary>
+    /// Activity type for planner stage events (P2 feature)
+    /// </summary>
+    public const string PlannerStage = "PlannerStage";
 }

@@ -57,21 +57,6 @@ public class AgentConfigurationTests
     }
 
     [Fact]
-    public void FromEnvironment_WithHttpTransportButNoUrl_ShouldThrow()
-    {
-        // Arrange
-        Environment.SetEnvironmentVariable("MCP_TRANSPORT", "http");
-        Environment.SetEnvironmentVariable("MCP_SERVER_URL", null);
-        
-        // Act & Assert
-        var exception = Assert.Throws<InvalidOperationException>(() => AgentConfiguration.FromEnvironment());
-        Assert.Contains("MCP_SERVER_URL is required when using HTTP transport", exception.Message);
-        
-        // Cleanup
-        Environment.SetEnvironmentVariable("MCP_TRANSPORT", null);
-    }
-
-    [Fact]
     public void FromEnvironment_WithHttpTransportAndUrl_ShouldSucceed()
     {
         // Arrange

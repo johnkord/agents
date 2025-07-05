@@ -1,64 +1,150 @@
+using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
+using Common.Interfaces.Session;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Client;
-using MCPClient; // ← add enum & client transport
 using OpenAIIntegration;
 using OpenAIIntegration.Model;
+using System.Text.Json;
 
-namespace AgentAlpha.Services;
-
-public class FastPathExecutor : IFastPathExecutor
+namespace AgentAlpha.Services
 {
-    private readonly SimpleToolManager _tools;
-    private readonly IConnectionManager _conn;
-    private readonly ISessionAwareOpenAIService _openAi;
-    private readonly ILogger<FastPathExecutor> _log;
-
-    public FastPathExecutor(SimpleToolManager tools,
-                            IConnectionManager conn,
-                            ISessionAwareOpenAIService openAi,
-                            ILogger<FastPathExecutor> log)
+    /// <summary>
+    /// Executes simple tasks using fast-path optimizations, bypassing the full ReAct loop
+    /// </summary>
+    public class FastPathExecutor : IFastPathExecutor
     {
-        _tools = tools; _conn = conn; _openAi = openAi; _log = log;
-    }
+        private readonly AgentConfiguration _configuration;
+        private readonly ISessionAwareOpenAIService _openAiService;
+        private readonly ISessionManager _sessionManager;
+        private readonly ISessionActivityLogger _activityLogger;
+        private readonly ILogger<FastPathExecutor> _logger;
 
-    public async Task ExecuteAsync(TaskExecutionRequest req)
-    {
-        var task = req.Task.Trim();
-        if (string.IsNullOrEmpty(task))
+        public FastPathExecutor(
+            AgentConfiguration configuration,
+            ISessionAwareOpenAIService openAiService,
+            ISessionManager sessionManager,
+            ISessionActivityLogger activityLogger,
+            ILogger<FastPathExecutor> logger)
         {
-            Console.WriteLine("No task provided.");
-            return;
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _openAiService = openAiService ?? throw new ArgumentNullException(nameof(openAiService));
+            _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
+            _activityLogger = activityLogger ?? throw new ArgumentNullException(nameof(activityLogger));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        // Connect quickly if a tool might be needed
-        await EnsureConnectedAsync();
-
-        // Very simple heuristics – extend as needed
-        if (task.Contains("time"))
+        public async Task ExecuteAsync(TaskExecutionRequest request)
         {
-            var res = await _tools.ExecuteToolAsync(_conn, "get_current_time", new());
-            Console.WriteLine(res);
-            return;
+            _logger.LogInformation("Starting fast-path execution for task: {Task}", request.Task);
+
+            var startTime = DateTime.UtcNow;
+
+            try
+            {
+                // Determine if this is a tool task or LLM task
+                var taskAnalysis = await AnalyzeTaskAsync(request);
+
+                if (taskAnalysis.RequiresTool)
+                {
+                    // Placeholder for tool task execution
+                    _logger.LogWarning("Tool execution not implemented, falling back to LLM");
+                    await ExecuteLLMTaskAsync(request);
+                }
+                else
+                {
+                    await ExecuteLLMTaskAsync(request);
+                }
+
+                var duration = DateTime.UtcNow - startTime;
+                _logger.LogInformation("Fast-path execution completed in {Duration}ms", duration.TotalMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fast-path execution failed");
+                throw new InvalidOperationException($"Fast-path execution failed: {ex.Message}", ex);
+            }
         }
 
-        // Fallback: one-shot LLM
-        var resp = await _openAi.CreateResponseAsync(new ResponsesCreateRequest
+        private Task<TaskAnalysis> AnalyzeTaskAsync(TaskExecutionRequest request)
         {
-            Model  = req.Model ?? "gpt-3.5-turbo",
-            Input  = new[] { new { role = "user", content = task } },
-            MaxOutputTokens = 800
-        });
-        var answer = resp.Output?.OfType<OutputMessage>().FirstOrDefault()?.Content?.ToString();
-        Console.WriteLine(answer);
-    }
+            // Simple heuristics to determine if task requires a tool
+            var taskLower = request.Task.ToLowerInvariant();
 
-    private async Task EnsureConnectedAsync()
-    {
-        if (_conn.IsConnected) return;
+            if (taskLower.Contains("time") || taskLower.Contains("date"))
+                return Task.FromResult(new TaskAnalysis { RequiresTool = true, ToolName = "get_current_time" });
 
-        var url = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
-        await _conn.ConnectAsync(McpTransportType.Http, "FastPath MCP", serverUrl: url);
+            if (taskLower.Contains("file") || taskLower.Contains("directory") || taskLower.Contains("folder"))
+                return Task.FromResult(new TaskAnalysis { RequiresTool = true, ToolName = "list_files" });
+
+            if (taskLower.Contains("weather"))
+                return Task.FromResult(new TaskAnalysis { RequiresTool = true, ToolName = "get_weather" });
+
+            return Task.FromResult(new TaskAnalysis { RequiresTool = false });
+        }
+
+        private async Task ExecuteLLMTaskAsync(TaskExecutionRequest request)
+        {
+            _logger.LogInformation("Executing LLM-only task");
+
+            // Create a simple one-shot LLM request
+            var messages = new[]
+            {
+                new { role = "system", content = "You are a helpful AI assistant. Answer the user's question concisely." },
+                new { role = "user", content = request.Task }
+            };
+
+            var openAiRequest = new ResponsesCreateRequest
+            {
+                Model = _configuration.Model,
+                Input = messages,
+                MaxOutputTokens = 500,
+                Temperature = 0.7
+            };
+
+            var response = await _openAiService.CreateResponseAsync(openAiRequest);
+
+            var content = response.Output?.OfType<OutputMessage>().FirstOrDefault()?.Content?.ToString() ?? "";
+
+            _logger.LogInformation("LLM response received: {Length} characters", content.Length);
+
+            // Log the result
+            await LogActivityAsync(request, "LLM", null, content);
+
+            // Display the result
+            Console.WriteLine($"\n✅ Fast-path result:\n{content}\n");
+        }
+
+        private async Task LogActivityAsync(TaskExecutionRequest request, string toolName,
+            Dictionary<string, object?>? toolInput, string result)
+        {
+            if (string.IsNullOrEmpty(request.SessionId))
+                return;
+
+            await _activityLogger.LogActivityAsync(
+                request.SessionId,
+                "FastPath activity",
+                new
+                {
+                    task = request.Task,
+                    tool = toolName,
+                    input = toolInput,
+                    result,
+                    executor = "FastPath"
+                }
+            );
+        }
+
+        private class TaskAnalysis
+        {
+            public bool RequiresTool { get; set; }
+            public string? ToolName { get; set; }
+        }
+
+        private enum ActivityTypes
+        {
+            ToolExecution,
+            FastPathResult
+        }
     }
 }

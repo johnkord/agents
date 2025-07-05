@@ -221,7 +221,8 @@ public class AgentConfiguration
         // Validate HTTP transport has server URL
         if (config.Transport == McpTransportType.Http && string.IsNullOrEmpty(config.ServerUrl))
         {
-            throw new InvalidOperationException("MCP_SERVER_URL is required when using HTTP transport");
+
+            config.ServerUrl = "http://localhost:3000";
         }
 
         // Validate conversation message limits

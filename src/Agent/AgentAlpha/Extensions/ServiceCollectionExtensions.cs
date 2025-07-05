@@ -23,6 +23,12 @@ public static class ServiceCollectionExtensions
     /// <returns>The service collection for method chaining</returns>
     public static IServiceCollection AddAgentAlphaServices(this IServiceCollection services, AgentConfiguration configuration)
     {
+        if (services == null)
+            throw new ArgumentNullException(nameof(services));
+        
+        if (configuration == null)
+            throw new ArgumentNullException(nameof(configuration));
+
         // Register configuration
         services.AddSingleton(configuration);
         
@@ -47,7 +53,7 @@ public static class ServiceCollectionExtensions
         
         services.AddSingleton<ISessionActivityLogger, SessionActivityLogger>();
         
-        // Simplified architecture - removed excessive abstractions
+        // Core execution services
         services.AddSingleton<SimpleToolManager>();
         services.AddSingleton<IConversationManager, ConversationManager>();
         services.AddTransient<WorkerConversation>();            // P5 – new instance per worker
@@ -57,7 +63,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITaskExecutor>(provider => provider.GetRequiredService<SimpleTaskExecutor>());
         
         // Register OpenAI services
-        services.AddSingleton<IOpenAIResponsesService>(provider => new OpenAIResponsesService(configuration.OpenAiApiKey));
+        services.AddSingleton<IOpenAIResponsesService>(provider => 
+        {
+            var apiKey = configuration.OpenAiApiKey;
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                throw new InvalidOperationException("OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.");
+            }
+            return new OpenAIResponsesService(apiKey);
+        });
+        
         services.AddSingleton<ISessionAwareOpenAIService>(provider =>
         {
             var innerService = provider.GetRequiredService<IOpenAIResponsesService>();
@@ -65,23 +80,69 @@ public static class ServiceCollectionExtensions
             return new SessionAwareOpenAIService(innerService, logger);
         });
         
-        // Register planning service
+        // Register planning services
         services.AddSingleton<PlanningService>();
         services.AddSingleton<ChainedPlanner>();
         services.AddSingleton<IPlanner>(sp =>
         {
             var cfg = sp.GetRequiredService<AgentConfiguration>();
-            return cfg.UseChainedPlanner
-                ? sp.GetRequiredService<ChainedPlanner>()
-                : sp.GetRequiredService<PlanningService>();
+            var logger = sp.GetRequiredService<ILogger<IPlanner>>();
+            
+            try
+            {
+                return cfg.UseChainedPlanner
+                    ? sp.GetRequiredService<ChainedPlanner>()
+                    : sp.GetRequiredService<PlanningService>();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to resolve planner implementation");
+                throw;
+            }
         });
         
-        // Register routing & fast-path (deduplicated)
+        // Register routing & fast-path services (V2 features)
         services.AddSingleton<ITaskRouter, TaskRouter>();
         services.AddSingleton<IFastPathExecutor, FastPathExecutor>();
         services.AddSingleton<IPlanEvaluator, PlanEvaluator>();
         services.AddSingleton<PlanRefinementLoop>();
 
+        // Validate service registration
+        ValidateServiceRegistration(services);
+
         return services;
+    }
+    
+    /// <summary>
+    /// Validates that all required services are properly registered
+    /// </summary>
+    private static void ValidateServiceRegistration(IServiceCollection services)
+    {
+        var requiredServices = new[]
+        {
+            typeof(AgentConfiguration),
+            typeof(IConnectionManager),
+            typeof(ISessionManager),
+            typeof(ISessionActivityLogger),
+            typeof(SimpleToolManager),
+            typeof(IConversationManager),
+            typeof(ITaskExecutor),
+            typeof(IOpenAIResponsesService),
+            typeof(ISessionAwareOpenAIService),
+            typeof(IPlanner),
+            typeof(ITaskRouter),
+            typeof(IFastPathExecutor),
+            typeof(IPlanEvaluator),
+            typeof(PlanRefinementLoop)
+        };
+        
+        var registeredTypes = services.Select(s => s.ServiceType).ToHashSet();
+        var missingServices = requiredServices.Where(t => !registeredTypes.Contains(t)).ToList();
+        
+        if (missingServices.Any())
+        {
+            throw new InvalidOperationException(
+                $"The following required services are not registered: {string.Join(", ", missingServices.Select(t => t.Name))}");
+        }
     }
 }
