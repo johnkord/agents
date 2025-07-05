@@ -23,6 +23,16 @@ public class ConnectionManager : IConnectionManager
 
     public bool IsConnected => _mcpClient != null;
 
+    public async Task EnsureConnectedAsync()
+    {
+        if (IsConnected) return;
+
+        var url        = Environment.GetEnvironmentVariable("MCP_SERVER_URL") ?? "http://localhost:3000";
+        var serverName = Environment.GetEnvironmentVariable("MCP_SERVER_NAME") ?? "AgentAlpha MCP Server";
+
+        await ConnectAsync(McpTransportType.Http, serverName, serverUrl: url);
+    }
+
     public async Task ConnectAsync(McpTransportType transport, string serverName, string? serverUrl = null, string? command = null, string[]? args = null)
     {
         if (_mcpClient != null)

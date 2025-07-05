@@ -28,4 +28,9 @@ public interface IConnectionManager : IAsyncDisposable
     /// Execute a tool with the given arguments
     /// </summary>
     Task<CallToolResult> CallToolAsync(string toolName, Dictionary<string, object?> arguments);
+
+    /// <summary>
+    /// Ensure the connection is established; connect with default settings when needed.
+    /// </summary>
+    Task EnsureConnectedAsync();
 }

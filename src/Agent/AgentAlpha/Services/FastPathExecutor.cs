@@ -2,10 +2,14 @@ using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
 using Common.Interfaces.Session;
+using MCPClient;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 using OpenAIIntegration;
 using OpenAIIntegration.Model;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace AgentAlpha.Services
 {
@@ -19,24 +23,30 @@ namespace AgentAlpha.Services
         private readonly ISessionManager _sessionManager;
         private readonly ISessionActivityLogger _activityLogger;
         private readonly ILogger<FastPathExecutor> _logger;
+        private readonly IConnectionManager _connectionManager;
 
         public FastPathExecutor(
             AgentConfiguration configuration,
             ISessionAwareOpenAIService openAiService,
             ISessionManager sessionManager,
             ISessionActivityLogger activityLogger,
+            IConnectionManager connectionManager,
             ILogger<FastPathExecutor> logger)
         {
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _openAiService = openAiService ?? throw new ArgumentNullException(nameof(openAiService));
             _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
             _activityLogger = activityLogger ?? throw new ArgumentNullException(nameof(activityLogger));
+            _connectionManager = connectionManager ??
+                                 throw new ArgumentNullException(nameof(connectionManager));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task ExecuteAsync(TaskExecutionRequest request)
         {
             _logger.LogInformation("Starting fast-path execution for task: {Task}", request.Task);
+
+            await _connectionManager.EnsureConnectedAsync();   // ← guarantee connection
 
             var startTime = DateTime.UtcNow;
 
@@ -45,16 +55,30 @@ namespace AgentAlpha.Services
                 // Determine if this is a tool task or LLM task
                 var taskAnalysis = await AnalyzeTaskAsync(request);
 
-                if (taskAnalysis.RequiresTool)
+                if (taskAnalysis.RequiresTool && taskAnalysis.ToolName != null)
                 {
-                    // Placeholder for tool task execution
-                    _logger.LogWarning("Tool execution not implemented, falling back to LLM");
-                    await ExecuteLLMTaskAsync(request);
+                    var callResult = await _connectionManager.CallToolAsync(
+                        taskAnalysis.ToolName,
+                        taskAnalysis.Arguments ?? new Dictionary<string, object?>());
+
+                    var output = callResult.IsError
+                        ? $"Error: {callResult.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text}"
+                        : string.Join("\n", callResult.Content
+                                         .OfType<TextContentBlock>()
+                                         .Select(t => t.Text));
+
+                    _logger.LogInformation("Tool {Tool} completed. Result length: {Len}",
+                        taskAnalysis.ToolName, output.Length);
+
+                    await LogActivityAsync(request, taskAnalysis.ToolName, taskAnalysis.Arguments, output);
+                    Console.WriteLine($"\n✅ Fast-path tool result ({taskAnalysis.ToolName}):\n{output}\n");
                 }
                 else
                 {
                     await ExecuteLLMTaskAsync(request);
                 }
+
+                // TODO: Take input & output here to the user
 
                 var duration = DateTime.UtcNow - startTime;
                 _logger.LogInformation("Fast-path execution completed in {Duration}ms", duration.TotalMilliseconds);
@@ -66,22 +90,81 @@ namespace AgentAlpha.Services
             }
         }
 
-        private Task<TaskAnalysis> AnalyzeTaskAsync(TaskExecutionRequest request)
+        // + helper: convert MCP tool → OpenAI ToolDefinition
+        private static ToolDefinition ToToolDefinition(McpClientTool t) => new()
         {
-            // Simple heuristics to determine if task requires a tool
-            var taskLower = request.Task.ToLowerInvariant();
+            Type        = "function",
+            Name        = t.Name,
+            Description = t.Description,
+            Parameters  = JsonSerializer.Deserialize<object>(
+                              t.ProtocolTool.InputSchema.GetRawText())
+        };
 
-            if (taskLower.Contains("time") || taskLower.Contains("date"))
-                return Task.FromResult(new TaskAnalysis { RequiresTool = true, ToolName = "get_current_time" });
-
-            if (taskLower.Contains("file") || taskLower.Contains("directory") || taskLower.Contains("folder"))
-                return Task.FromResult(new TaskAnalysis { RequiresTool = true, ToolName = "list_files" });
-
-            if (taskLower.Contains("weather"))
-                return Task.FromResult(new TaskAnalysis { RequiresTool = true, ToolName = "get_weather" });
-
-            return Task.FromResult(new TaskAnalysis { RequiresTool = false });
+        // + helper: robust argument extraction from FunctionToolCall
+        private static Dictionary<string, object?> ExtractArguments(JsonElement? args)
+        {
+            if (args is not { } a) return new();
+            if (a.ValueKind == JsonValueKind.Object)
+                return JsonSerializer.Deserialize<Dictionary<string, object?>>(a.GetRawText()) ?? new();
+            if (a.ValueKind == JsonValueKind.String)
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(a.GetString() ?? "{}");
+                    return JsonSerializer.Deserialize<Dictionary<string, object?>>(doc.RootElement.GetRawText()) ?? new();
+                }
+                catch { }
+            }
+            return new();
         }
+
+        // ------- updated AnalyseTaskAsync -------------------------------------
+        private async Task<TaskAnalysis> AnalyzeTaskAsync(TaskExecutionRequest request)
+        {
+            var tools     = await _connectionManager.ListToolsAsync();
+            var toolDefs  = tools.Select(ToToolDefinition).ToArray();
+            var toolNames = tools.Select(t => t.Name).ToArray();
+
+            var messages = new[]
+            {
+                new { role = "system", content = """
+                    You decide whether the user's task can be fulfilled by calling ONE of the provided tools.
+                    If a tool fits, CALL IT with correct arguments.
+                    Otherwise answer the user directly without calling any tool.
+                    """ },
+                new { role = "user", content = $"""
+                    Task: {request.Task}
+                    """ }
+            };
+
+            var llmReq = new ResponsesCreateRequest
+            {
+                Model           = _configuration.Model,
+                Input           = messages,
+                Tools           = toolDefs,   // <-- pass real tools
+                ToolChoice      = "auto",
+                MaxOutputTokens = 300,
+                Temperature     = 0.0
+            };
+
+            var llmResp = await _openAiService.CreateResponseAsync(llmReq);
+
+            var fnCall = llmResp.Output?
+                             .OfType<FunctionToolCall>()
+                             .FirstOrDefault();          // any tool call qualifies
+
+            if (fnCall == null || string.IsNullOrWhiteSpace(fnCall.Name))
+                return new();                            // fall back to LLM path
+
+            return new TaskAnalysis
+            {
+                Mode          = "TOOL",
+                RequiresTool  = true,
+                ToolName      = fnCall.Name,
+                Arguments     = ExtractArguments(fnCall.Arguments)
+            };
+        }
+        // ---------------------------------------------------------------------
 
         private async Task ExecuteLLMTaskAsync(TaskExecutionRequest request)
         {
@@ -135,16 +218,14 @@ namespace AgentAlpha.Services
             );
         }
 
+        // ----------------------- UPDATED helper types ---------------------
         private class TaskAnalysis
         {
-            public bool RequiresTool { get; set; }
+            public string Mode { get; set; } = "LLM";
+            public bool   RequiresTool { get; set; }      // filled after parsing
             public string? ToolName { get; set; }
+            public Dictionary<string, object?> Arguments { get; set; } = new();
         }
-
-        private enum ActivityTypes
-        {
-            ToolExecution,
-            FastPathResult
-        }
+        // -----------------------------------------------------------------
     }
 }

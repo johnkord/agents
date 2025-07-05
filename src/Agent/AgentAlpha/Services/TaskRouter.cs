@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using OpenAIIntegration;
 using OpenAIIntegration.Model;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace AgentAlpha.Services;
 
@@ -21,6 +22,43 @@ public class TaskRouter : ITaskRouter
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    // NEW – single reusable tool definition
+    private static readonly ToolDefinition ClassifyTaskTool = new()
+    {
+        Type = "function",
+        Name = "classify_task",
+        Description = "Classify a user task for routing and return confidence score.",
+        Parameters = new
+        {
+            type = "object",
+            properties = new
+            {
+                classification = new
+                {
+                    type = "string",
+                    description = "SIMPLE_TOOL | SIMPLE_QUERY | COMPLEX"
+                },
+                confidence = new
+                {
+                    type = "number",
+                    description = "Confidence 0-1"
+                },
+                reasoning = new
+                {
+                    type = "string",
+                    description = "Short rationale"
+                }
+            },
+            required = new[] { "classification", "confidence" }
+        }
+    };
+
+    /// <summary>
+    /// Routes the given task execution request to the appropriate task route (FastPath or ReactLoop)
+    /// </summary>
+    /// <param name="request">The task execution request containing the task to be routed</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>A tuple containing the selected task route and the confidence level of the routing decision</returns>
     public async Task<(TaskRoute route, double confidence)> RouteAsync(
         TaskExecutionRequest request,
         CancellationToken cancellationToken = default)
@@ -35,23 +73,43 @@ public class TaskRouter : ITaskRouter
         {
             _logger.LogInformation("Analyzing task for routing: {Task}", request.Task);
 
-            // Use a lightweight LLM call to classify the task
             var messages = new[]
             {
                 new { role = "system", content = GetSystemPrompt() },
                 new { role = "user", content = $"Task: {request.Task}" }
             };
 
+            // --- CHANGED: instruct model to call our tool -----------------
             var openAiRequest = new ResponsesCreateRequest
             {
-                Model = "gpt-4.1-nano", // Lightweight model for routing
+                Model = "gpt-4.1-nano",
                 Input = messages,
+                Tools = new[] { ClassifyTaskTool },
+                ToolChoice = "auto",
                 MaxOutputTokens = 200,
                 Temperature = 0.3
             };
+            // ---------------------------------------------------------------
 
-            var response = await _openAiService.CreateResponseAsync(openAiRequest, cancellationToken);
-            var content = response.Output?.OfType<OutputMessage>().FirstOrDefault()?.Content?.ToString();
+            var response = await _openAiService.CreateResponseAsync(
+                openAiRequest, cancellationToken);
+
+            // --- NEW: extract tool call result ----------------------------
+            var fnCall = response.Output?
+                                   .OfType<FunctionToolCall>()
+                                   .FirstOrDefault(fc => fc.Name == ClassifyTaskTool.Name);
+
+            if (fnCall != null && fnCall.Arguments.HasValue)
+            {
+                var rd = ParseRoutingDecision(fnCall.Arguments.Value);
+                return (MapRoute(rd.Classification), rd.Confidence);
+            }
+            // ----------------------------------------------------------------
+
+            // Fallback – previous plain-JSON behaviour
+            var content = response.Output?
+                                .OfType<OutputMessage>()
+                                .FirstOrDefault()?.Content?.ToString();
 
             if (string.IsNullOrWhiteSpace(content))
             {
@@ -59,45 +117,14 @@ public class TaskRouter : ITaskRouter
                 return (TaskRoute.ReactLoop, 0.5);
             }
 
-            // Parse the JSON response
-            try
-            {
-                var routingDecision = JsonSerializer.Deserialize<RoutingDecision>(content,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var legacy = JsonSerializer.Deserialize<RoutingDecision>(
+                             content, new JsonSerializerOptions
+                             { PropertyNameCaseInsensitive = true });
 
-                if (routingDecision is null)
-                {
-                    _logger.LogWarning("Failed to deserialize routing decision, defaulting to ReactLoop");
-                    return (TaskRoute.ReactLoop, 0.5);
-                }
-
-                // Apply confidence threshold
-                if (routingDecision.Confidence < 0.7)
-                {
-                    _logger.LogInformation("Low confidence ({Confidence}), routing to ReactLoop",
-                        routingDecision.Confidence);
-                    return (TaskRoute.ReactLoop, routingDecision.Confidence);
-                }
-
-                // Map classification to route
-                var route = routingDecision.Classification?.ToUpperInvariant() switch
-                {
-                    "SIMPLE_TOOL" => TaskRoute.FastPath,
-                    "SIMPLE_QUERY" => TaskRoute.FastPath,
-                    "COMPLEX" => TaskRoute.ReactLoop,
-                    _ => TaskRoute.ReactLoop
-                };
-
-                _logger.LogInformation("Task routed to {Route} with confidence {Confidence}",
-                    route, routingDecision.Confidence);
-
-                return (route, routingDecision.Confidence);
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogError(ex, "Failed to parse routing response JSON");
+            if (legacy == null)
                 return (TaskRoute.ReactLoop, 0.3);
-            }
+
+            return (MapRoute(legacy.Classification), legacy.Confidence);
         }
         catch (Exception ex)
         {
@@ -106,19 +133,53 @@ public class TaskRouter : ITaskRouter
         }
     }
 
+    // --- helpers --------------------------------------------------------
+    private static RoutingDecision ParseRoutingDecision(JsonElement args)
+    {
+        // NEW: unwrap when the tool arguments arrive as a JSON-encoded string
+        if (args.ValueKind == JsonValueKind.String)
+        {
+            var json = args.GetString();
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    return ParseRoutingDecision(doc.RootElement);   // recurse with parsed object
+                }
+                catch (JsonException)
+                {
+                    // fall through to default handling below
+                }
+            }
+        }
+
+        // Fallback if we still don't have an object
+        if (args.ValueKind != JsonValueKind.Object)
+            return new RoutingDecision { Classification = "", Confidence = 0.0 };
+
+        var cls = args.GetProperty("classification").GetString() ?? "";
+        var conf = args.GetProperty("confidence").GetDouble();
+        var reas = args.TryGetProperty("reasoning", out var r) ? r.GetString() : "";
+        return new RoutingDecision { Classification = cls, Confidence = conf, Reasoning = reas };
+    }
+
+    private static TaskRoute MapRoute(string? classification) => (classification ?? "")
+        .ToUpperInvariant() switch
+        {
+            "SIMPLE_TOOL" => TaskRoute.FastPath,
+            "SIMPLE_QUERY" => TaskRoute.FastPath,
+            "COMPLEX" => TaskRoute.ReactLoop,
+            _ => TaskRoute.ReactLoop
+        };
+
     private string GetSystemPrompt()
     {
-        return @"You are a task routing assistant. Classify tasks into categories for routing:
-1. SIMPLE_TOOL: Single tool call can complete this (e.g., 'what time is it?', 'list files')
-2. SIMPLE_QUERY: Single LLM response needed, no tools (e.g., 'explain X', 'what is Y?')
-3. COMPLEX: Requires multiple steps, planning, or tool orchestration
-
-Respond with JSON:
-{
-  ""classification"": ""SIMPLE_TOOL"" | ""SIMPLE_QUERY"" | ""COMPLEX"",
-  ""confidence"": 0.0-1.0,
-  ""reasoning"": ""brief explanation""
-}";
+        return @"You are a task-routing assistant.
+After analysing the task, CALL the function classify_task with the arguments:
+classification (SIMPLE_TOOL | SIMPLE_QUERY | COMPLEX),
+confidence (0-1), reasoning (short).
+Return nothing else.";
     }
 }
 

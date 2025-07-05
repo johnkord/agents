@@ -150,7 +150,7 @@ namespace MCPClient
         /// <param name="serverUrl">URL of the HTTP server (used for HTTP)</param>
         public async Task ConnectAsync(string serverName, string command, string[] arguments, string? serverUrl = null)
         {
-            var transportMode = Environment.GetEnvironmentVariable("MCP_TRANSPORT")?.ToLowerInvariant() ?? "stdio";
+            var transportMode = Environment.GetEnvironmentVariable("MCP_TRANSPORT")?.ToLowerInvariant() ?? "sse";
             
             if (transportMode == "sse" || transportMode == "http")
             {
