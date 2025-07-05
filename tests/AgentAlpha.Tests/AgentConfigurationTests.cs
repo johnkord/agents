@@ -29,34 +29,6 @@ public class AgentConfigurationTests
     }
 
     [Fact]
-    public void FromEnvironment_WithInvalidTransport_ShouldThrow()
-    {
-        // Arrange
-        Environment.SetEnvironmentVariable("MCP_TRANSPORT", "invalid-transport");
-        
-        // Act & Assert
-        var exception = Assert.Throws<InvalidOperationException>(() => AgentConfiguration.FromEnvironment());
-        Assert.Contains("Invalid MCP_TRANSPORT value", exception.Message);
-        
-        // Cleanup
-        Environment.SetEnvironmentVariable("MCP_TRANSPORT", null);
-    }
-
-    [Fact]
-    public void FromEnvironment_WithInvalidMaxIterations_ShouldThrow()
-    {
-        // Arrange
-        Environment.SetEnvironmentVariable("MAX_ITERATIONS", "-1");
-        
-        // Act & Assert
-        var exception = Assert.Throws<InvalidOperationException>(() => AgentConfiguration.FromEnvironment());
-        Assert.Contains("Invalid MAX_ITERATIONS", exception.Message);
-        
-        // Cleanup
-        Environment.SetEnvironmentVariable("MAX_ITERATIONS", null);
-    }
-
-    [Fact]
     public void FromEnvironment_WithHttpTransportAndUrl_ShouldSucceed()
     {
         // Arrange

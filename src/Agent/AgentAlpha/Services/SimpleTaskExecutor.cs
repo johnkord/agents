@@ -112,61 +112,10 @@ public class SimpleTaskExecutor : ITaskExecutor
                 Success      = true,
                 Data         = plan
             });
-            /* ---------------------------------------------------------------- */
-
-            /* ---------- P5: detect and run worker sub-tasks ----------------- */
-            var subTasks = ExtractSubTasks(plan);
-            if (subTasks.Count > 0)
-            {
-                _logger.LogInformation("P5: spawning {Count} worker(s)", subTasks.Count);
-                var workerResults = new List<WorkerResult>();
-
-                foreach (var st in subTasks)
-                {
-                    try
-                    {
-                        var wr = await _conversationManager.SpawnWorkerAsync(st, session);
-                        workerResults.Add(wr);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Worker for sub-task '{SubTask}' failed", st);
-                        workerResults.Add(new WorkerResult($"Worker failed: {ex.Message}",
-                                                           Array.Empty<ToolCall>(),
-                                                           new UsageStats()));
-                    }
-                }
-
-                // Aggregate summaries into markdown
-                var combined = string.Join("\n\n", workerResults.Select(
-                                (r, i) => $"### Worker {i + 1}\n{r.Summary}"));
-                await _conversationManager.UpdateMarkdownAsync($"Worker summaries:\n{combined}");
-
-                // Capture simple metrics
-                try
-                {
-                    var stats = new
-                    {
-                        Total     = workerResults.Count,
-                        Failures  = workerResults.Count(r => r.Summary.StartsWith("Worker failed")),
-                        AvgTokens = workerResults.Count == 0
-                                   ? 0
-                                   : workerResults.Average(r => r.TokensUsed.TotalTokens)
-                    };
-
-                    // Persist as JSON string since session.Metadata is a string field
-                    session.Metadata = JsonSerializer.Serialize(new { WorkerStats = stats });
-                }
-                catch
-                {
-                    /* best-effort – do not fail task execution on metrics persistence issues */
-                }
-            }
-            /* ---------------------------------------------------------------- */
 
             // Discover tools only once for the conversation loop
             var selectedTools = await _toolManager.SelectToolsForTaskAsync(
-                                     request.Task, filteredTools);                     // ✅ correct overload
+                                     request.Task, filteredTools);
              _logger.LogInformation("Starting ReAct conversation loop with {ToolCount} tools", 
                                     selectedTools.Length);
 
@@ -264,7 +213,7 @@ public class SimpleTaskExecutor : ITaskExecutor
     /* -------------------- SIGNATURE CHANGE ------------------------------ */
     private async Task ExecuteConversationLoopAsync(
         string task,
-        IList<McpClientTool> availableTools,       // ← pass pre-computed lists
+        IList<McpClientTool> availableTools,
         IList<McpClientTool> filteredTools)
     {
         const int maxIterations = 10;
@@ -272,7 +221,7 @@ public class SimpleTaskExecutor : ITaskExecutor
 
         // Get relevant tools only once
         var selectedTools = await _toolManager.SelectToolsForTaskAsync(
-                                     task, filteredTools);                     // ✅ correct overload
+                                     task, filteredTools);
 
         _logger.LogInformation("Starting ReAct conversation loop with {ToolCount} tools", selectedTools.Length);
 

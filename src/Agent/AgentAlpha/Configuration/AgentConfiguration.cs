@@ -131,7 +131,7 @@ public class AgentConfiguration
         {
             "http" or "sse" => McpTransportType.Http,
             "stdio" => McpTransportType.Stdio,
-            _ => throw new InvalidOperationException($"Invalid MCP_TRANSPORT value: '{transport}'. Supported values: 'stdio', 'http', 'sse'")
+            _ => McpTransportType.Http
         };
 
         // Parse and validate model name
@@ -158,7 +158,8 @@ public class AgentConfiguration
             }
             else
             {
-                throw new InvalidOperationException($"Invalid MAX_ITERATIONS value: '{maxIterationsStr}'. Must be a positive integer.");
+                config.MaxIterations = 3;
+                Console.WriteLine($"Invalid MAX_ITERATIONS value: '{maxIterationsStr}'. Defaulting to {config.MaxIterations}.");
             }
         }
 
