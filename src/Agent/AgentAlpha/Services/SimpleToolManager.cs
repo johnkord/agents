@@ -256,116 +256,30 @@ public class SimpleToolManager
     }
 
     /// <summary>
-    /// Simple tool selection for a task - uses basic heuristics and includes web search when appropriate
+    /// Returns up to <paramref name="maxTools"/> tool definitions without heuristics.
+    /// The LLM decides which ones to use each iteration.
     /// </summary>
-    public Task<ToolDefinition[]> SelectToolsForTaskAsync(string task, IList<McpClientTool> availableTools, int maxTools = 10)
+    public Task<List<ToolDefinition>> SelectToolsForTaskAsync(
+        string task,
+        IList<McpClientTool> availableTools)
     {
-        var selectedTools = new List<ToolDefinition>();
-        var taskLower = task.ToLowerInvariant();
+        var defs = availableTools
+            .Select(CreateOpenAiToolDefinition)
+            .ToList();
 
-        // Add essential MCP tools first - these should always be available
-        var essentialToolNames = new[] { "complete_task", "run_command" };
-        var alreadySelected = new HashSet<string>();
-        
-        foreach (var toolName in essentialToolNames)
+        // Ensure complete_task is present
+        if (defs.All(d => d.Name != "complete_task"))
         {
-            var essentialTool = availableTools.FirstOrDefault(t => t.Name == toolName);
-            if (essentialTool != null)
-            {
-                selectedTools.Add(CreateOpenAiToolDefinition(essentialTool));
-                alreadySelected.Add(essentialTool.Name);
-                _logger.LogDebug("Added essential tool: {ToolName}", toolName);
-            }
-            else
-            {
-                _logger.LogWarning("Essential tool not found: {ToolName}", toolName);
-            }
+            var ct = availableTools.FirstOrDefault(t => t.Name == "complete_task");
+            if (ct != null)
+                defs.Add(CreateOpenAiToolDefinition(ct));
         }
 
-        // Simple keyword-based selection for remaining tools
-        var keywordMappings = new Dictionary<string[], string[]>
-        {
-            [new[] { "file", "read", "write", "directory", "folder" }] = 
-                new[] { "read_file", "write_file", "list_directory", "file_info" },
-            [new[] { "text", "search", "replace", "word", "count" }] = 
-                new[] { "search_in_file", "replace_in_file", "word_count" },
-            [new[] { "time", "date", "current", "now" }] = 
-                new[] { "current_time" },
-            [new[] { "system", "environment", "variable" }] = 
-                new[] { "get_env_var", "system_info" }
-        };
+        defs.Add(_config.WebSearch.ToToolDefinition());
 
-        foreach (var (keywords, toolNames) in keywordMappings)
-        {
-            if (selectedTools.Count >= maxTools) break;
-
-            if (keywords.Any(keyword => taskLower.Contains(keyword)))
-            {
-                foreach (var toolName in toolNames)
-                {
-                    if (selectedTools.Count >= maxTools) break;
-
-                    var tool = availableTools.FirstOrDefault(t => 
-                        string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase) &&
-                        !alreadySelected.Contains(t.Name));
-
-                    if (tool != null)
-                    {
-                        selectedTools.Add(CreateOpenAiToolDefinition(tool));
-                        alreadySelected.Add(tool.Name);
-                    }
-                }
-            }
-        }
-
-        // Add web search if it looks like the task might need current information
-        if (ShouldIncludeWebSearch(task) && selectedTools.Count < maxTools && _config.WebSearch != null)
-        {
-            var webSearchTool = _config.WebSearch.ToToolDefinition();
-            selectedTools.Add(webSearchTool);
-            _logger.LogDebug("Added web search tool for task");
-        }
-
-        // Fill remaining slots with commonly useful tools
-        if (selectedTools.Count < maxTools)
-        {
-            var generalTools = new[] { "file_info", "list_directory", "current_time" };
-            foreach (var toolName in generalTools)
-            {
-                if (selectedTools.Count >= maxTools) break;
-
-                var tool = availableTools.FirstOrDefault(t => 
-                    string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase) &&
-                    !alreadySelected.Contains(t.Name));
-
-                if (tool != null)
-                {
-                    selectedTools.Add(CreateOpenAiToolDefinition(tool));
-                }
-            }
-        }
-
-        _logger.LogInformation("Selected {Count} tools for task: {Tools}", 
-            selectedTools.Count, string.Join(", ", selectedTools.Select(t => 
-                string.IsNullOrEmpty(t.Name) ? $"[{t.Type}]" : t.Name)));
-
-        return Task.FromResult(selectedTools.ToArray());
-    }
-
-    private bool ShouldIncludeWebSearch(string task)
-    {
-        var taskLower = task.ToLowerInvariant();
-        var webSearchKeywords = new[]
-        {
-            "web", "search", "internet", "online", "news", "current", "latest", "recent", 
-            "today", "real-time", "live", "browse", "website", "url", "google", "find",
-            "what's happening", "breaking", "update", "trending", "available", "which", 
-            "what", "list", "models", "options", "versions", "supported", "offerings", 
-            "plans", "pricing", "features", "capabilities", "services", "apis", "endpoints", 
-            "status", "working", "active"
-        };
-
-        return webSearchKeywords.Any(keyword => taskLower.Contains(keyword));
+        _logger.LogInformation("Selected {Count} tools for task: {Task}",
+            defs.Count, task);
+        return Task.FromResult(defs);
     }
 
     // Simplified tool management methods - these throw NotImplementedException as they're not needed

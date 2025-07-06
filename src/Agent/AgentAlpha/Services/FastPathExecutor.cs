@@ -2,6 +2,7 @@ using AgentAlpha.Configuration;
 using AgentAlpha.Interfaces;
 using AgentAlpha.Models;
 using Common.Interfaces.Session;
+using Common.Models.Session;
 using MCPClient;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
@@ -47,6 +48,30 @@ namespace AgentAlpha.Services
             _logger.LogInformation("Starting fast-path execution for task: {Task}", request.Task);
 
             await _connectionManager.EnsureConnectedAsync();   // ← guarantee connection
+
+            if (_activityLogger.GetCurrentSession() == null)
+            {
+                AgentSession? session = null;
+
+                if (!string.IsNullOrEmpty(request.SessionId))
+                {
+                    session = await _sessionManager.GetSessionAsync(request.SessionId);
+                }
+
+                // create one if none was found
+                if (session is null)
+                {
+                    var name = string.IsNullOrEmpty(request.SessionName)
+                        ? $"fastpath-{DateTime.UtcNow:yyyyMMdd_HHmmss}"
+                        : request.SessionName!;
+
+                    session          = await _sessionManager.CreateSessionAsync(name);
+                    request.SessionId = session.SessionId;   // propagate to request
+                }
+
+                _activityLogger.SetCurrentSession(session);   // session is guaranteed non-null
+            }
+            // -------------------------------------------------------------------------
 
             var startTime = DateTime.UtcNow;
 
@@ -198,24 +223,35 @@ namespace AgentAlpha.Services
             Console.WriteLine($"\n✅ Fast-path result:\n{content}\n");
         }
 
-        private async Task LogActivityAsync(TaskExecutionRequest request, string toolName,
-            Dictionary<string, object?>? toolInput, string result)
+        private async Task LogActivityAsync(
+            TaskExecutionRequest request,
+            string toolName,
+            Dictionary<string, object?>? toolInput,
+            string result)
         {
-            if (string.IsNullOrEmpty(request.SessionId))
+            // skip if logger has no session (should not happen after fix above)
+            if (_activityLogger.GetCurrentSession() == null)
                 return;
 
+            var activityType = toolName == "LLM"
+                ? ActivityTypes.OpenAIResponse
+                : ActivityTypes.FastPathResult;      // use dedicated constant
+
+            var description  = toolName == "LLM"
+                ? "FastPath LLM response"
+                : $"FastPath tool result ({toolName})";
+
             await _activityLogger.LogActivityAsync(
-                request.SessionId,
-                "FastPath activity",
+                activityType,
+                description,
                 new
                 {
-                    task = request.Task,
-                    tool = toolName,
-                    input = toolInput,
+                    task     = request.Task,
+                    tool     = toolName,
+                    input    = toolInput,
                     result,
                     executor = "FastPath"
-                }
-            );
+                });
         }
 
         // ----------------------- UPDATED helper types ---------------------

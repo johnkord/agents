@@ -113,11 +113,7 @@ public class SimpleTaskExecutor : ITaskExecutor
                 Data         = plan
             });
 
-            // Discover tools only once for the conversation loop
-            var selectedTools = await _toolManager.SelectToolsForTaskAsync(
-                                     request.Task, filteredTools);
-             _logger.LogInformation("Starting ReAct conversation loop with {ToolCount} tools", 
-                                    selectedTools.Length);
+            _logger.LogInformation("Starting ReAct conversation loop");
 
             // Execute main conversation loop
             await ExecuteConversationLoopAsync(request.Task, availableTools, filteredTools);
@@ -219,18 +215,20 @@ public class SimpleTaskExecutor : ITaskExecutor
         const int maxIterations = 10;
         var iteration = 0;
 
-        // Get relevant tools only once
-        var selectedTools = await _toolManager.SelectToolsForTaskAsync(
-                                     task, filteredTools);
-
-        _logger.LogInformation("Starting ReAct conversation loop with {ToolCount} tools", selectedTools.Length);
+        // NO pre-computed selectedTools here – we refresh every iteration
 
         while (iteration < maxIterations)
         {
             iteration++;
-            _logger.LogDebug("ReAct iteration {Iteration}: Processing reasoning and action phase", iteration);
 
-            // Process one ReAct iteration
+            // NEW: refresh tool list every iteration
+            var selectedTools = await _toolManager.SelectToolsForTaskAsync(
+                                    task,
+                                    filteredTools);
+
+            _logger.LogDebug("ReAct iteration {Iteration}: Using {ToolCount} tools",
+                             iteration, selectedTools.Count);
+
             var response = await _conversationManager.ProcessIterationAsync(selectedTools);
 
             if (!response.HasToolCalls)

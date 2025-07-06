@@ -27,8 +27,8 @@ public interface IConversationManager
     /// <summary>
     /// Process one iteration of the conversation
     /// </summary>
-    Task<ConversationResponse> ProcessIterationAsync(ToolDefinition[] availableTools);
-    
+    Task<ConversationResponse> ProcessIterationAsync(List<ToolDefinition> availableTools);
+
     /// <summary>
     /// Add tool execution results to the conversation
     /// </summary>

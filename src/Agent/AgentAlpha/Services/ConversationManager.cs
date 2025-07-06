@@ -129,7 +129,7 @@ public class ConversationManager : IConversationManager
     }
 
     public async Task<ConversationResponse> ProcessIterationAsync(
-        OpenAIIntegration.Model.ToolDefinition[] availableTools)
+        List<OpenAIIntegration.Model.ToolDefinition> availableTools)
     {
         // --- inject markdown context ---------------------------
         var mdSnapshot = GetCondensedMarkdown();
@@ -143,8 +143,8 @@ public class ConversationManager : IConversationManager
             });
         }
         // --------------------------------------------------------
-        
-        var toolList = (availableTools ?? Array.Empty<ToolDefinition>()).ToList();
+
+        var toolList = (availableTools ?? new List<ToolDefinition>()).ToList();
 
         var request = new ResponsesCreateRequest
         {
@@ -303,8 +303,8 @@ public class ConversationManager : IConversationManager
     }
 
     public async Task<ConversationResponse> ProcessIterationWithExpansionAsync(
-        OpenAIIntegration.Model.ToolDefinition[] currentTools,
-        Func<Task<OpenAIIntegration.Model.ToolDefinition[]>> getAdditionalTools)
+        List<OpenAIIntegration.Model.ToolDefinition> currentTools,
+        Func<Task<List<OpenAIIntegration.Model.ToolDefinition>>> getAdditionalTools)
     {
         // First, try with current tools
         var response = await ProcessIterationAsync(currentTools);
@@ -317,12 +317,12 @@ public class ConversationManager : IConversationManager
             try
             {
                 var additionalTools = await getAdditionalTools();
-                if (additionalTools.Length > 0)
+                if (additionalTools.Count > 0)
                 {
-                    var expandedTools = currentTools.Concat(additionalTools).ToArray();
+                    var expandedTools = currentTools.Concat(additionalTools).ToList();
                     _logger.LogInformation("Retrying with {Count} additional tools: {Tools}", 
-                        additionalTools.Length, string.Join(", ", additionalTools.Select(t => t.Name)));
-                    
+                        additionalTools.Count, string.Join(", ", additionalTools.Select(t => t.Name)));
+
                     // Add a message about tool expansion
                     _messages.Add(new { role = "system", content = $"Additional tools are now available: {string.Join(", ", additionalTools.Select(t => t.Name))}" });
                     
@@ -940,7 +940,7 @@ public class ConversationManager : IConversationManager
         worker.InitializeConversation(systemPrompt, subTask);
 
         // For the first cut we do not expose any tools to workers – they can still reason.
-        var dummyTools = Array.Empty<OpenAIIntegration.Model.ToolDefinition>();
+        var dummyTools = new List<ToolDefinition>();
 
         var allToolCalls = new List<ToolCall>();
         string? lastAssistantText = null;
