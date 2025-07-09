@@ -27,8 +27,13 @@ internal sealed class StubPlanner : IPlanner
 internal sealed class StubEvaluator(double[] scores) : IPlanEvaluator
 {
     private int _idx;
+
     public Task<EvaluationResult> EvaluateAsync(string plan, string task)
-        => Task.FromResult(new EvaluationResult(scores[Math.Min(_idx, scores.Length - 1)], $"fb{_idx++}"));
+    {
+        // Return the next score or repeat the last one when exhausted
+        var score = _idx < scores.Length ? scores[_idx++] : scores[^1];
+        return Task.FromResult(new EvaluationResult(score, $"stub score {score:F2}"));
+    }
 }
 
 public class PlanRefinementLoopTests
@@ -62,7 +67,7 @@ public class PlanRefinementLoopTests
         // Act
         await loop.RefinePlanAsync("plan0", "task");
 
-        // Assert – only 1 refinement because score did not improve
-        Assert.Equal(1, planner.RefineCalls);
+        // Assert – 2 refinements because stagnation limit is 2
+        Assert.Equal(2, planner.RefineCalls);          // CHANGED (was 1)
     }
 }

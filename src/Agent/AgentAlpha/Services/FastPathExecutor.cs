@@ -47,36 +47,22 @@ namespace AgentAlpha.Services
         {
             _logger.LogInformation("Starting fast-path execution for task: {Task}", request.Task);
 
-            await _connectionManager.EnsureConnectedAsync();   // ← guarantee connection
-
             if (_activityLogger.GetCurrentSession() == null)
-            {
-                AgentSession? session = null;
+                throw new InvalidOperationException(
+                    "No current session set. Initialise session in Program.cs before invoking FastPathExecutor.");
 
-                if (!string.IsNullOrEmpty(request.SessionId))
-                {
-                    session = await _sessionManager.GetSessionAsync(request.SessionId);
-                }
+            await _connectionManager.EnsureConnectedAsync();
 
-                // create one if none was found
-                if (session is null)
-                {
-                    var name = string.IsNullOrEmpty(request.SessionName)
-                        ? $"fastpath-{DateTime.UtcNow:yyyyMMdd_HHmmss}"
-                        : request.SessionName!;
-
-                    session          = await _sessionManager.CreateSessionAsync(name);
-                    request.SessionId = session.SessionId;   // propagate to request
-                }
-
-                _activityLogger.SetCurrentSession(session);   // session is guaranteed non-null
-            }
-            // -------------------------------------------------------------------------
-
-            var startTime = DateTime.UtcNow;
+            string? actId   = null;                    // +NEW
+            var      start  = DateTime.UtcNow;         // renamed for clarity         
 
             try
             {
+                actId = _activityLogger.StartActivity( // +NEW
+                          ActivityTypes.FastPathExecution,
+                          "Fast-path execution started",
+                          new { request.Task });
+
                 // Determine if this is a tool task or LLM task
                 var taskAnalysis = await AnalyzeTaskAsync(request);
 
@@ -105,12 +91,24 @@ namespace AgentAlpha.Services
 
                 // TODO: Take input & output here to the user
 
-                var duration = DateTime.UtcNow - startTime;
+                var duration = DateTime.UtcNow - start;
                 _logger.LogInformation("Fast-path execution completed in {Duration}ms", duration.TotalMilliseconds);
+
+                if (actId != null)                     // +NEW
+                    await _activityLogger.CompleteActivityAsync(
+                            actId,
+                            new { DurationMs = (long)duration.TotalMilliseconds });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Fast-path execution failed");
+
+                if (actId != null)                     // +NEW
+                    await _activityLogger.FailActivityAsync(
+                            actId,
+                            ex.Message,
+                            new { Exception = ex.GetType().Name });
+
                 throw new InvalidOperationException($"Fast-path execution failed: {ex.Message}", ex);
             }
         }
@@ -166,20 +164,20 @@ namespace AgentAlpha.Services
             {
                 Model           = _configuration.Model,
                 Input           = messages,
-                Tools           = toolDefs,   // <-- pass real tools
+                Tools           = toolDefs,
                 ToolChoice      = "auto",
-                MaxOutputTokens = 300,
-                Temperature     = 0.0
+                MaxOutputTokens = 500,
+                Temperature     = 0.3
             };
 
             var llmResp = await _openAiService.CreateResponseAsync(llmReq);
 
             var fnCall = llmResp.Output?
                              .OfType<FunctionToolCall>()
-                             .FirstOrDefault();          // any tool call qualifies
+                             .FirstOrDefault();
 
             if (fnCall == null || string.IsNullOrWhiteSpace(fnCall.Name))
-                return new();                            // fall back to LLM path
+                return new();
 
             return new TaskAnalysis
             {

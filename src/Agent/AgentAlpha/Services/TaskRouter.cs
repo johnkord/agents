@@ -5,6 +5,8 @@ using OpenAIIntegration;
 using OpenAIIntegration.Model;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Common.Interfaces.Session;
+using Common.Models.Session;      // +NEW
 
 namespace AgentAlpha.Services;
 
@@ -14,12 +16,17 @@ namespace AgentAlpha.Services;
 public class TaskRouter : ITaskRouter
 {
     private readonly ISessionAwareOpenAIService _openAiService;
-    private readonly ILogger<TaskRouter> _logger;
+    private readonly ILogger<TaskRouter>        _logger;
+    private readonly ISessionActivityLogger     _activityLogger;   // +NEW
 
-    public TaskRouter(ISessionAwareOpenAIService openAiService, ILogger<TaskRouter> logger)
+    public TaskRouter(
+        ISessionAwareOpenAIService openAiService,
+        ILogger<TaskRouter> logger,
+        ISessionActivityLogger activityLogger)                     // +NEW
     {
-        _openAiService = openAiService ?? throw new ArgumentNullException(nameof(openAiService));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _openAiService   = openAiService ?? throw new ArgumentNullException(nameof(openAiService));
+        _logger          = logger         ?? throw new ArgumentNullException(nameof(logger));
+        _activityLogger  = activityLogger ?? throw new ArgumentNullException(nameof(activityLogger));
     }
 
     // NEW – single reusable tool definition
@@ -69,9 +76,16 @@ public class TaskRouter : ITaskRouter
         if (string.IsNullOrWhiteSpace(request.Task))
             throw new ArgumentException("Task cannot be null or empty", nameof(request));
 
+        string? actId = null;
+
         try
         {
             _logger.LogInformation("Analyzing task for routing: {Task}", request.Task);
+
+            actId = _activityLogger.StartActivity(
+                       ActivityTypes.TaskRouting, 
+                       "Routing task", 
+                       new { request.Task });
 
             var messages = new[]
             {
@@ -102,6 +116,10 @@ public class TaskRouter : ITaskRouter
             if (fnCall != null && fnCall.Arguments.HasValue)
             {
                 var rd = ParseRoutingDecision(fnCall.Arguments.Value);
+
+                await _activityLogger.CompleteActivityAsync(       // +NEW
+                        actId, new { rd.Classification, rd.Confidence });
+
                 return (MapRoute(rd.Classification), rd.Confidence);
             }
             // ----------------------------------------------------------------
@@ -124,11 +142,19 @@ public class TaskRouter : ITaskRouter
             if (legacy == null)
                 return (TaskRoute.ReactLoop, 0.3);
 
+            await _activityLogger.CompleteActivityAsync(          // +NEW
+                    actId, new { legacy.Classification, legacy.Confidence });
+
             return (MapRoute(legacy.Classification), legacy.Confidence);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during task routing, defaulting to ReactLoop");
+
+            if (actId != null)                                     // +NEW
+                await _activityLogger.FailActivityAsync(
+                        actId, ex.Message, new { Exception = ex.GetType().Name });
+
             return (TaskRoute.ReactLoop, 0.0);
         }
     }

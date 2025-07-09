@@ -51,22 +51,6 @@
             "envFile": "${workspaceFolder}/.env"
         },
         {
-            "name": "AgentAlpha (SSE) list",
-            "type": "coreclr",
-            "request": "launch",
-            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
-            "args": ["--session-name","2025-06-24-s2","I'm running in a linux terminal and I want to list all the files in my current directory"],
-            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
-            "console": "integratedTerminal",
-            "stopAtEntry": false,
-            "preLaunchTask": "build:agent-alpha",
-            "env": {
-                "MCP_TRANSPORT": "sse",
-                "MCP_SERVER_URL": "http://localhost:3000"
-            },
-            "envFile": "${workspaceFolder}/.env"
-        },
-        {
             "name": "AgentAlpha (SSE) copy",
             "type": "coreclr",
             "request": "launch",
@@ -184,6 +168,22 @@
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
             "args": ["--max-iterations", "5", "--verbose", "List all files in the current directory and provide a brief description of each file based on its name"],
+            "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "preLaunchTask": "build:agent-alpha",
+            "env": {
+                "MCP_TRANSPORT": "sse",
+                "MCP_SERVER_URL": "http://localhost:3000"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "AgentAlpha (read in all docs and summarize)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
+            "args": ["--max-iterations", "20", "--verbose", "Read in all documentation files in the /home/cq/p/agents/docs directory and provide a summary of their contents"],
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",
             "stopAtEntry": false,

@@ -14,6 +14,8 @@ using AgentAlpha.Models;         // NEW
 using AgentAlpha.Extensions;     // NEW
 using AgentAlpha.Services;       // NEW
 using AgentAlpha.Interfaces;     // NEW
+using Common.Interfaces.Session;      // +ADD
+using Common.Models.Session;          // +ADD
 
 namespace AgentAlpha;
 
@@ -48,6 +50,44 @@ internal class Program
 
         try                                            // <<< restored try wrapper
         {
+            /* -----------------------------------------------------------------
+               Ensure a session is present for activity logging BEFORE routing
+               ----------------------------------------------------------------- */
+            var sessionManager  = host.Services.GetRequiredService<ISessionManager>();
+            var activityLogger  = host.Services.GetRequiredService<ISessionActivityLogger>();
+
+            if (activityLogger.GetCurrentSession() == null)
+            {
+                AgentSession? session = null;
+
+                // Try by ID first
+                if (!string.IsNullOrWhiteSpace(request.SessionId))
+                {
+                    try { session = await sessionManager.GetSessionAsync(request.SessionId); }
+                    catch { /* ignore – will create below */ }
+                }
+
+                // Try by name
+                if (session == null && !string.IsNullOrWhiteSpace(request.SessionName))
+                {
+                    try { session = await sessionManager.GetSessionByNameAsync(request.SessionName); }
+                    catch { /* ignore – will create below */ }
+                }
+
+                // Create if still missing
+                if (session == null)
+                {
+                    var name = string.IsNullOrWhiteSpace(request.SessionName)
+                        ? $"fastpath-{DateTime.UtcNow:yyyyMMdd_HHmmss}"
+                        : request.SessionName!;
+                    session = await sessionManager.CreateSessionAsync(name);
+                    request.SessionId = session.SessionId;   // propagate
+                }
+
+                activityLogger.SetCurrentSession(session);
+            }
+            /* ----------------------------------------------------------------- */
+
             // Router is always enabled
             var router = host.Services.GetRequiredService<ITaskRouter>();
             var (route, _) = await router.RouteAsync(request);

@@ -1,6 +1,5 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
-using System.Text.Json;
 using MCPServer.ToolApproval;
 using MCPServer.Logging;                       // +++
 using System.Collections.Generic;              // NEW
@@ -10,8 +9,8 @@ namespace MCPServer.Tools;
 [McpServerToolType]
 public class FileTools
 {
-    [McpServerTool(Name = "read_file"), Description("Read the contents of a file.")]
-    public static string ReadFile(string filePath)
+    [McpServerTool(Name = "read_file"), Description("Read the contents of a file. Set 'raw' to true to return only the content.")]
+    public static string ReadFile(string filePath, bool raw = false)
     {
         ToolLogger.LogStart("read_file");
         try
@@ -20,7 +19,8 @@ public class FileTools
                 return $"Error: File '{filePath}' does not exist";
 
             var content = File.ReadAllText(filePath);
-            return $"Successfully read file '{filePath}'. Content:\n{content}";
+            return raw ? content
+                       : $"Successfully read file '{filePath}'. Content:\n{content}";
         }
         catch (Exception ex)
         {

@@ -30,8 +30,9 @@ public class PlanRefinementLoop
 
     public async Task<string> RefinePlanAsync(string plan, string task)
     {
-        var attempts  = 0;
+        var attempts   = 0;
         var stagnation = 0;
+        const int StagnationLimit = 2;                 // NEW – allow one repeat before aborting
 
         var eval = await _evaluator.EvaluateAsync(plan, task);
 
@@ -39,7 +40,7 @@ public class PlanRefinementLoop
 
         while (eval.Score < _cfg.PlanQualityTarget
                && attempts < _cfg.MaxPlanRefinements
-               && stagnation < 1)                   // ← stop after first stagnant score
+               && stagnation < StagnationLimit)        // CHANGED
         {
             attempts++;
             _log.LogInformation("Plan score {Score:F2} < target {Target}. Refining… (Attempt {Attempt})",
@@ -52,7 +53,9 @@ public class PlanRefinementLoop
             if (Math.Abs(eval.Score - lastScore) < 0.001)
             {
                 stagnation++;
-                _log.LogInformation("No score improvement detected (still {Score:F2}) – stopping refinement.", eval.Score);
+                _log.LogInformation(
+                    "No score improvement detected (still {Score:F2}) – {Stagnant}/{Limit} stagnant iterations.",
+                    eval.Score, stagnation, StagnationLimit);          // UPDATED log
             }
             else
             {

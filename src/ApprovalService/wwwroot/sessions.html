@@ -215,7 +215,9 @@
             overflow-x:auto;
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <!-- +NEW -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- +NEW – YAML formatter -->
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -237,6 +239,16 @@
 
     <script>
         let loadedSessions = {};
+
+        /* NEW – repeatedly JSON-parse a string until it stops being a string  */
+        function safeParseJson(str, maxDepth = 3) {
+            let data = str;
+            for (let i = 0; i < maxDepth && typeof data === 'string'; i++) {
+                try { data = JSON.parse(data); }
+                catch { break; }
+            }
+            return data;
+        }
 
         async function loadSessions() {
             const container = document.getElementById('sessions-container');
@@ -361,14 +373,25 @@
                 
                 let dataHtml = '';
                 if (activity.data) {
-                    if (activity.activityType === 'TaskMarkdownUpdate') {             // +NEW
+                    if (activity.activityType === 'TaskMarkdownUpdate') {
+                        /* unchanged – render markdown */
                         dataHtml = `<div class="activity-data markdown">${marked.parse(activity.data)}</div>`;
                     } else {
+                        /* CHANGED – robust decode, supports doubly-encoded JSON */
                         try {
-                            const parsedData = JSON.parse(activity.data);
-                            dataHtml = `<div class="activity-data">${JSON.stringify(parsedData, null, 2)}</div>`;
+                            const parsed = safeParseJson(activity.data);        // <= NEW
+                            const yaml   = jsyaml.dump(parsed, {
+                                indent: 2, lineWidth: 120, noRefs: true
+                            });
+                            dataHtml = `<pre class="activity-data">${yaml}</pre>`;
                         } catch {
-                            dataHtml = `<div class="activity-data">${activity.data}</div>`;
+                            // ...existing fallback unicode decode...
+                            const decoded = activity.data
+                                .replace(/\\n/g, '\n')
+                                .replace(/\\t/g, '  ')
+                                .replace(/\\u([0-9a-fA-F]{4})/g,
+                                         (_, h) => String.fromCharCode(parseInt(h,16)));
+                            dataHtml = `<pre class="activity-data">${decoded}</pre>`;
                         }
                     }
                 }
@@ -482,8 +505,10 @@
                     if (activity.data) {
                         copyText += `  Data: \n`;
                         try {
-                            const parsedData = JSON.parse(activity.data);
-                            copyText += `${JSON.stringify(parsedData, null, 4).split('\n').map(line => `    ${line}`).join('\n')}\n`;
+                            /* CHANGED – use the same safe parser when copying */
+                            const parsedData = safeParseJson(activity.data);   // <= NEW
+                            const pretty     = JSON.stringify(parsedData, null, 4);
+                            copyText += pretty.split('\n').map(l => `    ${l}`).join('\n') + '\n';
                         } catch {
                             copyText += `    ${activity.data}\n`;
                         }

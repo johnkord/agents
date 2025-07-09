@@ -69,31 +69,96 @@ public class PlanEvaluator : IPlanEvaluator
 
         try
         {
-            var resp = await _openAi.CreateResponseAsync(req);
+            var resp  = await _openAi.CreateResponseAsync(req);
 
-            var call = resp.Output?
-                           .OfType<FunctionToolCall>()
-                           .FirstOrDefault(fc => fc.Name == "plan_evaluation");
+            // --- NEW: extract tool call result ---------------------------------
+            var fnCall = resp.Output?
+                            .OfType<FunctionToolCall>()
+                            .FirstOrDefault(fc => fc.Name == PlanEvaluationTool.Name);
 
-            if (call is null)
-                throw new InvalidOperationException("plan_evaluation call missing");
+            if (fnCall != null && fnCall.Arguments.HasValue)
+            {
+                var args = ExtractArguments(fnCall.Arguments);
+                var score    = args.TryGetValue("score", out var s) && s is double d ? d : 0.0;
+                var feedback = args.TryGetValue("feedback", out var f) ? f?.ToString() ?? "" : "";
+                return new EvaluationResult(score, feedback);
+            }
+            // --------------------------------------------------------------------
 
-            var args = call.Arguments ?? default;
-            double score = 0;
-            string feedback = "";
+            // Fallback – legacy plain-JSON message -------------------------------
+            var content = resp.Output?
+                              .OfType<OutputMessage>()
+                              .FirstOrDefault()?.Content?.ToString();
 
-            if (args.TryGetProperty("score", out var s) && s.TryGetDouble(out var sv))
-                score = sv;
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                _log.LogWarning("Empty evaluator response, returning default low score");
+                return new EvaluationResult(0.0, "Empty evaluator response");
+            }
 
-            if (args.TryGetProperty("feedback", out var f))
-                feedback = f.GetString() ?? "";
+            double fallbackScore     = 0.0;
+            string fallbackFeedback  = "";
 
-            return new EvaluationResult(score, feedback);
+            try
+            {
+                using var doc = JsonDocument.Parse(content);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("score", out var se) && se.ValueKind == JsonValueKind.Number)
+                    fallbackScore = se.GetDouble();
+                if (root.TryGetProperty("feedback", out var fe) && fe.ValueKind == JsonValueKind.String)
+                    fallbackFeedback = fe.GetString() ?? "";
+            }
+            catch (JsonException)
+            {
+                // Could not parse JSON; treat raw content as feedback
+                fallbackFeedback = content.Length > 100 ? content[..100] : content;
+            }
+
+            return new EvaluationResult(fallbackScore, fallbackFeedback);
+            // --------------------------------------------------------------------
         }
         catch (Exception ex)
         {
             _log.LogWarning(ex, "Plan evaluation failed, returning default low score");
             return new EvaluationResult(0.0, "Evaluator error – refine structure & clarity");
         }
+    }
+
+    /* ------------------------------------------------------------------ */
+    // NEW – unified argument extraction (mirrors ConversationManager logic)
+    private static Dictionary<string, object?> ExtractArguments(JsonElement? arguments)
+    {
+        if (arguments == null) return new();
+
+        var elem = arguments.Value;
+
+        if (elem.ValueKind == JsonValueKind.Object)
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, object?>>(elem.GetRawText()) 
+                   ?? new();
+        }
+
+        if (elem.ValueKind == JsonValueKind.String)
+        {
+            var raw = elem.GetString();
+            if (string.IsNullOrWhiteSpace(raw)) return new();
+
+            // If the string itself contains JSON, try to parse it
+            if (raw.TrimStart().StartsWith("{"))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(raw);
+                    return JsonSerializer.Deserialize<Dictionary<string, object?>>(doc.RootElement.GetRawText()) 
+                           ?? new();
+                }
+                catch
+                {
+                    // fall through
+                }
+            }
+        }
+
+        return new();
     }
 }

@@ -116,9 +116,19 @@ public static class ActivityTypes
     /// Activity type for planner stage events (P2 feature)
     /// </summary>
     public const string PlannerStage = "PlannerStage";
-    
+
     /// <summary>
     /// Activity type for final results when execution has finished
     /// </summary>
     public const string Result = "Result";
+    
+    /// <summary>
+    /// Activity type for task routing events
+    /// </summary>
+    public const string TaskRouting = "TaskRouting";
+
+    /// <summary>
+    /// Activity type for fast-path execution
+    /// </summary>
+    public const string FastPathExecution = "FastPathExecution";
 }

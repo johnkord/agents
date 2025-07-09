@@ -13,13 +13,12 @@ public class ShellTools
 {
     [McpServerTool(Name = "run_command"), Description("Run a shell command and capture its output.")]
     public static string RunCommand(
-        string script,
-        int timeoutSeconds = 30)
+        string script)
     {
         // NEW – approval gate
         if (!ApprovalServiceClient.EnsureApproved(
                 "run_command",
-                new() { ["script"] = script, ["timeoutSeconds"] = timeoutSeconds }))
+                new() { ["script"] = script }))
         {
             return "Error: request denied by approval service.";
         }
@@ -59,7 +58,8 @@ public class ShellTools
             };
 
             proc.Start();
-
+    
+            var timeoutSeconds = 60; // TODO: make configurable
             if (!proc.WaitForExit(timeoutSeconds * 1000))
             {
                 try { proc.Kill(); } catch { /* ignore */ }
@@ -81,6 +81,25 @@ public class ShellTools
         finally
         {
             ToolLogger.LogEnd("run_command");
+        }
+    }
+
+    [McpServerTool(Name = "get_working_directory"), Description("Return the current working directory.")]
+    public static string GetWorkingDirectory()
+    {
+        ToolLogger.LogStart("get_working_directory");
+        try
+        {
+            return $"Working directory: {Environment.CurrentDirectory}";
+        }
+        catch (Exception ex)
+        {
+            ToolLogger.LogError("get_working_directory", ex);
+            return $"Error getting working directory: {ex.Message}";
+        }
+        finally
+        {
+            ToolLogger.LogEnd("get_working_directory");
         }
     }
 }
