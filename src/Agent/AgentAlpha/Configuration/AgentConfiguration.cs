@@ -112,6 +112,9 @@ public class AgentConfiguration
     public double PlanQualityTarget   { get; set; } = 0.8;
     public int    MaxPlanRefinements  { get; set; } = 3;
 
+    // NEW – run-time cadence for additional plan refinements (0 = disabled)
+    public int PlanRefinementEveryIterations { get; set; } = 0;
+
     /// <summary>
     /// Create configuration from environment variables
     /// </summary>
@@ -198,6 +201,13 @@ public class AgentConfiguration
                          out var maxRef) && maxRef >= 0)
             config.MaxPlanRefinements = maxRef;
 
+        // Parse and validate plan refinement cadence
+        if (int.TryParse(Environment.GetEnvironmentVariable("PLAN_REFINEMENT_EVERY_ITERATIONS"),
+                         out var freq) && freq >= 0)
+        {
+            config.PlanRefinementEveryIterations = freq;
+        }
+
         // Validate the complete configuration
         ValidateConfiguration(config);
         return config;
@@ -235,6 +245,9 @@ public class AgentConfiguration
         // Validate new settings
         if (config.PlanQualityTarget is < 0 or > 1)
             throw new InvalidOperationException("PLAN_QUALITY_TARGET must be between 0 and 1.");
+
+        if (config.PlanRefinementEveryIterations < 0)
+            throw new InvalidOperationException("PLAN_REFINEMENT_EVERY_ITERATIONS must be >= 0.");
     }
 
     /// <summary>

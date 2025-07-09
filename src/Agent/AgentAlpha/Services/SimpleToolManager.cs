@@ -259,8 +259,8 @@ public class SimpleToolManager
     /// Returns up to <paramref name="maxTools"/> tool definitions without heuristics.
     /// The LLM decides which ones to use each iteration.
     /// </summary>
-    public Task<List<ToolDefinition>> SelectToolsForTaskAsync(
-        string task,
+    public Task<List<ToolDefinition>> SelectToolsForPlanAsync(
+        string plan,
         IList<McpClientTool> availableTools)
     {
         var defs = availableTools
@@ -277,8 +277,14 @@ public class SimpleToolManager
 
         defs.Add(_config.WebSearch.ToToolDefinition());
 
-        _logger.LogInformation("Selected {Count} tools for task: {Task}",
-            defs.Count, task);
+        // TODO: Make a ResponsesCreateRequest to OpenAI to get the selected tools
+        // This is a placeholder for the actual selection logic
+        // For now, we just return all available tools as definitions
+        // In a real implementation, you would call OpenAI's API to select tools based on the plan
+        // and possibly filter them based on some criteria.
+
+        _logger.LogInformation("Selected {Count} tools for plan: {Plan}",
+            defs.Count, plan);
         return Task.FromResult(defs);
     }
 

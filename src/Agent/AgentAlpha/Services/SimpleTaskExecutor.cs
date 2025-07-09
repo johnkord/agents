@@ -28,6 +28,9 @@ public class SimpleTaskExecutor : ITaskExecutor
     private readonly IPlanner _planner;          // was PlanningService
     private readonly PlanRefinementLoop _planRefiner;     // NEW
 
+    private string _currentPlan = "";          // NEW – latest plan in memory
+    private readonly int _refineEvery;         // NEW – cadence (0 = off)
+
     public SimpleTaskExecutor(
         IConnectionManager connectionManager,
         SimpleToolManager toolManager,
@@ -47,7 +50,8 @@ public class SimpleTaskExecutor : ITaskExecutor
         _config = config;
         _logger = logger;
         _planner = planner;
-        _planRefiner = planRefiner;                       // NEW
+        _planRefiner = planRefiner;
+        _refineEvery = config.PlanRefinementEveryIterations;   // NEW
 
         // Set up activity logging
         _toolManager.SetActivityLogger(_activityLogger);
@@ -97,6 +101,7 @@ public class SimpleTaskExecutor : ITaskExecutor
 
             var plan           = await _planner.CreatePlanAsync(request.Task, toolNames);
             plan               = await _planRefiner.RefinePlanAsync(plan, request.Task); // NEW
+            _currentPlan       = plan;                          // NEW
 
             _logger.LogInformation("Generated execution plan:\n{Plan}", plan);
 
@@ -222,17 +227,47 @@ public class SimpleTaskExecutor : ITaskExecutor
         IList<McpClientTool> availableTools,
         IList<McpClientTool> filteredTools)
     {
+        string? sessionId = _activityLogger.GetCurrentSession()?.SessionId;
+        if (string.IsNullOrEmpty(sessionId))
+        {
+            _logger.LogWarning("No session ID available for activity logging");
+            throw new InvalidOperationException("Session ID is required for activity logging");
+        }
+
         const int maxIterations = 10;
         var iteration = 0;
-
-        // NO pre-computed selectedTools here – we refresh every iteration
 
         while (iteration < maxIterations)
         {
             iteration++;
 
-            // NEW: refresh tool list every iteration
-            var selectedTools = await _toolManager.SelectToolsForTaskAsync(
+            if (_refineEvery > 0 && iteration % _refineEvery == 0)
+            {
+                var refined = await _planRefiner.RefinePlanAsync(
+                                   _currentPlan,
+                                   $"Progress after {iteration} iterations");
+                if (!string.Equals(refined, _currentPlan, StringComparison.Ordinal))
+                {
+                    _currentPlan = refined;
+                    _logger.LogInformation("Plan refined at iteration {It}.", iteration);
+
+                    await _sessionManager.AddSessionActivityAsync(
+                        sessionId,
+                        new SessionActivity
+                        {
+                            ActivityId = Guid.NewGuid().ToString(),
+                            SessionId = sessionId,
+                            Timestamp = DateTime.UtcNow,
+                            ActivityType = ActivityTypes.PlanRefined,
+                            Description = $"Plan refined at iteration {iteration}",
+                            Success = true,
+                            Data = _currentPlan
+                        });
+                }
+            }
+
+            // NO pre-computed selectedTools here – we refresh every iteration
+            var selectedTools = await _toolManager.SelectToolsForPlanAsync(
                                     task,
                                     filteredTools);
 
