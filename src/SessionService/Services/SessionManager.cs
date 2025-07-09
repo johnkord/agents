@@ -250,6 +250,17 @@ public class SessionManager : ISessionManager
     // --------------------------------------------------------------------
     public async Task AddSessionActivityAsync(string sessionId, SessionActivity activity)
     {
+        // ---------- safety & size limits ---------------------------------
+        if (string.IsNullOrWhiteSpace(activity.ActivityId))
+            activity.ActivityId = Guid.NewGuid().ToString();
+
+        if (activity.Timestamp == default)
+            activity.Timestamp = DateTime.UtcNow;
+
+        if (!string.IsNullOrEmpty(activity.Data) && activity.Data.Length > 50_000)
+            activity.Data = SessionActivity.TruncateString(activity.Data, 50_000);
+        // -----------------------------------------------------------------
+
         using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
         using var cmd = conn.CreateCommand();

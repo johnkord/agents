@@ -84,11 +84,13 @@ public class MarkdownTaskStateManagerTests
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
         var mockOpenAiService = new Mock<ISessionAwareOpenAIService>();
-        var mockToolScope     = new Mock<IToolScopeManager>();   // NEW
+        var mockToolScope     = new Mock<IToolScopeManager>();
+        var mockActivityLogger= new Mock<ISessionActivityLogger>();
         var markdownManager = new MarkdownTaskStateManager(
             sessionManager,
             mockOpenAiService.Object,
-            mockToolScope.Object,                                 // NEW
+            mockToolScope.Object,
+            mockActivityLogger.Object,
             loggerFactory.CreateLogger<MarkdownTaskStateManager>());
 
         var session = await sessionManager.CreateSessionAsync("Test Markdown Session");
@@ -135,11 +137,13 @@ public class MarkdownTaskStateManagerTests
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
         var mockOpenAiService = new Mock<ISessionAwareOpenAIService>();
-        var mockToolScope     = new Mock<IToolScopeManager>();   // NEW
+        var mockToolScope     = new Mock<IToolScopeManager>();
+        var mockActivityLogger= new Mock<ISessionActivityLogger>();           // +NEW
         var markdownManager = new MarkdownTaskStateManager(
             sessionManager,
             mockOpenAiService.Object,
-            mockToolScope.Object,                                 // NEW
+            mockToolScope.Object,
+            mockActivityLogger.Object,                                         // +NEW
             loggerFactory.CreateLogger<MarkdownTaskStateManager>());
 
         var session = await sessionManager.CreateSessionAsync("Test Fallback Session");
@@ -177,11 +181,13 @@ public class MarkdownTaskStateManagerTests
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
         var mockOpenAiService = new Mock<ISessionAwareOpenAIService>();
-        var mockToolScope     = new Mock<IToolScopeManager>();   // NEW
+        var mockToolScope     = new Mock<IToolScopeManager>();
+        var mockActivityLogger= new Mock<ISessionActivityLogger>();           // +NEW
         var markdownManager = new MarkdownTaskStateManager(
             sessionManager,
             mockOpenAiService.Object,
-            mockToolScope.Object,                                 // NEW
+            mockToolScope.Object,
+            mockActivityLogger.Object,                                         // +NEW
             loggerFactory.CreateLogger<MarkdownTaskStateManager>());
 
         var session = await sessionManager.CreateSessionAsync("Test Current Subtask Session");
@@ -209,11 +215,13 @@ public class MarkdownTaskStateManagerTests
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
         var mockOpenAiService = new Mock<ISessionAwareOpenAIService>();
-        var mockToolScope     = new Mock<IToolScopeManager>();   // NEW
+        var mockToolScope     = new Mock<IToolScopeManager>();
+        var mockActivityLogger= new Mock<ISessionActivityLogger>();           // +NEW
         var markdownManager = new MarkdownTaskStateManager(
             sessionManager,
             mockOpenAiService.Object,
-            mockToolScope.Object,                                 // NEW
+            mockToolScope.Object,
+            mockActivityLogger.Object,                                         // +NEW
             loggerFactory.CreateLogger<MarkdownTaskStateManager>());
 
         var session = await sessionManager.CreateSessionAsync("Test All Complete Session");
@@ -238,11 +246,13 @@ public class MarkdownTaskStateManagerTests
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
         var mockOpenAiService = new Mock<ISessionAwareOpenAIService>();
-        var mockToolScope     = new Mock<IToolScopeManager>();   // NEW
+        var mockToolScope     = new Mock<IToolScopeManager>();
+        var mockActivityLogger= new Mock<ISessionActivityLogger>();           // +NEW
         var markdownManager = new MarkdownTaskStateManager(
             sessionManager,
             mockOpenAiService.Object,
-            mockToolScope.Object,                                 // NEW
+            mockToolScope.Object,
+            mockActivityLogger.Object,                                         // +NEW
             loggerFactory.CreateLogger<MarkdownTaskStateManager>());
 
         var session = await sessionManager.CreateSessionAsync("Test Update Session");
@@ -312,11 +322,13 @@ public class MarkdownTaskStateManagerTests
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
         var mockOpenAiService = new Mock<ISessionAwareOpenAIService>();
-        var mockToolScope     = new Mock<IToolScopeManager>();   // NEW
+        var mockToolScope     = new Mock<IToolScopeManager>();
+        var mockActivityLogger= new Mock<ISessionActivityLogger>();           // +NEW
         var markdownManager = new MarkdownTaskStateManager(
             sessionManager,
             mockOpenAiService.Object,
-            mockToolScope.Object,                                 // NEW
+            mockToolScope.Object,
+            mockActivityLogger.Object,                                         // +NEW
             loggerFactory.CreateLogger<MarkdownTaskStateManager>());
 
         // Act
@@ -333,11 +345,13 @@ public class MarkdownTaskStateManagerTests
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         var sessionManager = new SessionManager(loggerFactory.CreateLogger<SessionManager>());
         var mockOpenAiService = new Mock<ISessionAwareOpenAIService>();
-        var mockToolScope     = new Mock<IToolScopeManager>();   // NEW
+        var mockToolScope     = new Mock<IToolScopeManager>();
+        var mockActivityLogger= new Mock<ISessionActivityLogger>();           // +NEW
         var markdownManager = new MarkdownTaskStateManager(
             sessionManager,
             mockOpenAiService.Object,
-            mockToolScope.Object,                                 // NEW
+            mockToolScope.Object,
+            mockActivityLogger.Object,                                         // +NEW
             loggerFactory.CreateLogger<MarkdownTaskStateManager>());
 
         // Act & Assert

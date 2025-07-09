@@ -17,19 +17,22 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
 {
     private readonly ISessionManager _sessionManager;
     private readonly ISessionAwareOpenAIService _openAiService;
-    private readonly IToolScopeManager _toolScope;            // NEW
+    private readonly IToolScopeManager _toolScope;
     private readonly ILogger<MarkdownTaskStateManager> _logger;
+    private readonly ISessionActivityLogger _activityLogger;    // +NEW
     
     public MarkdownTaskStateManager(
         ISessionManager sessionManager,
         ISessionAwareOpenAIService openAiService,
-        IToolScopeManager toolScope,                          // NEW
+        IToolScopeManager toolScope,
+        ISessionActivityLogger activityLogger,                 // +NEW
         ILogger<MarkdownTaskStateManager> logger)
     {
-        _sessionManager = sessionManager;
-        _openAiService = openAiService;
-        _toolScope     = toolScope;                           // NEW
-        _logger        = logger;
+        _sessionManager  = sessionManager;
+        _openAiService   = openAiService;
+        _toolScope       = toolScope;
+        _activityLogger  = activityLogger;                     // +NEW
+        _logger          = logger;
     }
     
     public async Task<string> InitializeTaskMarkdownAsync(string sessionId, string taskDescription)
@@ -569,20 +572,12 @@ public class MarkdownTaskStateManager : IMarkdownTaskStateManager
             await _sessionManager.SaveSessionAsync(session);
             
             // Then add the activity separately
-            var activity = new SessionActivity
-            {
-                ActivityId = Guid.NewGuid().ToString(),
-                SessionId = sessionId,
-                Timestamp = DateTime.UtcNow,
-                ActivityType = ActivityTypes.TaskMarkdownUpdate,
-                Description = "Task state markdown updated",
-                Success = true,
-                Data = SessionActivity.TruncateString(markdown, 50000)
-            };
-            
-            await _sessionManager.AddSessionActivityAsync(sessionId, activity);
-            
-            _logger.LogDebug("Saved task markdown for session {SessionId}: {Length} characters", 
+            await _activityLogger.LogActivityAsync(
+                ActivityTypes.TaskMarkdownUpdate,
+                "Task state markdown updated",
+                new { SessionId = sessionId, Length = markdown.Length });
+        
+            _logger.LogDebug("Saved task markdown for session {SessionId}: {Length} characters",
                              sessionId, markdown.Length);
         }
         else

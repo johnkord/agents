@@ -105,18 +105,11 @@ public class SimpleTaskExecutor : ITaskExecutor
 
             _logger.LogInformation("Generated execution plan:\n{Plan}", plan);
 
-            // Persisting into session.Metadata was causing a type mismatch (string vs object). 
-            // For now we just attach it as a session activity for traceability.
-            await _sessionManager.AddSessionActivityAsync(session.SessionId, new()
-            {
-                ActivityId   = Guid.NewGuid().ToString(),
-                SessionId    = session.SessionId,
-                Timestamp    = DateTime.UtcNow,
-                ActivityType = ActivityTypes.Planning,
-                Description  = "Initial execution plan generated",
-                Success      = true,
-                Data         = plan
-            });
+            // Persist the initial plan as a normal activity (uses logger ↔ truncation, etc.)
+            await _activityLogger.LogActivityAsync(
+                ActivityTypes.Planning,
+                "Initial execution plan generated",
+                new { Plan = plan });
 
             _logger.LogInformation("Starting ReAct conversation loop");
 
@@ -127,16 +120,10 @@ public class SimpleTaskExecutor : ITaskExecutor
 
             // Persist / show final markdown
             var md = _conversationManager.GetTaskMarkdown();
-            await _sessionManager.AddSessionActivityAsync(session.SessionId, new()
-            {
-                ActivityId   = Guid.NewGuid().ToString(),
-                SessionId    = session.SessionId,
-                Timestamp    = DateTime.UtcNow,
-                ActivityType = ActivityTypes.Result,
-                Description  = "Final task markdown generated",
-                Success      = true,
-                Data         = md
-            });
+            await _activityLogger.LogActivityAsync(
+                ActivityTypes.Result,
+                "Final task markdown generated",
+                new { Markdown = md.Length <= 5000 ? md : md[..5000] + "...[truncated]" });
             _logger.LogInformation("Final task markdown:\n{Markdown}", md);
         }
         catch (Exception ex)
@@ -251,18 +238,10 @@ public class SimpleTaskExecutor : ITaskExecutor
                     _currentPlan = refined;
                     _logger.LogInformation("Plan refined at iteration {It}.", iteration);
 
-                    await _sessionManager.AddSessionActivityAsync(
-                        sessionId,
-                        new SessionActivity
-                        {
-                            ActivityId = Guid.NewGuid().ToString(),
-                            SessionId = sessionId,
-                            Timestamp = DateTime.UtcNow,
-                            ActivityType = ActivityTypes.PlanRefined,
-                            Description = $"Plan refined at iteration {iteration}",
-                            Success = true,
-                            Data = _currentPlan
-                        });
+                    await _activityLogger.LogActivityAsync(
+                        ActivityTypes.PlanRefined,
+                        $"Plan refined at iteration {iteration}",
+                        new { Plan = _currentPlan });
                 }
             }
 

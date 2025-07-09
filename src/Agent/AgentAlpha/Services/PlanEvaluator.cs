@@ -59,7 +59,7 @@ public class PlanEvaluator : IPlanEvaluator
 
         var req = new ResponsesCreateRequest
         {
-            Model  = model,               // configurable
+            Model  = model,
             Input  = new[] { new { role = "user", content = prompt } },
             MaxOutputTokens = 200,
             Temperature     = 0,
