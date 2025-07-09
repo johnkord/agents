@@ -66,15 +66,15 @@ public static class ActivityTypes
     public const string TaskMarkdownUpdate = "TaskMarkdownUpdate";
 
     // ---------- added to reconcile duplicate definitions ----------
-    public const string ToolSelection            = "Tool_Selection";
-    public const string ToolCall                 = "Tool_Call";
-    public const string ToolResult               = "Tool_Result";
-    public const string ConversationIteration    = "Conversation_Iteration";
-    public const string PlanDetails              = "Plan_Details";
-    public const string ToolSelectionReasoning   = "Tool_Selection_Reasoning";
-    public const string ResponseQualityAssessment= "Response_Quality_Assessment";
+    public const string ToolSelection = "Tool_Selection";
+    public const string ToolCall = "Tool_Call";
+    public const string ToolResult = "Tool_Result";
+    public const string ConversationIteration = "Conversation_Iteration";
+    public const string PlanDetails = "Plan_Details";
+    public const string ToolSelectionReasoning = "Tool_Selection_Reasoning";
+    public const string ResponseQualityAssessment = "Response_Quality_Assessment";
     public const string TaskCompletionEvaluation = "Task_Completion_Evaluation";
-    public const string Planning                 = "Planning";
+    public const string Planning = "Planning";
 
     // ---------- added from AgentAlpha ActivityTypes ----------
     /// <summary>
@@ -116,4 +116,9 @@ public static class ActivityTypes
     /// Activity type for planner stage events (P2 feature)
     /// </summary>
     public const string PlannerStage = "PlannerStage";
+    
+    /// <summary>
+    /// Activity type for final results when execution has finished
+    /// </summary>
+    public const string Result = "Result";
 }

@@ -122,6 +122,16 @@ public class SimpleTaskExecutor : ITaskExecutor
 
             // Persist / show final markdown
             var md = _conversationManager.GetTaskMarkdown();
+            await _sessionManager.AddSessionActivityAsync(session.SessionId, new()
+            {
+                ActivityId   = Guid.NewGuid().ToString(),
+                SessionId    = session.SessionId,
+                Timestamp    = DateTime.UtcNow,
+                ActivityType = ActivityTypes.Result,
+                Description  = "Final task markdown generated",
+                Success      = true,
+                Data         = md
+            });
             _logger.LogInformation("Final task markdown:\n{Markdown}", md);
         }
         catch (Exception ex)
