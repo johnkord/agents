@@ -183,7 +183,7 @@
             "type": "coreclr",
             "request": "launch",
             "program": "${workspaceFolder}/src/Agent/AgentAlpha/bin/Debug/net8.0/AgentAlpha.dll",
-            "args": ["--max-iterations", "20", "--verbose", "Read in all documentation files in the /home/cq/p/agents/docs directory and provide a summary of their contents"],
+            "args": ["--max-iterations", "50", "--verbose", "Read in all documentation files in the /home/cq/p/agents/docs directory and provide a summary of their contents"],
             "cwd": "${workspaceFolder}/src/Agent/AgentAlpha",
             "console": "integratedTerminal",
             "stopAtEntry": false,

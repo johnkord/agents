@@ -10,6 +10,8 @@ using Common.Models.Session;              // ← explicit for Dictionary
 using System.Linq;                               // NEW
 using System.Text.RegularExpressions;    // NEW
 using System.Text.Json;                 // + ADD
+using OpenAIIntegration;
+using OpenAIIntegration.Model;                       // +NEW
 
 namespace AgentAlpha.Services;
 
@@ -25,8 +27,9 @@ public class SimpleTaskExecutor : ITaskExecutor
     private readonly ISessionActivityLogger _activityLogger;
     private readonly AgentConfiguration _config;
     private readonly ILogger<SimpleTaskExecutor> _logger;
-    private readonly IPlanner _planner;          // was PlanningService
-    private readonly PlanRefinementLoop _planRefiner;     // NEW
+    private readonly IPlanner _planner;
+    private readonly PlanRefinementLoop _planRefiner;
+    private readonly ISessionAwareOpenAIService _openAiService;   // +NEW
 
     private string _currentPlan = "";          // NEW – latest plan in memory
     private readonly int _refineEvery;         // NEW – cadence (0 = off)
@@ -40,7 +43,8 @@ public class SimpleTaskExecutor : ITaskExecutor
         AgentConfiguration config,
         ILogger<SimpleTaskExecutor> logger,
         IPlanner planner,
-        PlanRefinementLoop planRefiner)    // NEW
+        PlanRefinementLoop planRefiner,
+        ISessionAwareOpenAIService openAiService)                 // +NEW
     {
         _connectionManager = connectionManager;
         _toolManager = toolManager;
@@ -51,6 +55,7 @@ public class SimpleTaskExecutor : ITaskExecutor
         _logger = logger;
         _planner = planner;
         _planRefiner = planRefiner;
+        _openAiService = openAiService;                          // +NEW
         _refineEvery = config.PlanRefinementEveryIterations;   // NEW
 
         // Set up activity logging
@@ -114,7 +119,12 @@ public class SimpleTaskExecutor : ITaskExecutor
             _logger.LogInformation("Starting ReAct conversation loop");
 
             // Execute main conversation loop
-            await ExecuteConversationLoopAsync(request.Task, availableTools, filteredTools);
+            var effectiveMaxIterations = request.MaxIterations ?? _config.MaxIterations;   // NEW
+            await ExecuteConversationLoopAsync(
+                request.Task,
+                availableTools,
+                filteredTools,
+                effectiveMaxIterations);                                                  // CHANGED
 
             _logger.LogInformation("Task completed successfully");
 
@@ -212,7 +222,8 @@ public class SimpleTaskExecutor : ITaskExecutor
     private async Task ExecuteConversationLoopAsync(
         string task,
         IList<McpClientTool> availableTools,
-        IList<McpClientTool> filteredTools)
+        IList<McpClientTool> filteredTools,
+        int maxIterations)                                        // NEW PARAM
     {
         string? sessionId = _activityLogger.GetCurrentSession()?.SessionId;
         if (string.IsNullOrEmpty(sessionId))
@@ -221,8 +232,7 @@ public class SimpleTaskExecutor : ITaskExecutor
             throw new InvalidOperationException("Session ID is required for activity logging");
         }
 
-        const int maxIterations = 10;
-        var iteration = 0;
+        var iteration = 0;                                        // maxIterations comes from param
 
         while (iteration < maxIterations)
         {
@@ -309,8 +319,26 @@ public class SimpleTaskExecutor : ITaskExecutor
                 }
             }
 
+
+            // -------- summarise & integrate ---------------------------------
+            var combinedResults = string.Join("\n", toolResults);
+            var summary = await GetSummaryAsync(combinedResults);
+            var summarisedResults = new List<string> { summary };
+
+            // Append a small section to the current plan so future iterations
+            // can reason about what happened without bloating the context.
+            if (summarisedResults.Count > 0)
+            {
+                _currentPlan += $"""
+                                    
+                                    ### Iteration {iteration} – Tool Outputs
+                                    {string.Join("\n", summarisedResults.Select(s => "- " + s))}
+                                    """;
+            }
+            // -----------------------------------------------------------------
+
             // Add tool results to conversation for observation phase
-            _conversationManager.AddToolResults(toolResults);
+            _conversationManager.AddToolResults(summarisedResults);
             _logger.LogDebug("ReAct iteration {Iteration}: Tool results added, prompting observation phase", iteration);
             
             // Check if task was completed via tool execution
@@ -385,5 +413,49 @@ public class SimpleTaskExecutor : ITaskExecutor
                 subs.Add(m.Groups[1].Value.Trim());
         }
         return subs;
+    }
+
+    // ------------------------------------------------------------------
+    // NEW: Uses an LLM call to generate a concise summary (<1000 chars)
+    // ------------------------------------------------------------------
+    private async Task<string> GetSummaryAsync(string content)
+    {
+        int maxContentSize = 16000;
+        // Short inputs don't need summarisation
+        if (content.Length < maxContentSize) return content;
+
+        // TODO: maybe the user content should contain the current plan state?
+        var req = new ResponsesCreateRequest
+        {
+            Model = _config.Model,
+            Input = new[]
+            {
+                new { role = "system",  content = "You are a helpful assistant that summarises tool outputs." },
+                new { role = "user",    content = $"""
+                    Please provide a summary of the following tool output:
+
+                    ---
+                    {content}
+                    ---
+                    """ }
+            },
+            MaxOutputTokens = 5000,
+            Temperature     = 0.2
+        };
+
+        try
+        {
+            var resp = await _openAiService.CreateResponseAsync(req);
+            var summary = resp.Output?
+                              .OfType<OutputMessage>()
+                              .FirstOrDefault()?.Content?.ToString() ?? "";
+
+            return string.IsNullOrWhiteSpace(summary) ? content[..Math.Min(1000, content.Length)] : summary.Trim();
+        }
+        catch
+        {
+            // Fallback: return first 1000 chars on error
+            return content[..Math.Min(1000, content.Length)];
+        }
     }
 }
