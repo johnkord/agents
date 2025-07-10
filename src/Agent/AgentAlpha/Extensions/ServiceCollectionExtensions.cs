@@ -87,12 +87,16 @@ public static class ServiceCollectionExtensions
         {
             var cfg = sp.GetRequiredService<AgentConfiguration>();
             var logger = sp.GetRequiredService<ILogger<IPlanner>>();
-            
+
             try
             {
+                return sp.GetRequiredService<PlanningService>();
+                // Disable ChainedPlanner for now
+                /* 
                 return cfg.UseChainedPlanner
                     ? sp.GetRequiredService<ChainedPlanner>()
                     : sp.GetRequiredService<PlanningService>();
+                    */
             }
             catch (Exception ex)
             {

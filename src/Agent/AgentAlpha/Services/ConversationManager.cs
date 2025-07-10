@@ -118,28 +118,18 @@ public class ConversationManager : IConversationManager
         return _messages.ToList(); // Return a copy to avoid external modification
     }
 
-    private string GetCondensedMarkdown()
-    {
-        if (string.IsNullOrWhiteSpace(_taskMarkdown)) return "";
-        // crude “token” trim (≈4 chars per token)
-        var maxLen = MaxMarkdownTokens * 4;
-        return _taskMarkdown.Length <= maxLen
-            ? _taskMarkdown
-            : _taskMarkdown[..maxLen] + "\n\n<!-- trimmed -->";
-    }
-
     public async Task<ConversationResponse> ProcessIterationAsync(
         List<OpenAIIntegration.Model.ToolDefinition> availableTools)
     {
         // --- inject markdown context ---------------------------
-        var mdSnapshot = GetCondensedMarkdown();
+        var mdSnapshot = _taskMarkdown;
         var contextMessages = new List<object>(_messages);
         if (!string.IsNullOrWhiteSpace(mdSnapshot))
         {
             contextMessages.Add(new
             {
                 role    = "system",
-                content = $"Current task markdown (trimmed):\n\n{mdSnapshot}"
+                content = $"Current task markdown:\n\n{mdSnapshot}"
             });
         }
         // --------------------------------------------------------
@@ -300,43 +290,6 @@ public class ConversationManager : IConversationManager
             _logger.LogError(ex, "Failed to process conversation iteration");
             throw;
         }
-    }
-
-    public async Task<ConversationResponse> ProcessIterationWithExpansionAsync(
-        List<OpenAIIntegration.Model.ToolDefinition> currentTools,
-        Func<Task<List<OpenAIIntegration.Model.ToolDefinition>>> getAdditionalTools)
-    {
-        // First, try with current tools
-        var response = await ProcessIterationAsync(currentTools);
-        
-        // If the assistant's response suggests it needs more tools, try expanding
-        if (!response.HasToolCalls && ContainsToolExpansionRequest(response.AssistantText))
-        {
-            _logger.LogInformation("Detected tool expansion request, getting additional tools");
-            
-            try
-            {
-                var additionalTools = await getAdditionalTools();
-                if (additionalTools.Count > 0)
-                {
-                    var expandedTools = currentTools.Concat(additionalTools).ToList();
-                    _logger.LogInformation("Retrying with {Count} additional tools: {Tools}", 
-                        additionalTools.Count, string.Join(", ", additionalTools.Select(t => t.Name)));
-
-                    // Add a message about tool expansion
-                    _messages.Add(new { role = "system", content = $"Additional tools are now available: {string.Join(", ", additionalTools.Select(t => t.Name))}" });
-                    
-                    // Retry the request with expanded tools
-                    response = await ProcessIterationAsync(expandedTools);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to expand tools, continuing with original response");
-            }
-        }
-        
-        return response;
     }
 
     public void AddAssistantMessage(string content)
