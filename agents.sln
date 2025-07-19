@@ -37,6 +37,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Agent", "Agent", "{6861220F
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentAlpha", "src\Agent\AgentAlpha\AgentAlpha.csproj", "{3A4BB623-7AB6-4F89-A3E5-D613F5CD58DE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SK1Agent", "src\Agent\SK1\SK1Agent.csproj", "{A1B2C3D4-5E6F-7A8B-9C0D-1E2F3A4B5C6D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -86,6 +88,10 @@ Global
 		{3A4BB623-7AB6-4F89-A3E5-D613F5CD58DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3A4BB623-7AB6-4F89-A3E5-D613F5CD58DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3A4BB623-7AB6-4F89-A3E5-D613F5CD58DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-5E6F-7A8B-9C0D-1E2F3A4B5C6D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-5E6F-7A8B-9C0D-1E2F3A4B5C6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-5E6F-7A8B-9C0D-1E2F3A4B5C6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-5E6F-7A8B-9C0D-1E2F3A4B5C6D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{EEA6C0B3-D94B-47DF-A6DF-4850A5C79BE4} = {917153BF-6FB0-4C57-9B49-0341D89A1289}
