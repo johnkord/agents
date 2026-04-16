@@ -7,21 +7,25 @@ using ResearchAgent.Core.Models;
 namespace ResearchAgent.Plugins.Search;
 
 /// <summary>
-/// Web search plugin for the research agent.
-/// Provides the "information acquisition" tools from the StateLM spellbook.
-///
-/// In production, replace the simulated results with calls to:
-/// - Bing Search API, Google Custom Search, Tavily, Brave Search, etc.
+/// Web search plugin for the research agent. Delegates actual HTTP traffic to an
+/// <see cref="IWebSearchProvider"/> so the same plugin contract can run against a
+/// simulated corpus (<see cref="SimulatedWebSearchProvider"/>) or a real API
+/// (<see cref="TavilyWebSearchProvider"/>). Wiring is decided by ResearchOrchestrator
+/// based on configuration (<c>Research:Search:Provider = Tavily | Simulated</c>).
 /// </summary>
 public sealed class WebSearchPlugin
 {
+    private readonly IWebSearchProvider _provider;
     private readonly ResearchMemory _memory;
     private readonly ILogger _logger;
+    private readonly SearchStatistics? _stats;
 
-    public WebSearchPlugin(ResearchMemory memory, ILoggerFactory loggerFactory)
+    public WebSearchPlugin(IWebSearchProvider provider, ResearchMemory memory, ILoggerFactory loggerFactory, SearchStatistics? stats = null)
     {
+        _provider = provider;
         _memory = memory;
         _logger = loggerFactory.CreateLogger<WebSearchPlugin>();
+        _stats = stats;
     }
 
     [Description("Search the web for information on a given query. Returns a list of relevant results with titles, URLs, and snippets.")]
@@ -30,26 +34,20 @@ public sealed class WebSearchPlugin
         [Description("Maximum number of results to return")] int maxResults = 10)
     {
         var sw = Stopwatch.StartNew();
-        _logger.LogInformation("[TOOL] SearchWebAsync — query=\"{Query}\", maxResults={MaxResults}", query, maxResults);
+        _logger.LogInformation("[TOOL] SearchWebAsync ({Provider}) — query=\"{Query}\", maxResults={MaxResults}",
+            _provider.Name, query, maxResults);
 
-        // TODO: Replace with actual search API integration
-        await Task.Delay(100); // Simulate API latency
-
-        var results = GenerateSimulatedResults(query, maxResults);
+        var results = await _provider.SearchWebAsync(query, maxResults, CancellationToken.None);
 
         foreach (var result in results)
-        {
             _memory.RegisterSource(result);
-        }
 
-        var formatted = results.Select((r, i) =>
-            $"[{i + 1}] {r.Title}\n    URL: {r.Url}\n    {r.Snippet}");
-
-        var output = $"Found {results.Count} results for: \"{query}\"\n\n{string.Join("\n\n", formatted)}";
+        var output = FormatResults(query, results, kind: "results");
 
         sw.Stop();
-        _logger.LogInformation("[TOOL] SearchWebAsync done — {ResultCount} results, {OutputChars} chars, {ElapsedMs}ms",
-            results.Count, output.Length, sw.ElapsedMilliseconds);
+        _stats?.RecordCall(results.Count, sw.ElapsedMilliseconds);
+        _logger.LogInformation("[TOOL] SearchWebAsync done — provider={Provider}, {ResultCount} results, {OutputChars} chars, {ElapsedMs}ms",
+            _provider.Name, results.Count, output.Length, sw.ElapsedMilliseconds);
 
         return output;
     }
@@ -60,46 +58,38 @@ public sealed class WebSearchPlugin
         [Description("Maximum number of papers to return")] int maxResults = 5)
     {
         var sw = Stopwatch.StartNew();
-        _logger.LogInformation("[TOOL] SearchAcademicPapersAsync — query=\"{Query}\", maxResults={MaxResults}",
-            query, maxResults);
+        _logger.LogInformation("[TOOL] SearchAcademicPapersAsync ({Provider}) — query=\"{Query}\", maxResults={MaxResults}",
+            _provider.Name, query, maxResults);
 
-        await Task.Delay(100);
+        var papers = await _provider.SearchAcademicAsync(query, maxResults, CancellationToken.None);
 
-        var papers = Enumerable.Range(1, Math.Min(maxResults, 5)).Select(i => new SourceRecord
-        {
-            Title = $"[Simulated Paper {i}] Research on: {query}",
-            Url = $"https://arxiv.org/abs/simulated.{i:D4}",
-            Snippet = $"This paper investigates {query} and presents findings relevant to the topic.",
-            Type = SourceType.AcademicPaper,
-            ReliabilityScore = 0.85
-        }).ToList();
+        foreach (var p in papers)
+            _memory.RegisterSource(p);
 
-        foreach (var paper in papers)
-        {
-            _memory.RegisterSource(paper);
-        }
-
-        var formatted = papers.Select((p, i) =>
-            $"[{i + 1}] {p.Title}\n    URL: {p.Url}\n    Abstract: {p.Snippet}");
-
-        var output = $"Found {papers.Count} academic papers for: \"{query}\"\n\n{string.Join("\n\n", formatted)}";
+        var output = FormatResults(query, papers, kind: "academic papers");
 
         sw.Stop();
-        _logger.LogInformation("[TOOL] SearchAcademicPapersAsync done — {PaperCount} papers, {OutputChars} chars, {ElapsedMs}ms",
-            papers.Count, output.Length, sw.ElapsedMilliseconds);
+        _stats?.RecordCall(papers.Count, sw.ElapsedMilliseconds);
+        _logger.LogInformation("[TOOL] SearchAcademicPapersAsync done — provider={Provider}, {PaperCount} papers, {OutputChars} chars, {ElapsedMs}ms",
+            _provider.Name, papers.Count, output.Length, sw.ElapsedMilliseconds);
 
         return output;
     }
 
-    private static List<SourceRecord> GenerateSimulatedResults(string query, int maxResults)
+    private static string FormatResults(string query, IReadOnlyList<SourceRecord> results, string kind)
     {
-        return Enumerable.Range(1, Math.Min(maxResults, 10)).Select(i => new SourceRecord
-        {
-            Title = $"[Simulated Result {i}] {query}",
-            Url = $"https://example.com/result-{i}",
-            Snippet = $"This result contains information about {query}. It provides relevant details and analysis.",
-            Type = i % 3 == 0 ? SourceType.AcademicPaper : SourceType.WebPage,
-            ReliabilityScore = 0.5 + (0.05 * (maxResults - i))
-        }).ToList();
+        if (results.Count == 0)
+            return $"No {kind} returned for: \"{query}\". Try a different query or relax filters.";
+
+        // Surface the real SourceRecord.Id alongside each result so downstream tools
+        // (RecordFinding, RecordClaimVerification) can be called with IDs that actually
+        // resolve. Without this, the LLM has no option but to invent slugs — and every
+        // finding becomes an orphan w.r.t. the evidence-sufficiency gate. The 'id:' label
+        // is deliberate: it lines up with the '"sourceId":' parameter name models expect.
+        var formatted = results.Select((r, i) =>
+            $"[{i + 1}] (id: {r.Id}) {r.Title}\n    URL: {r.Url}\n    {r.Snippet}");
+        return $"Found {results.Count} {kind} for: \"{query}\". " +
+               $"When citing a source, pass its 'id' value (not the [1]/[2] index) to RecordFinding.\n\n" +
+               string.Join("\n\n", formatted);
     }
 }

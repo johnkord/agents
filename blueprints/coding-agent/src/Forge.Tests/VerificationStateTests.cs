@@ -263,4 +263,148 @@ public class VerificationStateTests
         var hint = state.CheckFileReRead("/workspace/src/Auth.cs");
         Assert.Null(hint);
     }
+
+    // ── P0.2: FileRead content stub (mtime/size based) ─────────────────────────
+
+    [Fact]
+    public void TryGetReReadStub_NoPriorRead_ReturnsNull()
+    {
+        var state = new VerificationState();
+        Assert.Null(state.TryGetReReadStub("/x/a.cs", 123L, 456L));
+    }
+
+    [Fact]
+    public void TryGetReReadStub_MetadataUnknown_ReturnsNull()
+    {
+        // Legacy two-arg overload stores 0/0 — never produces a stub
+        var state = new VerificationState();
+        state.RecordFileRead("/x/a.cs", 1);
+        Assert.Null(state.TryGetReReadStub("/x/a.cs", 123L, 456L));
+    }
+
+    [Fact]
+    public void TryGetReReadStub_MetadataMatches_ReturnsStub()
+    {
+        var state = new VerificationState();
+        state.RecordFileRead("/x/a.cs", 3, mtimeTicks: 123L, size: 456L);
+        var stub = state.TryGetReReadStub("/x/a.cs", 123L, 456L);
+        Assert.NotNull(stub);
+        Assert.Contains("step 3", stub);
+        Assert.Contains("SUPPRESSED", stub);
+    }
+
+    [Fact]
+    public void TryGetReReadStub_MtimeChanged_ReturnsNull()
+    {
+        var state = new VerificationState();
+        state.RecordFileRead("/x/a.cs", 3, mtimeTicks: 123L, size: 456L);
+        Assert.Null(state.TryGetReReadStub("/x/a.cs", 999L, 456L));
+    }
+
+    [Fact]
+    public void TryGetReReadStub_SizeChanged_ReturnsNull()
+    {
+        var state = new VerificationState();
+        state.RecordFileRead("/x/a.cs", 3, mtimeTicks: 123L, size: 456L);
+        Assert.Null(state.TryGetReReadStub("/x/a.cs", 123L, 999L));
+    }
+
+    [Fact]
+    public void TryGetReReadStub_AfterInvalidate_ReturnsNull()
+    {
+        var state = new VerificationState();
+        state.RecordFileRead("/x/a.cs", 3, mtimeTicks: 123L, size: 456L);
+        state.InvalidateFileRead("/x/a.cs");
+        Assert.Null(state.TryGetReReadStub("/x/a.cs", 123L, 456L));
+    }
+
+    [Fact]
+    public void TryGetReReadStub_CaseInsensitivePath()
+    {
+        var state = new VerificationState();
+        state.RecordFileRead("/Workspace/A.cs", 2, mtimeTicks: 10L, size: 20L);
+        var stub = state.TryGetReReadStub("/workspace/a.cs", 10L, 20L);
+        Assert.NotNull(stub);
+    }
+
+    // ── P1.4: adversarial stub + hard-block ───────────────────────────────
+
+    [Fact]
+    public void TryGetReReadStub_FirstStub_IsWarning_NotBlocked()
+    {
+        var state = new VerificationState();
+        state.RecordFileRead("/x/a.cs", 1, mtimeTicks: 10L, size: 20L);
+        var first = state.TryGetReReadStub("/x/a.cs", 10L, 20L, stubThresholdBeforeBlock: 2);
+        Assert.NotNull(first);
+        Assert.Contains("SUPPRESSED", first);
+        Assert.DoesNotContain("BLOCKED", first);
+        Assert.Equal(1, state.GetStubReturnCount("/x/a.cs"));
+    }
+
+    [Fact]
+    public void TryGetReReadStub_AfterThresholdStubs_EscalatesToBlocked()
+    {
+        var state = new VerificationState();
+        state.RecordFileRead("/x/a.cs", 1, mtimeTicks: 10L, size: 20L);
+
+        var first = state.TryGetReReadStub("/x/a.cs", 10L, 20L, stubThresholdBeforeBlock: 2);
+        var second = state.TryGetReReadStub("/x/a.cs", 10L, 20L, stubThresholdBeforeBlock: 2);
+        var third = state.TryGetReReadStub("/x/a.cs", 10L, 20L, stubThresholdBeforeBlock: 2);
+
+        Assert.Contains("SUPPRESSED", first);
+        Assert.Contains("SUPPRESSED", second);
+        Assert.Contains("BLOCKED", third);
+        Assert.DoesNotContain("SUPPRESSED", third);
+    }
+
+    [Fact]
+    public void TryGetReReadStub_EditResetsStubCounter()
+    {
+        var state = new VerificationState();
+        state.RecordFileRead("/x/a.cs", 1, mtimeTicks: 10L, size: 20L);
+
+        state.TryGetReReadStub("/x/a.cs", 10L, 20L);
+        state.TryGetReReadStub("/x/a.cs", 10L, 20L);
+        Assert.Equal(2, state.GetStubReturnCount("/x/a.cs"));
+
+        // Edit invalidates the cache AND resets the stub counter
+        state.InvalidateFileRead("/x/a.cs");
+        Assert.Equal(0, state.GetStubReturnCount("/x/a.cs"));
+
+        // Fresh read after edit — now the next stub starts the count from zero
+        state.RecordFileRead("/x/a.cs", 5, mtimeTicks: 11L, size: 21L);
+        var next = state.TryGetReReadStub("/x/a.cs", 11L, 21L, stubThresholdBeforeBlock: 2);
+        Assert.NotNull(next);
+        Assert.Contains("SUPPRESSED", next);
+        Assert.DoesNotContain("BLOCKED", next);
+    }
+
+    [Fact]
+    public void TryGetReReadStub_ThresholdHigh_NeverBlocks()
+    {
+        var state = new VerificationState();
+        state.RecordFileRead("/x/a.cs", 1, mtimeTicks: 10L, size: 20L);
+
+        for (int i = 0; i < 10; i++)
+        {
+            var r = state.TryGetReReadStub("/x/a.cs", 10L, 20L, stubThresholdBeforeBlock: 100);
+            Assert.NotNull(r);
+            Assert.Contains("SUPPRESSED", r);
+        }
+    }
+
+    [Fact]
+    public void TryGetReReadStub_StubCountsPerPath()
+    {
+        var state = new VerificationState();
+        state.RecordFileRead("/x/a.cs", 1, mtimeTicks: 10L, size: 20L);
+        state.RecordFileRead("/y/b.cs", 2, mtimeTicks: 30L, size: 40L);
+
+        state.TryGetReReadStub("/x/a.cs", 10L, 20L);
+        state.TryGetReReadStub("/x/a.cs", 10L, 20L);
+        state.TryGetReReadStub("/y/b.cs", 30L, 40L);
+
+        Assert.Equal(2, state.GetStubReturnCount("/x/a.cs"));
+        Assert.Equal(1, state.GetStubReturnCount("/y/b.cs"));
+    }
 }

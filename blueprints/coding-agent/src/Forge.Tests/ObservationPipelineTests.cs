@@ -1,4 +1,5 @@
 using Forge.Core;
+using Serilog;
 
 namespace Forge.Tests;
 
@@ -42,9 +43,9 @@ public class ObservationPipelineTests
 
         var result = ObservationPipeline.Process("read_file", bigText, CreateOptions());
 
-        Assert.True(result.Length < bigText.Length);
-        Assert.Contains("truncated", result);
-        Assert.Contains("15,000 total characters", result);
+        Assert.True(result.Text.Length < bigText.Length);
+        Assert.Contains("truncated", result.Text);
+        Assert.Contains("15,000 total characters", result.Text);
     }
 
     [Fact]
@@ -87,12 +88,12 @@ public class ObservationPipelineTests
 
         var result = ObservationPipeline.Process("run_bash_command", trace, CreateOptions());
 
-        Assert.Contains("EXCEPTION:", result);
-        Assert.Contains("InvalidOperationException", result);
-        Assert.Contains("top 5 frames", result);
-        Assert.DoesNotContain("ThreadPoolWorkQueue", result); // frame 10 — should be trimmed
-        Assert.True(result.Length < trace.Length,
-            $"Compacted ({result.Length}) should be shorter than original ({trace.Length})");
+        Assert.Contains("EXCEPTION:", result.Text);
+        Assert.Contains("InvalidOperationException", result.Text);
+        Assert.Contains("top 5 frames", result.Text);
+        Assert.DoesNotContain("ThreadPoolWorkQueue", result.Text); // frame 10 — should be trimmed
+        Assert.True(result.Text.Length < trace.Length,
+            $"Compacted ({result.Text.Length}) should be shorter than original ({trace.Length})");
     }
 
     [Fact]
@@ -104,5 +105,151 @@ public class ObservationPipelineTests
 
         Assert.Equal(normal, result);
         Assert.DoesNotContain("EXCEPTION", result);
+    }
+
+    // ── P0.1: Tool-result disk spill ───────────────────────────────────────
+
+    private static ToolResultSpillStore CreateSpillStore(out string dir)
+    {
+        dir = Path.Combine(Path.GetTempPath(), "forge-spill-test-" + Guid.NewGuid().ToString("N"));
+        return new ToolResultSpillStore(dir, new LoggerConfiguration().CreateLogger());
+    }
+
+    [Fact]
+    public void Process_AboveSpillThreshold_WritesFullContentToDiskAndEmbedsPath()
+    {
+        var spill = CreateSpillStore(out var dir);
+        try
+        {
+            var opts = new AgentOptions
+            {
+                Model = "test",
+                ObservationMaxChars = 1_000,
+                ToolResultSpillThresholdChars = 500,
+            };
+            var big = new string('x', 2_000);
+
+            var result = ObservationPipeline.Process("run_bash_command", big, opts, spill);
+
+            Assert.Contains("Full output saved to:", result);
+            var spilledFiles = Directory.GetFiles(dir);
+            Assert.Single(spilledFiles);
+            Assert.Equal(big, File.ReadAllText(spilledFiles[0]));
+            Assert.Contains(spilledFiles[0], result);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void Process_BelowSpillThreshold_DoesNotSpill()
+    {
+        var spill = CreateSpillStore(out var dir);
+        try
+        {
+            var opts = new AgentOptions
+            {
+                Model = "test",
+                ObservationMaxChars = 100,
+                ToolResultSpillThresholdChars = 1_000,
+            };
+            var text = new string('y', 500); // over observation limit, under spill
+
+            var result = ObservationPipeline.Process("read_file", text, opts, spill);
+
+            Assert.Contains("truncated", result);
+            Assert.DoesNotContain("Full output saved to:", result);
+            Assert.Empty(Directory.GetFiles(dir));
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void Process_NoSpillStore_BehavesLikeBefore()
+    {
+        var opts = new AgentOptions { Model = "test", ObservationMaxChars = 100, ToolResultSpillThresholdChars = 50 };
+        var text = new string('z', 1_000);
+
+        var result = ObservationPipeline.Process("read_file", text, opts, spillStore: null);
+
+        Assert.Contains("truncated", result);
+        Assert.DoesNotContain("Full output saved to:", result);
+    }
+
+    [Fact]
+    public void Process_SpillThresholdZero_Disabled()
+    {
+        var spill = CreateSpillStore(out var dir);
+        try
+        {
+            var opts = new AgentOptions
+            {
+                Model = "test",
+                ObservationMaxChars = 100,
+                ToolResultSpillThresholdChars = 0,
+            };
+            var text = new string('a', 1_000);
+
+            var result = ObservationPipeline.Process("read_file", text, opts, spill);
+
+            Assert.DoesNotContain("Full output saved to:", result);
+            Assert.Empty(Directory.GetFiles(dir));
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    // ── P2.5: structured ObservationResult tagging ─────────────────────────
+
+    [Fact]
+    public void Process_NoGating_TagIsNull()
+    {
+        var result = ObservationPipeline.Process("read_file", "hello", CreateOptions());
+        Assert.Null(result.Tag);
+        Assert.Null(result.SpillPath);
+        Assert.False(result.WasTruncated);
+    }
+
+    [Fact]
+    public void Process_TruncationWithoutSpill_TagIsTruncated()
+    {
+        var result = ObservationPipeline.Process("read_file", new string('x', 15_000), CreateOptions());
+        Assert.Equal("truncated", result.Tag);
+        Assert.True(result.WasTruncated);
+        Assert.Null(result.SpillPath);
+    }
+
+    [Fact]
+    public void Process_SpillOverride_TagIsSpilled()
+    {
+        var spill = CreateSpillStore(out var dir);
+        try
+        {
+            var opts = new AgentOptions
+            {
+                Model = "test",
+                ObservationMaxChars = 100,
+                ToolResultSpillThresholdChars = 50,
+            };
+            var text = new string('a', 1_000);
+
+            var result = ObservationPipeline.Process("read_file", text, opts, spill);
+
+            Assert.Equal("spilled", result.Tag);
+            Assert.NotNull(result.SpillPath);
+            Assert.True(result.WasTruncated);
+            Assert.Contains("Full output saved to:", result.Text);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
     }
 }

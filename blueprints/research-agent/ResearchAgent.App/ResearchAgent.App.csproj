@@ -10,8 +10,8 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-rc3" />
-    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.0.0-rc3" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.1.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.1.0" />
     <!-- OpenTelemetry for distributed tracing -->
     <PackageReference Include="OpenTelemetry" Version="1.12.0" />
     <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.12.0" />
@@ -24,6 +24,10 @@
     <Nullable>enable</Nullable>
     <UserSecretsId>research-agent-blueprint</UserSecretsId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ResearchAgent.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Update="appsettings.json">

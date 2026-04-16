@@ -37,10 +37,18 @@ public sealed class NoteTakingPlugin
         _logger.LogDebug("[TOOL] RecordFinding content preview: {Preview}",
             content.Length > 120 ? content[..120] + "..." : content);
 
+        // Resolve the agent-supplied sourceId against the actual registered SourceRecord
+        // pool. LLMs routinely invent human-readable slugs (e.g. "anthropic_claude_code_doc")
+        // instead of quoting the short hash ID we returned from the search tool. When this
+        // happens the finding's SourceId is orphan — it resolves to no real source, which
+        // silently defeats downstream consumers like EvidenceSufficiencyEvaluator's
+        // per-question distinct-domain check. Resolve upstream so downstream is honest.
+        var (resolvedSourceId, resolutionOutcome) = ResolveSourceId(sourceId);
+
         var finding = new ResearchFinding
         {
             Content = content,
-            SourceId = sourceId,
+            SourceId = resolvedSourceId,
             SubQuestionId = subQuestionId,
             Confidence = Math.Clamp(confidence, 0.0, 1.0)
         };
@@ -55,8 +63,23 @@ public sealed class NoteTakingPlugin
         _logger.LogInformation("[TOOL] RecordFinding done — id={FindingId}, findingsForQ={ForQuestion}, totalFindings={Total}, {ElapsedMs}ms",
             finding.Id, totalForQuestion, totalAll, sw.ElapsedMilliseconds);
 
-        return $"Finding recorded (ID: {finding.Id}, confidence: {finding.Confidence:P0}). " +
-               $"Total findings for '{subQuestionId}': {totalForQuestion}";
+        var baseMsg = $"Finding recorded (ID: {finding.Id}, confidence: {finding.Confidence:P0}). " +
+                      $"Total findings for '{subQuestionId}': {totalForQuestion}";
+
+        // When the agent-supplied sourceId didn't map to a real SourceRecord AND the memory
+        // already has some registered sources to choose from, surface a visible warning to
+        // the LLM so it self-corrects on subsequent calls. We deliberately *accept* the
+        // finding (losing it silently would be worse) but include the problem in the return
+        // text, which the model will see in its next turn.
+        if (resolutionOutcome == ResolutionOutcome.Orphan && _memory.GetAllSources().Count > 0)
+        {
+            return baseMsg +
+                $" ⚠ WARNING: sourceId '{sourceId}' did not match any source ID returned by SearchWeb. " +
+                $"Next time, pass the exact 'id:' value from the search results (e.g. an 8-hex token). " +
+                $"This finding will not contribute to the evidence-sufficiency gate's domain-coverage check.";
+        }
+
+        return baseMsg;
     }
 
     [Description("Update the working notes for a specific sub-question. This creates or overwrites the summary note for that sub-question with an updated synthesis of findings so far.")]
@@ -241,5 +264,114 @@ public sealed class NoteTakingPlugin
             context.Length > 200 ? context[..200] + "..." : context);
 
         return context;
+    }
+
+    /// <summary>Outcome classification from <see cref="ResolveSourceId"/>.</summary>
+    private enum ResolutionOutcome { Exact, FuzzyMatched, Orphan, Empty }
+
+    /// <summary>
+    /// Resolve an agent-supplied <c>sourceId</c> argument to a real <see cref="SourceRecord.Id"/>.
+    /// LLMs tend to cite human-readable slugs (<c>"anthropic_claude_code_memory_doc"</c>)
+    /// rather than the 8-hex IDs our search tool returns. When that happens, the finding's
+    /// <c>SourceId</c> is an orphan — it doesn't match any real source, which silently breaks
+    /// downstream consumers like <c>EvidenceSufficiencyEvaluator</c>. This resolver tries in
+    /// order:
+    /// <list type="number">
+    /// <item>Exact ID match (the happy path).</item>
+    /// <item>Substring match against titles (handles slugs derived from either).</item>
+    /// <item>As a last resort, return the original string so the finding is still recorded.
+    /// A Warning is logged so orphan rates are visible.</item>
+    /// </list>
+    /// Returns the resolved id and an outcome classification so the caller can surface a
+    /// self-correcting warning to the LLM on orphan.
+    /// </summary>
+    private (string id, ResolutionOutcome outcome) ResolveSourceId(string agentSourceId)
+    {
+        if (string.IsNullOrWhiteSpace(agentSourceId))
+            return (agentSourceId, ResolutionOutcome.Empty);
+
+        var sources = _memory.GetAllSources();
+
+        // Exact match — short hash IDs we returned from the search tool.
+        var exact = sources.FirstOrDefault(s =>
+            string.Equals(s.Id, agentSourceId, StringComparison.OrdinalIgnoreCase));
+        if (exact is not null)
+            return (exact.Id, ResolutionOutcome.Exact);
+
+        // Slug-style IDs frequently embed fragments of the title or domain. Try a simple
+        // containment match in either direction. We normalize to lowercase + replace
+        // underscores/dashes with spaces so "anthropic_claude_code_memory_doc" can match a
+        // title like "How Claude remembers your project - Claude Code Docs".
+        var needle = Normalize(agentSourceId);
+        if (needle.Length >= 4)
+        {
+            var titleHit = sources.FirstOrDefault(s =>
+                !string.IsNullOrEmpty(s.Title) &&
+                TokensOverlap(needle, Normalize(s.Title), minOverlap: 2));
+            if (titleHit is not null)
+            {
+                _logger.LogInformation(
+                    "[TOOL] RecordFinding source-resolution: agent slug '{Slug}' matched by title → {Id} ({Title})",
+                    agentSourceId, titleHit.Id, titleHit.Title);
+                return (titleHit.Id, ResolutionOutcome.FuzzyMatched);
+            }
+
+            var urlHit = sources.FirstOrDefault(s =>
+                !string.IsNullOrEmpty(s.Url) &&
+                TokensOverlap(needle, Normalize(s.Url), minOverlap: 2));
+            if (urlHit is not null)
+            {
+                _logger.LogInformation(
+                    "[TOOL] RecordFinding source-resolution: agent slug '{Slug}' matched by URL → {Id} ({Url})",
+                    agentSourceId, urlHit.Id, urlHit.Url);
+                return (urlHit.Id, ResolutionOutcome.FuzzyMatched);
+            }
+        }
+
+        _logger.LogWarning(
+            "[TOOL] RecordFinding source-resolution FAILED: agent supplied sourceId '{AgentId}' that matches none of {Count} registered sources. Finding will be orphan w.r.t. evidence gate.",
+            agentSourceId, sources.Count);
+        return (agentSourceId, ResolutionOutcome.Orphan);
+    }
+
+    private static string Normalize(string s)
+    {
+        var sb = new System.Text.StringBuilder(s.Length + 8);
+        char prev = ' ';
+        foreach (var c in s)
+        {
+            // Treat all non-alnum chars as word boundaries so URLs, slugs, and titles
+            // tokenize consistently.
+            if (!char.IsLetterOrDigit(c))
+            {
+                sb.Append(' ');
+                prev = ' ';
+                continue;
+            }
+            // Split CamelCase: insert a space when transitioning lower→upper or
+            // digit→letter. This is what makes 'ClaudeMemory' / 'GitHubCodingAgent'
+            // decompose into the individual words a title or URL path will contain.
+            if ((char.IsUpper(c) && char.IsLower(prev)) ||
+                (char.IsLetter(c) && char.IsDigit(prev)) ||
+                (char.IsDigit(c) && char.IsLetter(prev)))
+            {
+                sb.Append(' ');
+            }
+            sb.Append(char.ToLowerInvariant(c));
+            prev = c;
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Returns true when the two normalized strings share at least <paramref name="minOverlap"/>
+    /// tokens of length ≥ 4. Avoids false positives from common stop-sized tokens like "the".
+    /// </summary>
+    private static bool TokensOverlap(string a, string b, int minOverlap)
+    {
+        var aTokens = a.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(t => t.Length >= 4).ToHashSet();
+        if (aTokens.Count == 0) return false;
+        var bTokens = b.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(t => t.Length >= 4);
+        return bTokens.Count(aTokens.Contains) >= minOverlap;
     }
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.AI;
 using Serilog;
+using Forge.Core.SessionMemory;
 
 namespace Forge.Core;
 
@@ -42,7 +43,8 @@ public sealed class AgentLoop
         IReadOnlyList<AITool> allTools,
         OnTokenReceived? onToken = null,
         CancellationToken cancellationToken = default,
-        string? continuationContext = null)
+        string? continuationContext = null,
+        SessionMemoryExtractor? sessionMemoryExtractor = null)
     {
         var sessionSw = Stopwatch.StartNew();
         await using var eventLog = await EventLog.CreateAsync(_options.SessionsPath, task, _options.Model, _options.WorkspacePath);
@@ -101,7 +103,24 @@ public sealed class AgentLoop
         var steps = new List<StepRecord>();
         int totalPromptTokens = 0;
         int totalCompletionTokens = 0;
-        var toolExecutor = new ToolExecutor(_options, _guardrails, _logger);
+
+        // Tool-result spill store: large raw outputs go to disk; the conversation gets a preview + pointer.
+        ToolResultSpillStore? spillStore = null;
+        try
+        {
+            var spillRoot = Path.IsPathRooted(_options.ToolResultSpillRoot)
+                ? _options.ToolResultSpillRoot
+                : Path.GetFullPath(_options.ToolResultSpillRoot, _options.WorkspacePath);
+            ToolResultSpillStore.GcOldSessions(spillRoot, TimeSpan.FromDays(Math.Max(1, _options.ToolResultSpillGcDays)), _logger);
+            var sessionId = Path.GetFileNameWithoutExtension(eventLog.FilePath);
+            spillStore = new ToolResultSpillStore(Path.Combine(spillRoot, sessionId), _logger);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to initialize ToolResultSpillStore; continuing without spill");
+        }
+
+        var toolExecutor = new ToolExecutor(_options, _guardrails, _logger, spillStore);
         var verificationState = new VerificationState();
         var verificationTracker = new VerificationTracker();
         int consecutiveFailures = 0;
@@ -113,6 +132,28 @@ public sealed class AgentLoop
         string? midSessionCheckpoint = null; // Quiet 50% checkpoint for handoff fallback
         string? assumptionsText = null; // Captured from early steps when agent states assumptions
         var pivotReasons = new List<string>(); // Captured when agent changes approach (AriadneMem transition history)
+
+        // ── P2.1: mid-session memory manager (opt-in, no-op when disabled) ──
+        SessionMemoryManager? sessionMemory = null;
+        if (_options.SessionMemoryEnabled && sessionMemoryExtractor is not null)
+        {
+            var sessionId = Path.GetFileNameWithoutExtension(eventLog.FilePath);
+            var memRoot = Path.IsPathRooted(_options.SessionMemoryRoot)
+                ? _options.SessionMemoryRoot
+                : Path.GetFullPath(_options.SessionMemoryRoot, _options.WorkspacePath);
+            var memDir = Path.Combine(memRoot, sessionId);
+            var memOptions = new SessionMemoryOptions
+            {
+                Enabled = true,
+                MinInitTokens = _options.SessionMemoryMinInitTokens,
+                StepsBetweenUpdates = _options.SessionMemoryStepsBetweenUpdates,
+                PersistRawResponses = _options.SessionMemoryPersistRawResponses,
+            };
+            var limiter = new AuxiliaryCallLimiter(memOptions.FailureThreshold);
+            sessionMemory = new SessionMemoryManager(memOptions, sessionMemoryExtractor, limiter, memDir, _logger);
+            _logger.Information("Session memory ENABLED — root={Root}, minInitTokens={Init}, stepsBetweenUpdates={Steps}",
+                memDir, memOptions.MinInitTokens, memOptions.StepsBetweenUpdates);
+        }
 
         _logger.Information("Starting task: {Task}", task);
 
@@ -256,8 +297,10 @@ public sealed class AgentLoop
             // Update verification state based on tool results (FuseSearch-inspired redundancy tracking)
             // Check redundancy BEFORE updating state, so intra-step parallel calls
             // (e.g., run_tests + dotnet build in the same step) don't flag each other.
-            var resultsWithHints = AppendRedundancyHints(
+            var hinted = AppendRedundancyHints(
                 toolExecution.ToolResults, toolExecution.ToolCallRecords, verificationState);
+            var resultsWithHints = hinted.Results;
+            var recordsWithHints = hinted.Records;
             UpdateVerificationState(verificationState, toolExecution.ToolCallRecords, stepNum);
 
             // Send tool results back to the LLM
@@ -330,13 +373,37 @@ public sealed class AgentLoop
                 StepNumber = stepNum,
                 Timestamp = DateTimeOffset.UtcNow,
                 Thought = response.Text,
-                ToolCalls = toolExecution.ToolCallRecords,
+                ToolCalls = recordsWithHints,
                 PromptTokens = response.PromptTokens,
                 CompletionTokens = response.CompletionTokens,
                 DurationMs = stepSw.Elapsed.TotalMilliseconds,
             };
             steps.Add(step);
             await eventLog.RecordStepAsync(step);
+
+            // ── P2.1: offer this step to the session-memory manager ────────
+            // No-op when disabled or no extractor wired. Failures are handled
+            // inside MaybeExtractAsync (circuit breaker) and never reach here.
+            if (sessionMemory is not null && !sessionMemory.Disabled)
+            {
+                try
+                {
+                    await sessionMemory.MaybeExtractAsync(
+                        task,
+                        steps,
+                        totalPromptTokens + totalCompletionTokens,
+                        cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw; // propagate — user interrupt takes precedence
+                }
+                catch (Exception ex)
+                {
+                    // Defensive: the manager already catches; this is belt-and-braces.
+                    _logger.Warning(ex, "Session memory extraction raised unexpectedly");
+                }
+            }
 
             // Hypothesis detection: log when the agent's reasoning contains hypothesis indicators.
             // Zero infrastructure cost — enables future analysis of hypothesis quality.
@@ -642,7 +709,7 @@ public sealed class AgentLoop
     /// Tracks what has been verified to detect redundant verification.
     /// Research basis: FuseSearch (arXiv:2601.19568) — tool efficiency metric.
     /// </summary>
-    private static void UpdateVerificationState(
+    private void UpdateVerificationState(
         VerificationState state, IReadOnlyList<ToolCallRecord> records, int stepNumber)
     {
         foreach (var record in records)
@@ -677,24 +744,73 @@ public sealed class AgentLoop
             {
                 var readPath = ExtractFilePath(record.Arguments);
                 if (readPath is not null)
-                    state.RecordFileRead(readPath, stepNumber);
+                {
+                    var (mtime, size) = StatFileSafe(readPath);
+                    if (mtime > 0)
+                        state.RecordFileRead(readPath, stepNumber, mtime, size);
+                    else
+                        state.RecordFileRead(readPath, stepNumber);
+                }
             }
         }
+    }
+
+    /// <summary>
+    /// Resolve a possibly-relative file path against the workspace and return (mtimeTicks, size)
+    /// if the file exists. Returns (0, 0) on any failure (missing file, permission error, etc.).
+    /// </summary>
+    private (long mtimeTicks, long size) StatFileSafe(string filePath)
+    {
+        try
+        {
+            var resolved = Path.IsPathRooted(filePath)
+                ? filePath
+                : Path.GetFullPath(filePath, _options.WorkspacePath);
+            var info = new FileInfo(resolved);
+            if (!info.Exists) return (0, 0);
+            return (info.LastWriteTimeUtc.Ticks, info.Length);
+        }
+        catch
+        {
+            return (0, 0);
+        }
+    }
+
+    /// <summary>
+    /// If the referenced file was previously read AND has not changed (mtime + size match),
+    /// return a short stub string to replace the full content in the tool result.
+    /// Returns null if no stub is applicable (first read, file changed, file missing).
+    /// </summary>
+    private string? TryGetFileReReadStub(string filePath, VerificationState state)
+    {
+        var (mtime, size) = StatFileSafe(filePath);
+        if (mtime == 0) return null;
+        return state.TryGetReReadStub(filePath, mtime, size, _options.FileReadStubThresholdBeforeBlock);
     }
 
     /// <summary>
     /// Append redundancy hints to tool results before they enter the conversation.
     /// When the agent tries to re-verify something already confirmed, we append
     /// a note to help it skip redundant steps in the future.
+    ///
+    /// Returns both the rewritten <see cref="LlmToolResult"/>s (what the LLM sees)
+    /// AND rewritten <see cref="ToolCallRecord"/>s (what the session log stores),
+    /// with <see cref="ToolCallRecord.ResultTag"/> set to <c>"stubbed"</c> or
+    /// <c>"blocked"</c> when applicable. Keeping the record in sync with the LLM
+    /// view is what lets <see cref="SessionAnalyzer"/> count these events
+    /// post-hoc (P2.5) — without this, the session log would show the pre-stub
+    /// raw content the LLM never saw.
     /// </summary>
-    private IReadOnlyList<LlmToolResult> AppendRedundancyHints(
+    private (IReadOnlyList<LlmToolResult> Results, IReadOnlyList<ToolCallRecord> Records) AppendRedundancyHints(
         IReadOnlyList<LlmToolResult> results,
         IReadOnlyList<ToolCallRecord> records,
         VerificationState verificationState)
     {
-        if (results.Count != records.Count) return results;
+        if (results.Count != records.Count) return (results, records);
 
-        var modified = new List<LlmToolResult>(results.Count);
+        var modifiedResults = new List<LlmToolResult>(results.Count);
+        var modifiedRecords = new List<ToolCallRecord>(records.Count);
+
         for (int i = 0; i < results.Count; i++)
         {
             var record = records[i];
@@ -705,31 +821,62 @@ public sealed class AgentLoop
                 // Check verification redundancy (build-after-test, etc.)
                 var hint = verificationState.CheckRedundancy(record.ToolName, record.Arguments);
 
-                // Check file re-read redundancy
+                // Check file re-read content stub: if file unchanged since prior read, replace
+                // the (potentially large) content with a short stub that points back to the prior turn.
+                // This saves prompt tokens on all subsequent turns of the conversation.
                 if (hint is null && record.ToolName is "read_file")
                 {
                     var filePath = ExtractFilePath(record.Arguments);
                     if (filePath is not null)
-                        hint = verificationState.CheckFileReRead(filePath);
+                    {
+                        var stub = TryGetFileReReadStub(filePath, verificationState);
+                        if (stub is not null)
+                        {
+                            var isBlock = stub.StartsWith("BLOCKED:", StringComparison.Ordinal);
+                            var tag = isBlock ? "blocked" : "stubbed";
+                            var stubCount = verificationState.GetStubReturnCount(filePath);
+
+                            if (isBlock)
+                                _logger.Warning("Re-read hard-blocked after {Count} stubs: {Path}", stubCount, filePath);
+                            else
+                                _logger.Information("Re-read stub applied ({Count}× so far): {Path}", stubCount, filePath);
+
+                            modifiedResults.Add(new LlmToolResult { CallId = result.CallId, Output = stub });
+                            modifiedRecords.Add(record with
+                            {
+                                ResultSummary = stub,
+                                ResultLength = stub.Length,
+                                ResultTag = tag,
+                            });
+                            continue;
+                        }
+                    }
                 }
 
                 if (hint is not null)
                 {
                     _logger.Debug("Redundancy detected: {Tool}", record.ToolName);
-                    modified.Add(new LlmToolResult
+                    var hinted = result.Output + $"\n\n💡 {hint}";
+                    modifiedResults.Add(new LlmToolResult { CallId = result.CallId, Output = hinted });
+                    modifiedRecords.Add(record with
                     {
-                        CallId = result.CallId,
-                        Output = result.Output + $"\n\n💡 {hint}",
+                        ResultSummary = Truncate(hinted, 500),
+                        ResultTag = record.ResultTag ?? "redundancy-hint",
                     });
                     continue;
                 }
             }
 
-            modified.Add(result);
+            modifiedResults.Add(result);
+            modifiedRecords.Add(record);
         }
 
-        return modified;
+        return (modifiedResults, modifiedRecords);
     }
+
+    /// <summary>Local helper mirroring ToolExecutor.Truncate — keeps summaries bounded.</summary>
+    private static string Truncate(string text, int maxChars) =>
+        text.Length <= maxChars ? text : text[..maxChars] + "…";
 
     /// <summary>Extract filePath from tool call arguments JSON.</summary>
     private static string? ExtractFilePath(string argsJson) =>

@@ -73,6 +73,22 @@ public sealed class AgentInteraction
 
     [JsonPropertyName("charCount")]
     public int CharCount => Text?.Length ?? 0;
+
+    /// <summary>
+    /// Execution status: <c>"ok"</c> (non-empty response), <c>"empty"</c>
+    /// (agent completed but emitted nothing — usually a misconfigured model or a silent LLM-call failure),
+    /// or <c>"failed"</c> (exception thrown; see <see cref="ErrorText"/>).
+    /// </summary>
+    [JsonPropertyName("status")]
+    public string Status { get; init; } = "ok";
+
+    /// <summary>
+    /// Exception message when <see cref="Status"/> is <c>"failed"</c>. Null otherwise.
+    /// Populated even when the orchestrator rethrows, so post-mortem session-log analysis
+    /// can pinpoint which sub-agent failed and why without re-running.
+    /// </summary>
+    [JsonPropertyName("errorText")]
+    public string? ErrorText { get; init; }
 }
 
 /// <summary>
@@ -89,6 +105,14 @@ public sealed class SessionMetrics
 
     [JsonPropertyName("agentInteractionCount")]
     public int AgentInteractionCount { get; init; }
+
+    /// <summary>
+    /// Count of agent interactions whose <c>Status != "ok"</c> (either <c>"empty"</c> or
+    /// <c>"failed"</c>). A non-zero value on a completed session is a strong signal of
+    /// a misconfigured LLM (bad model name, expired key, quota), not a gap in sources.
+    /// </summary>
+    [JsonPropertyName("nonOkAgentInteractionCount")]
+    public int NonOkAgentInteractionCount { get; init; }
 
     [JsonPropertyName("reportCharCount")]
     public int ReportCharCount { get; init; }
@@ -120,4 +144,67 @@ public sealed class SessionMetrics
 
     [JsonPropertyName("verificationFailedItems")]
     public IReadOnlyList<string>? VerificationFailedItems { get; init; }
+
+    // ── Web-search metrics (P0.4: provider visibility for auto-eval) ──
+
+    /// <summary>Name of the search backend used (<c>Tavily</c>, <c>Simulated</c>, …).</summary>
+    [JsonPropertyName("searchProvider")]
+    public string SearchProvider { get; init; } = "Simulated";
+
+    /// <summary>Number of web-search tool invocations during the session.</summary>
+    [JsonPropertyName("webSearchCallCount")]
+    public int WebSearchCallCount { get; init; }
+
+    /// <summary>Sum of results returned across all web-search calls.</summary>
+    [JsonPropertyName("webSearchResultCount")]
+    public int WebSearchResultCount { get; init; }
+
+    /// <summary>Aggregate latency (ms) against the search backend.</summary>
+    [JsonPropertyName("webSearchTotalLatencyMs")]
+    public long WebSearchTotalLatencyMs { get; init; }
+
+    // ── Evidence-sufficiency gate (P2.4) ──
+
+    /// <summary>Gate mode in effect (<c>Off</c>/<c>Warn</c>/<c>Enforce</c>).</summary>
+    [JsonPropertyName("evidenceGateMode")]
+    public string? EvidenceGateMode { get; init; }
+
+    /// <summary>Gate decision (<c>Pass</c>/<c>Refuse</c>). Null when gate was Off.</summary>
+    [JsonPropertyName("evidenceGateDecision")]
+    public string? EvidenceGateDecision { get; init; }
+
+    /// <summary>True when synthesis was replaced with a diagnostic report.</summary>
+    [JsonPropertyName("synthesisRefused")]
+    public bool SynthesisRefused { get; init; }
+
+    /// <summary>Human-readable reasons the gate cited, if any.</summary>
+    [JsonPropertyName("evidenceGateReasons")]
+    public IReadOnlyList<string>? EvidenceGateReasons { get; init; }
+
+    /// <summary>Sub-question IDs that failed evidence thresholds, if any.</summary>
+    [JsonPropertyName("evidenceGateFailingSubQuestions")]
+    public IReadOnlyList<string>? EvidenceGateFailingSubQuestions { get; init; }
+
+    /// <summary>Ratio of sources detected as simulated/placeholder (0..1).</summary>
+    [JsonPropertyName("simulatedSourceRatio")]
+    public double SimulatedSourceRatio { get; init; }
+
+    // ── Context-management feature fingerprint (A/B sweep support) ──
+
+    /// <summary>
+    /// Compaction mode in effect for this session: <c>Off</c> / <c>ToolResultOnly</c> /
+    /// <c>Pipeline</c>. Populated from <c>AI:Compaction:Mode</c> (after legacy promotion).
+    /// Lets a sweep script pair session logs with the mode that produced them without
+    /// depending on filename conventions.
+    /// </summary>
+    [JsonPropertyName("compactionMode")]
+    public string? CompactionMode { get; init; }
+
+    /// <summary>Human-readable pipeline shape, e.g. <c>Pipeline[ToolResult(&gt;8192) → Summarization(&gt;20480,≥8)]</c>.</summary>
+    [JsonPropertyName("compactionShape")]
+    public string? CompactionShape { get; init; }
+
+    /// <summary>True when <c>AI:ResearchContextProvider:Enabled</c> was on for this session.</summary>
+    [JsonPropertyName("researchContextProviderEnabled")]
+    public bool ResearchContextProviderEnabled { get; init; }
 }

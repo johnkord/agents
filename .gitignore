@@ -372,3 +372,7 @@ env.sh
 test-shared-database.sh
 verify-solution.sh
 sessions
+
+# Forge runtime artifacts (spilled tool results, session caches)
+.forge/tool-results/
+

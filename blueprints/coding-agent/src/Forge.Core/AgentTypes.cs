@@ -22,6 +22,23 @@ public sealed record ToolCallRecord
     public int ResultLength { get; init; }
     public bool IsError { get; init; }
     public double DurationMs { get; init; }
+
+    /// <summary>
+    /// P2.5: Context-management classification applied to this tool result. One of:
+    /// <c>"spilled"</c> (large output diverted to disk by <see cref="ObservationPipeline"/>),
+    /// <c>"truncated"</c> (size-gated without spill),
+    /// <c>"stubbed"</c> (re-read suppressed by <see cref="VerificationState.TryGetReReadStub"/>),
+    /// <c>"blocked"</c> (re-read hard-blocked after N consecutive stubs — P1.4).
+    /// Null when none apply. Structured so <see cref="SessionAnalyzer"/> can count
+    /// without fragile string matching against <see cref="ResultSummary"/>.
+    /// </summary>
+    public string? ResultTag { get; init; }
+
+    /// <summary>
+    /// When <see cref="ResultTag"/> is <c>"spilled"</c>, the on-disk path where the
+    /// full raw output was persisted. Null otherwise.
+    /// </summary>
+    public string? SpillPath { get; init; }
 }
 
 /// <summary>

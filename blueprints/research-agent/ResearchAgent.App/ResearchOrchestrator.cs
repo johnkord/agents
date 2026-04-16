@@ -4,6 +4,9 @@ using System.Reflection;
 using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
+#pragma warning disable MAAI001 // Microsoft.Agents.AI.Compaction is experimental in 1.1.0
+using Microsoft.Agents.AI.Compaction;
+#pragma warning restore MAAI001
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -39,7 +42,7 @@ namespace ResearchAgent.App;
 ///
 /// Pipeline: Planner → [Researcher ↔ Analyst]×N → Synthesizer → Verifier
 /// </summary>
-public sealed class ResearchOrchestrator
+public sealed class ResearchOrchestrator : IDisposable
 {
     private readonly IConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
@@ -47,6 +50,9 @@ public sealed class ResearchOrchestrator
     private readonly ResearchMemory _memory;
     private readonly ResearchStateFile? _priorState;
     private readonly IProgress<ResearchProgressEvent>? _progress;
+    private readonly IWebSearchProvider _searchProvider;
+    private readonly HttpClient? _ownedHttpClient;
+    private readonly SearchStatistics _searchStats;
 
     public ResearchOrchestrator(
         IConfiguration config,
@@ -61,12 +67,53 @@ public sealed class ResearchOrchestrator
         _priorState = priorState;
         _progress = progress;
 
+        (_searchProvider, _ownedHttpClient) = CreateSearchProvider(config, loggerFactory);
+        _searchStats = new SearchStatistics(_searchProvider.Name);
+        _logger.LogInformation("Web search provider: {Provider}", _searchProvider.Name);
+
         if (priorState is not null)
         {
             _memory.LoadPriorState(priorState);
             _logger.LogInformation("Loaded prior state from session {PriorSessionId}: {FindingCount} findings, {SourceCount} sources",
                 priorState.Metadata.SessionId, priorState.Findings.Count, priorState.Sources.Count);
         }
+    }
+
+    /// <summary>
+    /// Select the search provider based on <c>Research:Search:Provider</c>:
+    /// <c>Tavily</c> (requires <c>Research:Tavily:ApiKey</c>) or <c>Simulated</c> (default).
+    /// If Tavily is requested but no key is configured, falls back to Simulated with a
+    /// warning — this keeps dev environments functional without hiding the misconfig.
+    /// </summary>
+    private static (IWebSearchProvider provider, HttpClient? ownedHttp) CreateSearchProvider(
+        IConfiguration config, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(typeof(ResearchOrchestrator));
+        var requested = (config["Research:Search:Provider"] ?? "Simulated").Trim();
+
+        if (string.Equals(requested, "Tavily", StringComparison.OrdinalIgnoreCase))
+        {
+            var key = config["Research:Tavily:ApiKey"];
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                logger.LogWarning("Research:Search:Provider=Tavily but Research:Tavily:ApiKey is empty — falling back to Simulated.");
+                return (new SimulatedWebSearchProvider(), null);
+            }
+            var depth = config["Research:Tavily:SearchDepth"] ?? "basic";
+            // `advanced` searches occasionally take 30+s on Tavily; give them more runway.
+            var timeout = string.Equals(depth, "advanced", StringComparison.OrdinalIgnoreCase)
+                ? TimeSpan.FromSeconds(60)
+                : TimeSpan.FromSeconds(30);
+            var http = new HttpClient { Timeout = timeout };
+            var provider = new TavilyWebSearchProvider(http, key!,
+                loggerFactory.CreateLogger<TavilyWebSearchProvider>(), depth);
+            return (provider, http);
+        }
+
+        if (!string.Equals(requested, "Simulated", StringComparison.OrdinalIgnoreCase))
+            logger.LogWarning("Unknown Research:Search:Provider=\"{Requested}\" — falling back to Simulated.", requested);
+
+        return (new SimulatedWebSearchProvider(), null);
     }
 
     /// <summary>
@@ -143,6 +190,7 @@ public sealed class ResearchOrchestrator
 
         // ── Phase 3: Run Planner ───────────────────────────
         state.CurrentPhase = ResearchPhase.Planning;
+        _memory.SetResearchQuestion(query);   // P2.3 — make question available to downstream context provider
         var taskPrompt = _priorState is not null
             ? BuildTaskPromptWithPrior(query, _priorState)
             : BuildTaskPrompt(query);
@@ -151,6 +199,7 @@ public sealed class ResearchOrchestrator
 
         var plannerOutput = await RunSingleAgentAsync(
             plannerAgent, "Planner", taskPrompt, state.SessionId, interactions, history, ct);
+        _memory.SetPlannerOutput(plannerOutput);   // P2.3 — surface to downstream agents via context provider
 
         // ── Phase 4: Iterative Research ↔ Analyst Loop ─────
         // Inspired by SFR-DeepResearch and RE-Searcher: top agents iterate,
@@ -248,28 +297,89 @@ public sealed class ResearchOrchestrator
             ReportProgress(ResearchProgressKind.GapIdentified, $"{underResearched.Count} knowledge gap(s) — iterating", underResearched.Count);
         }
 
+        // ── Phase 4.5: Evidence-Sufficiency Gate (P2.4) ─────
+        // Decide whether the accumulated evidence justifies a synthesis pass. The
+        // gate is pure-functional over memory; it logs a verdict regardless of
+        // mode and only blocks synthesis when Mode=Enforce + decision=Refuse.
+        var gateOptions = EvidenceGateOptions.FromConfig(_config);
+        var gateLogger = _loggerFactory.CreateLogger<EvidenceSufficiencyEvaluator>();
+        var evidenceGate = new EvidenceSufficiencyEvaluator(gateOptions, gateLogger);
+        var evidenceVerdict = gateOptions.Mode == EvidenceGateMode.Off
+            ? null
+            : evidenceGate.Evaluate(
+                _memory.GetAllFindings(),
+                _memory.GetAllSources(),
+                _memory.GetAllProgress());
+
+        if (evidenceVerdict is not null)
+        {
+            sessionActivity?.SetTag("evidence_gate.mode", evidenceVerdict.Mode.ToString());
+            sessionActivity?.SetTag("evidence_gate.decision", evidenceVerdict.Decision.ToString());
+            sessionActivity?.SetTag("evidence_gate.failing_sub_questions", evidenceVerdict.FailingSubQuestions.Count);
+            ReportProgress(
+                ResearchProgressKind.SessionInfo,
+                $"Evidence gate: {evidenceVerdict.Decision} (mode={evidenceVerdict.Mode}, failingQ={evidenceVerdict.FailingSubQuestions.Count})");
+        }
+
+        if (evidenceVerdict?.ShouldRefuseSynthesis == true)
+        {
+            _logger.LogWarning("Evidence gate REFUSED synthesis (mode=Enforce). Emitting diagnostic report instead.");
+            foreach (var reason in evidenceVerdict.Reasons)
+                _logger.LogWarning("Evidence gate reason: {Reason}", reason);
+
+            finalReport = evidenceVerdict.RenderDiagnostic(query);
+            state.FinalReport = finalReport;
+            ReportProgress(
+                ResearchProgressKind.PhaseChange,
+                $"Evidence gate refused synthesis — emitting diagnostic ({evidenceVerdict.Reasons.Count} reason(s))");
+        }
+
         // ── Phase 5: Synthesizer ───────────────────────────
-        state.CurrentPhase = ResearchPhase.Synthesizing;
-        _logger.LogInformation("Phase 5: Running Synthesizer...");
-        ReportProgress(ResearchProgressKind.PhaseChange, $"Synthesizing report ({_memory.GetAllFindings().Count} findings, {_memory.GetAllSources().Count} sources)...");
+        // Skipped when the evidence gate refused — `finalReport` already holds the diagnostic.
+        var synthesisRefused = evidenceVerdict?.ShouldRefuseSynthesis == true;
+        if (!synthesisRefused)
+        {
+            state.CurrentPhase = ResearchPhase.Synthesizing;
+            _logger.LogInformation("Phase 5: Running Synthesizer...");
+            ReportProgress(ResearchProgressKind.PhaseChange, $"Synthesizing report ({_memory.GetAllFindings().Count} findings, {_memory.GetAllSources().Count} sources)...");
 
-        var synthesizerInput = $"""
-            ## Analysis Summary
+            var warnBanner = evidenceVerdict?.ShouldAnnotateSynthesis == true
+                ? $"""
+                   ⚠️ EVIDENCE-GATE WARNING — DO NOT IGNORE:
+                   The evidence-sufficiency gate flagged this research session. Reasons:
+                   {string.Join("\n", evidenceVerdict.Reasons.Select(r => "  - " + r))}
 
-            {interactions.LastOrDefault(i => i.Agent == "Analyst")?.Text ?? "(no analysis)"}
+                   You MUST either (a) explicitly acknowledge these limitations in the report's
+                   "Limitations" section with the same specificity shown above, or (b) refuse to
+                   synthesize and state so directly. Do NOT paper over the gaps with hedged language.
 
-            ---
-            Use GetAllResearchContext to access all findings and notes.
-            Produce the final comprehensive research report.
-            Total research iterations completed: {state.IterationCount}
-            """;
+                   ---
+                   """
+                : string.Empty;
 
-        var synthesizerOutput = await RunSingleAgentAsync(
-            synthesizerAgent, "Synthesizer", synthesizerInput, state.SessionId, interactions, history, ct);
-        finalReport = synthesizerOutput;
+            var synthesizerInput = $"""
+                {warnBanner}## Analysis Summary
+
+                {interactions.LastOrDefault(i => i.Agent == "Analyst")?.Text ?? "(no analysis)"}
+
+                ---
+                Use GetAllResearchContext to access all findings and notes.
+                Produce the final comprehensive research report.
+                Total research iterations completed: {state.IterationCount}
+                """;
+
+            var synthesizerOutput = await RunSingleAgentAsync(
+                synthesizerAgent, "Synthesizer", synthesizerInput, state.SessionId, interactions, history, ct);
+            finalReport = synthesizerOutput;
+        }
+        else
+        {
+            _logger.LogInformation("Phase 5: Synthesizer SKIPPED (evidence gate refused; diagnostic report substituted)");
+        }
 
         // ── Phase 6: Verifier (optional) ─────────────────────────
-        if (verificationEnabled && verifierAgent is not null)
+        // Also skipped on refusal — there are no claims to verify against synthetic evidence.
+        if (!synthesisRefused && verificationEnabled && verifierAgent is not null)
         {
             state.CurrentPhase = ResearchPhase.Verifying;
             _logger.LogInformation("Phase 6: Running Verifier...");
@@ -294,6 +404,10 @@ public sealed class ResearchOrchestrator
 
             var verifierOutput = await RunSingleAgentAsync(
                 verifierAgent, "Verifier", verifierInput, state.SessionId, interactions, history, ct);
+        }
+        else if (synthesisRefused)
+        {
+            _logger.LogInformation("Phase 6: Verification SKIPPED (evidence gate refused — nothing to verify)");
         }
         else if (!verificationEnabled)
         {
@@ -343,6 +457,12 @@ public sealed class ResearchOrchestrator
             CompletedAt = DateTimeOffset.UtcNow,
             Provider = provider,
             Model = model,
+            SearchProvider = _searchStats.ProviderName,
+            WebSearchCallCount = _searchStats.CallCount,
+            WebSearchResultCount = _searchStats.ResultCount,
+            WebSearchTotalLatencyMs = _searchStats.TotalLatencyMs,
+            EvidenceVerdict = evidenceVerdict,
+            SynthesisRefused = synthesisRefused,
         };
     }
 
@@ -389,13 +509,26 @@ public sealed class ResearchOrchestrator
             activity?.SetTag("duration_ms", sw.ElapsedMilliseconds);
 
             // Extract text output from events
-            var responseText = ExtractAgentOutput(events, agentName);
+            var responseText = ExtractAgentOutput(events, agentName, out var workflowError);
+            string interactionStatus = "ok";
+            string? interactionError = null;
 
             if (string.IsNullOrEmpty(responseText))
             {
-                _logger.LogWarning("Agent {AgentName} produced EMPTY response", agentName);
-                activity?.SetStatus(ActivityStatusCode.Error, "Empty response");
-                responseText = $"(Agent {agentName} produced no output)";
+                if (workflowError is not null)
+                {
+                    _logger.LogWarning("Agent {AgentName} produced EMPTY response due to workflow error: {Error}", agentName, workflowError);
+                    interactionStatus = "failed";
+                    interactionError = workflowError;
+                    responseText = $"(Agent {agentName} failed: {workflowError})";
+                }
+                else
+                {
+                    _logger.LogWarning("Agent {AgentName} produced EMPTY response — check model name, API key, and quota. Run with Logging:MinLevel=Debug for the underlying LLM error.", agentName);
+                    interactionStatus = "empty";
+                    responseText = $"(Agent {agentName} produced no output)";
+                }
+                activity?.SetStatus(ActivityStatusCode.Error, interactionStatus);
             }
             else
             {
@@ -413,6 +546,8 @@ public sealed class ResearchOrchestrator
                 Role = "assistant",
                 Text = responseText,
                 Timestamp = now,
+                Status = interactionStatus,
+                ErrorText = interactionError,
             });
 
             activity?.SetTag("output_chars", responseText.Length);
@@ -424,26 +559,47 @@ public sealed class ResearchOrchestrator
             _logger.LogError(ex, "Agent {AgentName} FAILED after {ElapsedMs}ms: {Error}",
                 agentName, sw.ElapsedMilliseconds, ex.Message);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            // Record the failure in the session log before rethrowing — so a
+            // post-mortem doesn't have to scrape the Serilog stream.
+            interactions.Add(new AgentInteraction
+            {
+                Agent = agentName,
+                Role = "assistant",
+                Text = $"(Agent {agentName} failed: {ex.GetType().Name})",
+                Timestamp = DateTimeOffset.UtcNow,
+                Status = "failed",
+                ErrorText = ex.Message,
+            });
             throw;
         }
     }
 
     /// <summary>
     /// Extract the accumulated text output from workflow events for a single agent.
+    /// Returns the output text. When a <see cref="WorkflowErrorEvent"/> is seen, captures
+    /// its exception (including inner exceptions — MAF commonly wraps the real error in a
+    /// <c>TargetInvocationException</c>) into <paramref name="workflowError"/> so the
+    /// caller can record it on the <c>AgentInteraction</c>.
     /// </summary>
-    private string ExtractAgentOutput(List<WorkflowEvent> events, string agentName)
+    private string ExtractAgentOutput(List<WorkflowEvent> events, string agentName, out string? workflowError)
     {
         var sb = new StringBuilder();
+        workflowError = null;
 
         foreach (var evt in events)
         {
             switch (evt)
             {
                 case WorkflowErrorEvent errorEvt:
-                    _logger.LogError("WORKFLOW ERROR in {AgentName}: {ErrorType}: {ErrorMessage}",
-                        agentName,
-                        errorEvt.Exception?.GetType().Name ?? "Unknown",
-                        errorEvt.Exception?.Message ?? errorEvt.ToString());
+                    // Walk the InnerException chain — MAF's TurnToken handler wraps the
+                    // underlying LLM error (HTTP 404, invalid model, auth failure) in one
+                    // or more TargetInvocationException layers. The inner message is the
+                    // one a human needs.
+                    var (outerType, rootType, rootMsg) = FormatWorkflowException(errorEvt.Exception, errorEvt.ToString());
+                    _logger.LogError("WORKFLOW ERROR in {AgentName}: {OuterType} → {RootType}: {RootMessage}",
+                        agentName, outerType, rootType, rootMsg);
+                    // First error wins — downstream ones are usually cascades.
+                    workflowError ??= $"{rootType}: {rootMsg}";
                     break;
 
                 case WorkflowOutputEvent outputEvt when outputEvt.ExecutorId != "OutputMessages":
@@ -461,6 +617,136 @@ public sealed class ResearchOrchestrator
     // ──────────────────────────────────────────────────────────
     // Agent Factories — each agent gets specialized instructions and tools
     // ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Create an agent, optionally wrapped with a <see cref="CompactionProvider"/>
+    /// built by <see cref="CompactionConfigurator"/> (P2.2).
+    ///
+    /// <para>Modes, via <c>AI:Compaction:Mode</c>: <c>Off</c> (default) · <c>ToolResultOnly</c>
+    /// (P1.1 shape) · <c>Pipeline</c> (ToolResult → Summarization → SlidingWindow → Truncation).
+    /// The legacy <c>AI:ToolResultCompaction:Enabled = true</c> promotes to <c>ToolResultOnly</c>
+    /// for back-compat.</para>
+    ///
+    /// <para>Only applied to agents chosen by the caller (currently Researcher + Verifier) —
+    /// these produce the largest tool-result payloads (web pages, evidence bundles) and the
+    /// longest multi-turn conversations. Leaves Planner / Analyst / Synthesizer untouched
+    /// because their contexts are already summary-shaped.</para>
+    /// </summary>
+    private AIAgent CreateAgentWithOptionalCompaction(
+        ChatClient chatClient,
+        string name,
+        string description,
+        string instructions,
+        IList<AITool> tools,
+        bool attachStateProvider = false)
+    {
+        var cfg = CompactionConfigurator.Resolve(_config);
+
+        // P2.3 — opt-in research-state provider. Decoupled from compaction so either
+        // feature can be enabled independently.
+        var stateProviderEnabled = attachStateProvider &&
+            _config.GetValue<bool>("AI:ResearchContextProvider:Enabled", false);
+        AIContextProvider? stateProvider = stateProviderEnabled
+            ? new ResearchStateContextProvider(_memory, _logger)
+            : null;
+
+        if (cfg.Mode == CompactionConfigurator.Mode.Off && stateProvider is null)
+        {
+            return chatClient.AsAIAgent(
+                name: name,
+                description: description,
+                instructions: instructions,
+                tools: tools);
+        }
+
+#pragma warning disable MAAI001 // Microsoft.Agents.AI.Compaction is experimental in 1.1.0
+        var providers = new List<AIContextProvider>();
+
+        if (cfg.Mode != CompactionConfigurator.Mode.Off)
+        {
+            var strategy = CompactionConfigurator.Build(
+                cfg,
+                summarizerClientFactory: () => CreateSummarizerChatClient(cfg.SummarizationModel),
+                logger: _logger);
+
+            if (strategy is not null)
+            {
+                providers.Add(new CompactionProvider(
+                    strategy,
+                    name + "-compaction",
+                    _loggerFactory));
+                _logger.LogInformation("Compaction ENABLED for {Agent}: {Shape}", name, cfg.Describe());
+            }
+        }
+
+        if (stateProvider is not null)
+        {
+            providers.Add(stateProvider);
+            _logger.LogInformation("Research-state context provider ENABLED for {Agent}", name);
+        }
+
+        if (providers.Count == 0)
+        {
+            return chatClient.AsAIAgent(
+                name: name, description: description,
+                instructions: instructions, tools: tools);
+        }
+
+        var options = new ChatClientAgentOptions
+        {
+            Name = name,
+            Description = description,
+            ChatOptions = new ChatOptions
+            {
+                Instructions = instructions,
+                Tools = tools.ToList(),
+            },
+            AIContextProviders = providers,
+        };
+#pragma warning restore MAAI001
+
+        return chatClient.AsAIAgent(options);
+    }
+
+    /// <summary>
+    /// Builds the <see cref="IChatClient"/> used by the summarization stage of the compaction
+    /// pipeline. When <paramref name="modelOverride"/> is null or empty, reuses the primary
+    /// chat client; otherwise instantiates a dedicated client on the same provider+credential
+    /// using the override model. The result is wrapped via <see cref="ChatClientExtensions.AsIChatClient"/>.
+    /// </summary>
+    private IChatClient? CreateSummarizerChatClient(string? modelOverride)
+    {
+        try
+        {
+            var provider = _config["AI:Provider"] ?? "openai";
+            var apiKey = _config["AI:ApiKey"];
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                _logger.LogWarning("Compaction summarization requested but AI:ApiKey is not set — summarization stage will be skipped.");
+                return null;
+            }
+
+            var model = string.IsNullOrWhiteSpace(modelOverride)
+                ? (_config["AI:Model"] ?? "gpt-4o")
+                : modelOverride!;
+
+            ChatClient inner = provider.ToLowerInvariant() switch
+            {
+                "openai" => new OpenAIClient(apiKey).GetChatClient(model),
+                "azure" => CreateAzureChatClient(model, apiKey),
+                _ => throw new InvalidOperationException($"Unknown AI provider: {provider}"),
+            };
+
+            _logger.LogDebug("Summarizer IChatClient ready (model={Model}, override={HasOverride})",
+                model, !string.IsNullOrWhiteSpace(modelOverride));
+            return inner.AsIChatClient();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to build summarizer chat client — summarization stage will be skipped.");
+            return null;
+        }
+    }
 
     /// <summary>
     /// Creates the Planning Agent — decomposes the research query into sub-questions.
@@ -501,14 +787,15 @@ public sealed class ResearchOrchestrator
     private AIAgent CreateResearcherAgent(ChatClient chatClient)
     {
         var tools = new List<AITool>();
-        tools.AddRange(CreateToolsFrom(new WebSearchPlugin(_memory, _loggerFactory)));
+        tools.AddRange(CreateToolsFrom(new WebSearchPlugin(_searchProvider, _memory, _loggerFactory, _searchStats)));
         tools.AddRange(CreateToolsFrom(new ContentExtractionPlugin(_memory, _loggerFactory)));
         tools.AddRange(CreateToolsFrom(new NoteTakingPlugin(_memory, _loggerFactory)));
 
         _logger.LogDebug("Researcher agent tools: {ToolNames}",
             string.Join(", ", tools.Select(t => t.GetType().Name)));
 
-        return chatClient.AsAIAgent(
+        return CreateAgentWithOptionalCompaction(
+            chatClient,
             name: "Researcher",
             description: "Searches for information, reads sources, and extracts key findings using goal-reflect pattern and Pensieve memory.",
             instructions: """
@@ -549,7 +836,8 @@ public sealed class ResearchOrchestrator
                 then pass the complete research context forward.
                 Do NOT pass raw fetched content — only distilled findings and notes.
                 """,
-            tools: tools);
+            tools: tools,
+            attachStateProvider: true);
     }
 
     /// <summary>
@@ -654,7 +942,8 @@ public sealed class ResearchOrchestrator
         var tools = new List<AITool>();
         tools.AddRange(CreateToolsFrom(new VerificationPlugin(_memory, _loggerFactory)));
 
-        return chatClient.AsAIAgent(
+        return CreateAgentWithOptionalCompaction(
+            chatClient,
             name: "Verifier",
             description: "Verifies research report claims against accumulated evidence using checklist-based verification.",
             instructions: """
@@ -686,7 +975,8 @@ public sealed class ResearchOrchestrator
                 - Mark as UNVERIFIABLE only if the claim is about something outside the research scope
                 - Be strict but fair — the goal is accuracy, not nitpicking
                 """,
-            tools: tools);
+            tools: tools,
+            attachStateProvider: true);
     }
 
     // ──────────────────────────────────────────────────────────
@@ -813,6 +1103,47 @@ public sealed class ResearchOrchestrator
     {
         return text.Length <= maxLength ? text : string.Concat(text.AsSpan(0, maxLength), "...");
     }
+
+    /// <summary>
+    /// Unwrap a MAF <see cref="WorkflowErrorEvent"/> exception down to its root cause.
+    /// MAF commonly surfaces workflow errors as
+    /// <c>TargetInvocationException → … → ClientResultException</c> (for LLM HTTP errors) or
+    /// <c>TargetInvocationException → InvalidOperationException</c> (for config errors).
+    /// The root message is the one operators actually need.
+    /// </summary>
+    /// <param name="exception">The exception on the <c>WorkflowErrorEvent</c>, possibly null.</param>
+    /// <param name="fallbackText">Text to use for the root message if <paramref name="exception"/> is null.</param>
+    /// <returns>
+    /// <c>outerType</c> — the original exception type name (for log context).
+    /// <c>rootType</c> — the deepest inner exception's type name (the actionable one).
+    /// <c>rootMessage</c> — the deepest message, or <paramref name="fallbackText"/> if nothing was available.
+    /// </returns>
+    internal static (string OuterType, string RootType, string RootMessage) FormatWorkflowException(
+        Exception? exception, string fallbackText)
+    {
+        if (exception is null)
+        {
+            return ("Unknown", "Unknown", fallbackText);
+        }
+        var root = exception;
+        while (root.InnerException is not null)
+        {
+            root = root.InnerException;
+        }
+        return (
+            OuterType: exception.GetType().Name,
+            RootType: root.GetType().Name,
+            RootMessage: root.Message ?? fallbackText);
+    }
+
+    /// <summary>
+    /// Dispose the owned <see cref="HttpClient"/> used by the Tavily search provider (if any).
+    /// Simulated provider owns nothing, so disposal is a no-op in that case.
+    /// </summary>
+    public void Dispose()
+    {
+        _ownedHttpClient?.Dispose();
+    }
 }
 
 /// <summary>
@@ -869,4 +1200,28 @@ public sealed class ResearchResult
     /// Session ID of the prior state that was loaded, if any.
     /// </summary>
     public string? PriorSessionId { get; init; }
+
+    /// <summary>
+    /// Name of the web-search provider used (<c>Tavily</c>, <c>Simulated</c>, …). Distinct from
+    /// <see cref="Provider"/> which names the LLM backend.
+    /// </summary>
+    public string SearchProvider { get; init; } = "Simulated";
+
+    /// <summary>Number of web-search tool invocations during this session.</summary>
+    public int WebSearchCallCount { get; init; }
+
+    /// <summary>Total number of search results returned across all web-search calls.</summary>
+    public int WebSearchResultCount { get; init; }
+
+    /// <summary>Wall-clock time spent waiting on the search backend, summed over all calls.</summary>
+    public long WebSearchTotalLatencyMs { get; init; }
+
+    /// <summary>
+    /// Verdict from the evidence-sufficiency gate (P2.4). <c>null</c> when
+    /// <c>Research:EvidenceGate:Mode=Off</c>.
+    /// </summary>
+    public EvidenceVerdict? EvidenceVerdict { get; init; }
+
+    /// <summary>True when the evidence gate rejected synthesis and a diagnostic report was emitted.</summary>
+    public bool SynthesisRefused { get; init; }
 }

@@ -66,6 +66,9 @@ public static class SessionAnalyzer
         // Load handoff for episode/pivot/assumption data
         var handoff = HandoffGenerator.LoadFromSessionFile(sessionFilePath);
 
+        // P2.5: context-management counters (pattern-matched against ResultSummary strings).
+        var (spills, stubs, blocks, truncs) = ComputeContextMgmtCounters(steps);
+
         return new SessionAnalysis
         {
             FilePath = sessionFilePath,
@@ -108,6 +111,12 @@ public static class SessionAnalyzer
                         DurationMs = 0,
                     }).ToList(),
                 }).ToList()) : null,
+
+            // P2.5
+            SpillsTriggered = spills,
+            StubReturns = stubs,
+            ReadsBlocked = blocks,
+            ToolResultsTruncated = truncs,
         };
     }
 
@@ -138,6 +147,16 @@ public static class SessionAnalyzer
             if (a.PivotCount > 0) lines.Add($"  Pivots: {a.PivotCount}");
             if (a.HasAssumptions) lines.Add($"  Assumptions: stated");
             if (a.TrajectoryLine is not null) lines.Add($"  Trajectory: {a.TrajectoryLine}");
+        }
+
+        if (a.SpillsTriggered + a.StubReturns + a.ReadsBlocked + a.ToolResultsTruncated > 0)
+        {
+            lines.Add("");
+            lines.Add("Context management (P0.1/P0.2/P1.4):");
+            if (a.SpillsTriggered > 0) lines.Add($"  Tool-result spills: {a.SpillsTriggered}");
+            if (a.StubReturns > 0) lines.Add($"  Re-read stubs returned: {a.StubReturns}");
+            if (a.ReadsBlocked > 0) lines.Add($"  Reads hard-blocked: {a.ReadsBlocked}");
+            if (a.ToolResultsTruncated > 0) lines.Add($"  Tool results truncated: {a.ToolResultsTruncated}");
         }
 
         return string.Join("\n", lines);
@@ -173,8 +192,71 @@ public static class SessionAnalyzer
             $"  Avg token/step growth: {avgGrowth:P0}",
             $"  Consolidation capture: {consolidationRate:P0} (of {incomplete.Count} incomplete sessions)",
             $"  Sessions with pivots: {sessions.Count(s => s.PivotCount > 0)}",
-            $"  Sessions with assumptions: {sessions.Count(s => s.HasAssumptions)}"
+            $"  Sessions with assumptions: {sessions.Count(s => s.HasAssumptions)}",
+            $"  Total tool-result spills: {sessions.Sum(s => s.SpillsTriggered)}",
+            $"  Total re-read stubs: {sessions.Sum(s => s.StubReturns)}",
+            $"  Total reads hard-blocked: {sessions.Sum(s => s.ReadsBlocked)}"
         );
+    }
+
+    /// <summary>
+    /// P2.5: Side-by-side comparison of two sessions for A/B testing of
+    /// context-management changes. Uses session B's numbers as the "after"
+    /// and reports deltas (B − A) with direction annotations.
+    /// </summary>
+    public static string FormatDiff(SessionAnalysis a, SessionAnalysis b)
+    {
+        static string Pct(double x) => $"{x:P0}";
+        static string Num(double x) => $"{x:N0}";
+        static string Delta(double oldV, double newV, bool lowerIsBetter = true)
+        {
+            var d = newV - oldV;
+            if (d == 0) return "±0";
+            var arrow = (lowerIsBetter ? d < 0 : d > 0) ? "↓better" : "↑worse";
+            var sign = d > 0 ? "+" : "";
+            return $"{sign}{d:N0} ({arrow})";
+        }
+        static string DeltaInt(int oldV, int newV, bool lowerIsBetter = true) => Delta(oldV, newV, lowerIsBetter);
+        static string DeltaPct(double oldV, double newV, bool lowerIsBetter = true)
+        {
+            var d = newV - oldV;
+            if (d == 0) return "±0";
+            var arrow = (lowerIsBetter ? d < 0 : d > 0) ? "↓better" : "↑worse";
+            var sign = d > 0 ? "+" : "";
+            return $"{sign}{d:P0} ({arrow})";
+        }
+
+        var lines = new List<string>
+        {
+            $"Comparing:",
+            $"  A: {Path.GetFileName(a.FilePath)} — {a.TotalSteps} steps, {Num(a.TotalTokens)} tokens",
+            $"  B: {Path.GetFileName(b.FilePath)} — {b.TotalSteps} steps, {Num(b.TotalTokens)} tokens",
+            "",
+            "Deltas (B − A):",
+            $"  Steps:                 {a.TotalSteps,6} → {b.TotalSteps,-6}  {DeltaInt(a.TotalSteps, b.TotalSteps)}",
+            $"  Total tokens:          {Num(a.TotalTokens),12} → {Num(b.TotalTokens),-12}  {DeltaInt(a.TotalTokens, b.TotalTokens)}",
+            $"  Tokens/step growth:    {Pct(a.TokensPerStepGrowth),6} → {Pct(b.TokensPerStepGrowth),-6}  {DeltaPct(a.TokensPerStepGrowth, b.TokensPerStepGrowth)}",
+        };
+
+        // Read coalescence only makes sense when both sessions contain reads.
+        // The -1.0 sentinel means "no reads" — omit the row in that case so the
+        // diff doesn't render nonsense like "100% → -100%  -200% (↑worse)".
+        if (a.ReadCoalescenceRate >= 0 && b.ReadCoalescenceRate >= 0)
+        {
+            lines.Add($"  Read coalescence:      {Pct(a.ReadCoalescenceRate),6} → {Pct(b.ReadCoalescenceRate),-6}  {DeltaPct(a.ReadCoalescenceRate, b.ReadCoalescenceRate, lowerIsBetter: false)}");
+        }
+        else
+        {
+            lines.Add($"  Read coalescence:      N/A (one or both sessions have no read_file calls)");
+        }
+
+        lines.Add("");
+        lines.Add("Context management (P0.1/P0.2/P1.4):");
+        lines.Add($"  Spills triggered:      {a.SpillsTriggered,6} → {b.SpillsTriggered,-6}  {DeltaInt(a.SpillsTriggered, b.SpillsTriggered, lowerIsBetter: false)}");
+        lines.Add($"  Re-read stubs:         {a.StubReturns,6} → {b.StubReturns,-6}  {DeltaInt(a.StubReturns, b.StubReturns, lowerIsBetter: false)}");
+        lines.Add($"  Reads hard-blocked:    {a.ReadsBlocked,6} → {b.ReadsBlocked,-6}  {DeltaInt(a.ReadsBlocked, b.ReadsBlocked, lowerIsBetter: false)}");
+        lines.Add($"  Results truncated:     {a.ToolResultsTruncated,6} → {b.ToolResultsTruncated,-6}  {DeltaInt(a.ToolResultsTruncated, b.ToolResultsTruncated)}");
+        return string.Join("\n", lines);
     }
 
     // ── Metric computations ──────────────────────────────────────────
@@ -234,6 +316,52 @@ public static class SessionAnalyzer
         return $"{verified}/{edits} ({(double)verified / edits:P0})";
     }
 
+    /// <summary>
+    /// P2.5: Count context-management events. Primary path: read structured
+    /// <see cref="ParsedToolCall.ResultTag"/> which is set at emission time in
+    /// <see cref="ObservationPipeline"/> + <see cref="AgentLoop"/>. Fallback for
+    /// pre-P2.5 session files: pattern-match the pointer strings that land in
+    /// the LLM-visible tool output (only reliable for spills because the
+    /// ObservationPipeline footer is short enough to fit in the 500-char
+    /// <see cref="ParsedToolCall.ResultSummary"/> head when the raw output is
+    /// below the observation-max threshold; stubs/blocks cannot be detected
+    /// reliably in legacy logs because pre-P2.5 AgentLoop did not rewrite the
+    /// record's summary when applying them).
+    /// </summary>
+    internal static (int spills, int stubs, int blocks, int truncs) ComputeContextMgmtCounters(List<ParsedStep> steps)
+    {
+        int spills = 0, stubs = 0, blocks = 0, truncs = 0;
+        foreach (var step in steps)
+        {
+            foreach (var tc in step.ToolCalls)
+            {
+                // Primary: structured tag.
+                switch (tc.ResultTag)
+                {
+                    case "spilled": spills++; continue;
+                    case "truncated": truncs++; continue;
+                    case "stubbed": stubs++; continue;
+                    case "blocked": blocks++; continue;
+                    // "redundancy-hint" is counted in its own metric (VerificationCompliance)
+                    // not here; falls through.
+                }
+
+                // Fallback: only spills are reliably detectable from legacy summaries,
+                // because ObservationPipeline appends the pointer inline and for short
+                // tool outputs the whole pointer fits within the 500-char summary head.
+                // Stubs/blocks were NOT written back to the summary in pre-P2.5 AgentLoop,
+                // so fallback detection for those would undercount silently — better to
+                // leave them at zero than mislead.
+                var s = tc.ResultSummary;
+                if (string.IsNullOrEmpty(s)) continue;
+                if (s.Contains("Full output saved to:", StringComparison.Ordinal)) { spills++; continue; }
+                // Match the actual ObservationPipeline footer: "... truncated (" followed by count.
+                if (s.Contains("... truncated (", StringComparison.Ordinal)) { truncs++; continue; }
+            }
+        }
+        return (spills, stubs, blocks, truncs);
+    }
+
     // ── Parsing helpers ──────────────────────────────────────────────
 
     private static ParsedStep? ParseStep(JsonElement data)
@@ -253,7 +381,11 @@ public static class SessionAnalyzer
                     {
                         ToolName = tc.GetProperty("toolName").GetString() ?? "unknown",
                         Arguments = tc.TryGetProperty("arguments", out var args) ? args.GetString() ?? "{}" : "{}",
+                        ResultSummary = tc.TryGetProperty("resultSummary", out var rs) ? rs.GetString() ?? "" : "",
+                        ResultLength = tc.TryGetProperty("resultLength", out var rl) ? rl.GetInt32() : 0,
                         IsError = tc.TryGetProperty("isError", out var ie) && ie.GetBoolean(),
+                        ResultTag = tc.TryGetProperty("resultTag", out var rt) ? rt.GetString() : null,
+                        SpillPath = tc.TryGetProperty("spillPath", out var sp) ? sp.GetString() : null,
                     });
                 }
             }
@@ -287,7 +419,11 @@ public sealed record ParsedToolCall
 {
     public required string ToolName { get; init; }
     public string Arguments { get; init; } = "{}";
+    public string ResultSummary { get; init; } = "";
+    public int ResultLength { get; init; }
     public bool IsError { get; init; }
+    public string? ResultTag { get; init; }
+    public string? SpillPath { get; init; }
 }
 
 public sealed record SessionAnalysis
@@ -311,4 +447,10 @@ public sealed record SessionAnalysis
     public int PivotCount { get; init; }
     public bool HasAssumptions { get; init; }
     public string? TrajectoryLine { get; init; }
+
+    // P2.5: Context-management counters (derived from ResultSummary pattern matching)
+    public int SpillsTriggered { get; init; }
+    public int StubReturns { get; init; }
+    public int ReadsBlocked { get; init; }
+    public int ToolResultsTruncated { get; init; }
 }

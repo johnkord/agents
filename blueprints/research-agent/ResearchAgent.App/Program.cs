@@ -135,7 +135,7 @@ try
         WriteStderr(evt.ToString());
     });
 
-    var orchestrator = new ResearchOrchestrator(config, loggerFactory, priorState, progress);
+    using var orchestrator = new ResearchOrchestrator(config, loggerFactory, priorState, progress);
 
     var overallSw = Stopwatch.StartNew();
     var result = await orchestrator.ResearchAsync(query);
@@ -159,6 +159,17 @@ try
     WriteStderr($"Sources: {result.Sources.Count}");
     WriteStderr($"Agent interactions: {result.AgentInteractions.Count}");
     WriteStderr($"Research iterations: {result.IterationCount}");
+    if (result.EvidenceVerdict is not null)
+    {
+        var v = result.EvidenceVerdict;
+        var tag = result.SynthesisRefused ? " — SYNTHESIS REFUSED, diagnostic emitted" : "";
+        WriteStderr($"Evidence gate: {v.Decision} (mode={v.Mode}, failingQ={v.FailingSubQuestions.Count}, simulatedRatio={v.SimulatedSourceRatio:P0}){tag}");
+        if (v.Reasons.Count > 0 && v.Decision == EvidenceDecision.Refuse)
+        {
+            foreach (var reason in v.Reasons)
+                WriteStderr($"  ⚠ {reason}");
+        }
+    }
     if (result.VerificationResult is not null)
     {
         WriteStderr($"Verification: {result.VerificationResult.PassedItems}/{result.VerificationResult.TotalItems} claims passed ({result.VerificationResult.PassRate:P0})");
@@ -254,6 +265,11 @@ try
         WriteStderr($"State file: {statePath}");
 
         // ── Session Export (full trajectory for analysis) ───
+        // Resolve context-management feature fingerprint so the session log is self-describing
+        // for A/B sweeps (no reliance on filename convention to pair logs with modes).
+        var compactionCfg = CompactionConfigurator.Resolve(config);
+        var researchContextProviderEnabled = config.GetValue("AI:ResearchContextProvider:Enabled", false);
+
         var export = new SessionExport
         {
             SessionId = result.SessionId,
@@ -272,6 +288,7 @@ try
                 FindingCount = result.Findings.Count,
                 SourceCount = result.Sources.Count,
                 AgentInteractionCount = result.AgentInteractions.Count,
+                NonOkAgentInteractionCount = result.AgentInteractions.Count(i => i.Status != "ok"),
                 ReportCharCount = result.Report?.Length ?? 0,
                 AverageFindingConfidence = result.Findings.Count > 0
                     ? result.Findings.Average(f => f.Confidence)
@@ -283,6 +300,19 @@ try
                 VerificationItemsPassed = result.VerificationResult?.PassedItems ?? 0,
                 VerificationPassRate = result.VerificationResult?.PassRate ?? 0,
                 VerificationFailedItems = failedClaims,
+                SearchProvider = result.SearchProvider,
+                WebSearchCallCount = result.WebSearchCallCount,
+                WebSearchResultCount = result.WebSearchResultCount,
+                WebSearchTotalLatencyMs = result.WebSearchTotalLatencyMs,
+                EvidenceGateMode = result.EvidenceVerdict?.Mode.ToString(),
+                EvidenceGateDecision = result.EvidenceVerdict?.Decision.ToString(),
+                SynthesisRefused = result.SynthesisRefused,
+                EvidenceGateReasons = result.EvidenceVerdict?.Reasons,
+                EvidenceGateFailingSubQuestions = result.EvidenceVerdict?.FailingSubQuestions,
+                SimulatedSourceRatio = result.EvidenceVerdict?.SimulatedSourceRatio ?? 0.0,
+                CompactionMode = compactionCfg.Mode.ToString(),
+                CompactionShape = compactionCfg.Describe(),
+                ResearchContextProviderEnabled = researchContextProviderEnabled,
             }
         };
 

@@ -25,6 +25,36 @@ public sealed class ResearchMemory
     private readonly List<string> _contextLog = [];
     private readonly object _logLock = new();
     private readonly object _reflectionLock = new();
+    private volatile string? _researchQuestion;
+    private volatile string? _plannerOutput;
+
+    /// <summary>
+    /// The top-level research question for the current session. Set once at session start
+    /// by the orchestrator; read by any <c>AIContextProvider</c> that injects state
+    /// into sub-agent instructions. Null until the orchestrator populates it.
+    /// </summary>
+    public string? ResearchQuestion => _researchQuestion;
+
+    /// <summary>
+    /// The Planner's full output for the current session. Set once after Phase 3 by the
+    /// orchestrator; read by any <c>AIContextProvider</c> that wants to surface the plan
+    /// to downstream agents without re-embedding it in user-message payloads.
+    /// </summary>
+    public string? PlannerOutput => _plannerOutput;
+
+    /// <summary>Records the current session's research question. Idempotent; last write wins.</summary>
+    public void SetResearchQuestion(string question)
+    {
+        _researchQuestion = question;
+        LogEvent($"Research question set: {Truncate(question, 120)}");
+    }
+
+    /// <summary>Records the Planner's output for downstream context-provider consumption.</summary>
+    public void SetPlannerOutput(string plannerOutput)
+    {
+        _plannerOutput = plannerOutput;
+        LogEvent($"Planner output recorded ({plannerOutput.Length} chars)");
+    }
 
     /// <summary>
     /// Load findings and sources from a prior research state file.

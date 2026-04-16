@@ -13,27 +13,65 @@ namespace Forge.Core;
 public static class ObservationPipeline
 {
     /// <summary>
-    /// Process a raw tool result, applying size gating and formatting.
-    /// Returns the (possibly truncated) text that should enter the conversation.
+    /// Outcome of <see cref="Process"/>, including the processed text plus
+    /// structured metadata about what size-gating action (if any) was applied.
     /// </summary>
-    public static string Process(string toolName, string rawResult, AgentOptions options)
+    public readonly record struct ObservationResult(string Text, string? SpillPath, bool WasTruncated)
+    {
+        /// <summary>Classifies the outcome for logging/analysis: <c>"spilled"</c>, <c>"truncated"</c>, or null.</summary>
+        public string? Tag =>
+            SpillPath is not null ? "spilled"
+            : WasTruncated ? "truncated"
+            : null;
+
+        /// <summary>Implicit conversion so legacy callers that expected a string still compile.</summary>
+        public static implicit operator string(ObservationResult r) => r.Text;
+    }
+
+    /// <summary>
+    /// Process a raw tool result, applying size gating and formatting.
+    /// Returns the (possibly truncated) text that should enter the conversation
+    /// along with structured metadata about what action was applied. When
+    /// <paramref name="spillStore"/> is provided AND the raw result exceeds
+    /// <see cref="AgentOptions.ToolResultSpillThresholdChars"/>, the full output
+    /// is persisted to disk and the truncation footer points at the spill path.
+    /// </summary>
+    public static ObservationResult Process(
+        string toolName,
+        string rawResult,
+        AgentOptions options,
+        ToolResultSpillStore? spillStore = null)
     {
         if (string.IsNullOrEmpty(rawResult))
-            return "(no output)";
+            return new ObservationResult("(no output)", null, false);
 
         var maxChars = Math.Max(1, options.ObservationMaxChars);
         var maxLines = Math.Max(1, options.ObservationMaxLines);
 
         // Error compaction: if it looks like a stack trace, compact it
         if (IsStackTrace(rawResult))
-            return CompactStackTrace(rawResult);
+            return new ObservationResult(CompactStackTrace(rawResult), null, false);
+
+        // Spill large raw results to disk BEFORE truncation so the agent can retrieve arbitrary slices.
+        string? spillPath = null;
+        if (spillStore is not null
+            && options.ToolResultSpillThresholdChars > 0
+            && rawResult.Length > options.ToolResultSpillThresholdChars)
+        {
+            try { spillPath = spillStore.Spill(toolName, rawResult); }
+            catch { /* spill is best-effort; fall through to normal truncation */ }
+        }
 
         // Size gate by character count
         if (rawResult.Length > maxChars)
         {
             var truncated = rawResult[..maxChars];
             var totalLines = rawResult.AsSpan().Count('\n') + 1;
-            return $"{truncated}\n\n... truncated ({rawResult.Length:N0} total characters, {totalLines} total lines). Use read_file with startLine/endLine for specific sections.";
+            var pointer = spillPath is not null
+                ? $"Full output saved to: {spillPath}. Use read_file on this path with startLine/endLine for specific sections."
+                : "Use read_file with startLine/endLine for specific sections.";
+            var text = $"{truncated}\n\n... truncated ({rawResult.Length:N0} total characters, {totalLines} total lines). {pointer}";
+            return new ObservationResult(text, spillPath, WasTruncated: true);
         }
 
         // Size gate by line count
@@ -41,10 +79,17 @@ public static class ObservationPipeline
         if (lines.Length > maxLines)
         {
             var kept = string.Join('\n', lines[..maxLines]);
-            return $"{kept}\n\n... truncated (showing {maxLines} of {lines.Length} lines). Use read_file with startLine/endLine for specific sections.";
+            var pointer = spillPath is not null
+                ? $"Full output saved to: {spillPath}. Use read_file on this path with startLine/endLine for specific sections."
+                : "Use read_file with startLine/endLine for specific sections.";
+            var text = $"{kept}\n\n... truncated (showing {maxLines} of {lines.Length} lines). {pointer}";
+            return new ObservationResult(text, spillPath, WasTruncated: true);
         }
 
-        return rawResult;
+        // Below both size gates — but a spill might still have happened if the raw
+        // exceeded the spill threshold but not the observation cap. Carry the path
+        // through so it's still tagged "spilled".
+        return new ObservationResult(rawResult, spillPath, WasTruncated: false);
     }
 
     private static bool IsStackTrace(string text)

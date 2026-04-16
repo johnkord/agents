@@ -14,15 +14,17 @@ public sealed class ToolExecutor
     private readonly AgentOptions _options;
     private readonly Guardrails _guardrails;
     private readonly ILogger _logger;
+    private readonly ToolResultSpillStore? _spillStore;
     private readonly HashSet<string> _recentFailedCalls = new(StringComparer.Ordinal);
     private readonly Queue<string> _failedCallOrder = new();
     private const int MaxRecentFailedCalls = 200;
 
-    public ToolExecutor(AgentOptions options, Guardrails guardrails, ILogger logger)
+    public ToolExecutor(AgentOptions options, Guardrails guardrails, ILogger logger, ToolResultSpillStore? spillStore = null)
     {
         _options = options;
         _guardrails = guardrails;
         _logger = logger;
+        _spillStore = spillStore;
     }
 
     public async Task<ToolExecutionResult> ExecuteAsync(
@@ -112,10 +114,10 @@ public sealed class ToolExecutor
                 var result = await tool.InvokeAsync(aiArgs, cancellationToken);
                 var resultText = result?.ToString() ?? "(no output)";
 
-                var processedResult = ObservationPipeline.Process(toolCall.FunctionName, resultText, _options);
-                var summary = Truncate(processedResult, 500);
+                var processed = ObservationPipeline.Process(toolCall.FunctionName, resultText, _options, _spillStore);
+                var summary = Truncate(processed.Text, 500);
 
-                toolResults.Add(new LlmToolResult { CallId = toolCall.CallId, Output = processedResult });
+                toolResults.Add(new LlmToolResult { CallId = toolCall.CallId, Output = processed.Text });
                 toolCallRecords.Add(new ToolCallRecord
                 {
                     ToolName = toolCall.FunctionName,
@@ -123,7 +125,13 @@ public sealed class ToolExecutor
                     ResultSummary = summary,
                     ResultLength = resultText.Length,
                     DurationMs = toolSw.Elapsed.TotalMilliseconds,
+                    ResultTag = processed.Tag,
+                    SpillPath = processed.SpillPath,
                 });
+
+                if (processed.SpillPath is not null)
+                    _logger.Information("Tool result spilled ({Tool}): {Chars} chars → {Path}",
+                        toolCall.FunctionName, resultText.Length, processed.SpillPath);
 
                 onToken?.Invoke($" ✓ ({toolSw.Elapsed.TotalMilliseconds:F0}ms)\n");
                 _logger.Debug("Tool result ({Tool}): {Summary}", toolCall.FunctionName, summary);

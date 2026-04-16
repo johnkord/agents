@@ -19,12 +19,41 @@ var config = new ConfigurationBuilder()
 var dryRun = args.Any(arg => string.Equals(arg, "--dry-run", StringComparison.OrdinalIgnoreCase));
 var analyzeTarget = args.SkipWhile(a => !string.Equals(a, "--analyze", StringComparison.OrdinalIgnoreCase))
     .Skip(1).FirstOrDefault();
+var diffMode = args.Any(a => string.Equals(a, "--diff", StringComparison.OrdinalIgnoreCase));
 var resumeFile = args.SkipWhile(a => !string.Equals(a, "--resume", StringComparison.OrdinalIgnoreCase))
     .Skip(1).FirstOrDefault();
+var sessionMemoryOverride = args.Any(a => string.Equals(a, "--session-memory", StringComparison.OrdinalIgnoreCase));
 
 // ── Analyze mode: offline session analysis ─────────────────────────────────────
 if (!string.IsNullOrEmpty(analyzeTarget))
 {
+    // --diff mode: compare exactly two files side-by-side.
+    // Usage: forge --analyze A.jsonl B.jsonl --diff
+    if (diffMode)
+    {
+        var analyzeIdx = Array.FindIndex(args, a => string.Equals(a, "--analyze", StringComparison.OrdinalIgnoreCase));
+        var pathA = analyzeIdx >= 0 && analyzeIdx + 1 < args.Length ? args[analyzeIdx + 1] : null;
+        var pathB = analyzeIdx >= 0 && analyzeIdx + 2 < args.Length && !args[analyzeIdx + 2].StartsWith("--")
+            ? args[analyzeIdx + 2] : null;
+
+        if (pathA is null || pathB is null || !File.Exists(pathA) || !File.Exists(pathB))
+        {
+            Console.WriteLine("--diff requires two existing session file paths: forge --analyze A.jsonl B.jsonl --diff");
+            Environment.Exit(1);
+        }
+
+        var sA = SessionAnalyzer.Analyze(pathA);
+        var sB = SessionAnalyzer.Analyze(pathB);
+        if (sA is null || sB is null)
+        {
+            Console.WriteLine("Could not parse one or both session files.");
+            Environment.Exit(1);
+        }
+
+        Console.WriteLine(SessionAnalyzer.FormatDiff(sA, sB));
+        Environment.Exit(0);
+    }
+
     var files = Directory.Exists(analyzeTarget)
         ? Directory.GetFiles(analyzeTarget, "*.jsonl")
         : File.Exists(analyzeTarget)
@@ -153,6 +182,15 @@ try
         SessionsPath = sessionsDir,
         LessonsPath = config["LessonsPath"] ?? Path.Combine(sessionsDir, "lessons.md"),
         ToolMode = config["ToolMode"],
+        // ── P2.1: session memory ──────────────────────────────────────────────
+        SessionMemoryEnabled = sessionMemoryOverride
+            || bool.TryParse(config["SessionMemoryEnabled"], out var sme) && sme,
+        SessionMemoryMinInitTokens = int.TryParse(config["SessionMemoryMinInitTokens"], out var smit)
+            ? smit : 15_000,
+        SessionMemoryStepsBetweenUpdates = int.TryParse(config["SessionMemoryStepsBetweenUpdates"], out var smsu)
+            ? smsu : 5,
+        SessionMemoryRoot = config["SessionMemoryRoot"] ?? ".forge/session-memory",
+        SessionMemoryPersistRawResponses = bool.TryParse(config["SessionMemoryPersistRawResponses"], out var smprr) && smprr,
     };
 
     if (options.DryRun)
@@ -162,9 +200,16 @@ try
     }
 
     // ── LLM Client (OpenAI Responses API) ──────────────────────────────────────
-    var apiKey = config["OPENAI_API_KEY"] ?? config["OpenAIKey"]
+    // Try multiple config keys in order of preference so a single shared secret can
+    // power all three blueprints (research-agent + life-agent use AI:ApiKey; this
+    // one historically used OpenAIKey / OPENAI_API_KEY). The old keys stay accepted
+    // for back-compat with existing user-secrets stores.
+    var apiKey = config["AI:ApiKey"]
+        ?? config["OPENAI_API_KEY"]
+        ?? config["OpenAIKey"]
         ?? throw new InvalidOperationException(
-            "Set OPENAI_API_KEY via environment variable, user secrets, or appsettings.json");
+            "Set the OpenAI API key. Supported config keys (checked in order): AI:ApiKey, OPENAI_API_KEY, OpenAIKey. " +
+            "Source priority: command-line → environment variables (FORGE_ prefix) → user-secrets → appsettings.json.");
 
     var openAiClient = new OpenAIClient(new ApiKeyCredential(apiKey));
     var responsesClient = openAiClient.GetResponsesClient();
@@ -176,6 +221,17 @@ try
 
     // ── Run the Agent ──────────────────────────────────────────────────────────
     var agent = new AgentLoop(options, Log.Logger);
+
+    // ── Session-memory extractor (P2.1) ────────────────────────────────────────
+    // Built only when enabled. Uses a dedicated OpenAIResponsesLlmClient with
+    // tools: [] to keep the extraction conversation isolated from the main loop.
+    Forge.Core.SessionMemory.SessionMemoryExtractor? memoryExtractor = null;
+    if (options.SessionMemoryEnabled)
+    {
+        memoryExtractor = Forge.App.SessionMemoryWiring.Build(responsesClient, model, options, Log.Logger);
+        Log.Information("Session memory ENABLED (min-init={Init} tokens, every {Steps} steps, root={Root})",
+            options.SessionMemoryMinInitTokens, options.SessionMemoryStepsBetweenUpdates, options.SessionMemoryRoot);
+    }
 
     // Set up cancellation for graceful SIGINT handling
     using var cts = new CancellationTokenSource();
@@ -196,7 +252,7 @@ try
         Log.Information("Injected continuation context from previous session ({Chars} chars)", continuationContext.Length);
     }
 
-    var result = await agent.RunAsync(task, llmClient, mcpToolList, token => Console.Write(token), cts.Token, continuationContext);
+    var result = await agent.RunAsync(task, llmClient, mcpToolList, token => Console.Write(token), cts.Token, continuationContext, memoryExtractor);
 
     // ── Print Result ───────────────────────────────────────────────────────────
     Console.WriteLine();
